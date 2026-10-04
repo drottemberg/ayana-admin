@@ -16,7 +16,6 @@ import { ModalId, Modals } from '@/providers/modal'
 import type { SelectTableRow } from '@/providers/modal-types'
 import type { StoreGroup } from '@/types/group'
 import type { Store } from '@/types/store'
-import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 export type StoreDetailModule = 'users' | 'devices' | 'storeGroups' | 'partners' | 'issues'
 type StoreDetailActionEntity = 'user' | 'device' | 'partner' | 'issue' | 'group'
@@ -63,32 +62,17 @@ function toDropdownAction({ entity, ...action }: StoreDetailAction): DropdownAct
 
 export const StoreService = {
   canManageDetails() {
-    return getPortalSafe() !== Portal.OPS
+    return true
   },
 
   getDetailModules(): Array<{ key: StoreDetailModule; label: string }> {
-    if (getPortalSafe() === Portal.OPS) {
-      return [
-        { key: 'users', label: 'Active users' },
-        { key: 'devices', label: 'Active devices' },
-        { key: 'storeGroups', label: 'Store groups' },
-        { key: 'issues', label: 'Last issues' },
-      ]
-    }
-
-    return this.canManageDetails()
-      ? [
-          { key: 'users', label: 'Active users' },
-          { key: 'devices', label: 'Active devices' },
-          { key: 'storeGroups', label: 'Store groups' },
-          { key: 'partners', label: 'Maintenance partners' },
-          { key: 'issues', label: 'Last issues' },
-        ]
-      : [
-          { key: 'devices', label: 'Active devices' },
-          { key: 'storeGroups', label: 'Store groups' },
-          { key: 'issues', label: 'Last issues' },
-        ]
+    return [
+      { key: 'users', label: 'Active users' },
+      { key: 'devices', label: 'Active devices' },
+      { key: 'storeGroups', label: 'Store groups' },
+      { key: 'partners', label: 'Maintenance partners' },
+      { key: 'issues', label: 'Last issues' },
+    ]
   },
 
   getRowActions(store: Store): DropdownActionItem[] {

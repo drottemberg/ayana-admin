@@ -560,7 +560,7 @@ function DeviceCenterModules({
 }) {
   const queryClient = useQueryClient()
   const portal = getPortalSafe()
-  const canManageProductAssignments = portal !== Portal.OPS
+  const canManageProductAssignments = true
   const isChildDevice = Boolean(device.parentId)
   const canManageContractAssignments = portal !== Portal.CUSTOMER && !isChildDevice
   const canManageStoreAssignments = !isChildDevice

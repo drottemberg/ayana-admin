@@ -26,8 +26,6 @@ import { Drawer, DrawerId } from '@/providers/drawer'
 import type { Device } from '@/types/device'
 import { ProductStatus, type Product, type ProductStatus as ProductStatusType } from '@/types/product'
 import { formatDateTime } from '@/utils/date-utils'
-import { getPortalSafe, Portal } from '@/utils/portal-utils'
-import { NotFoundPage } from '@/pages/NotFoundPage'
 import { HugeiconsIcon } from '@hugeicons/react'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
@@ -110,7 +108,6 @@ function ProductModulesLoading() {
 export default function ProductPage() {
   const { productId = '' } = useParams()
   const navigate = useNavigate()
-  const portal = getPortalSafe()
 
   useDictionaryQuery({
     queryKey: devicesQueryKeys.types,
@@ -124,12 +121,8 @@ export default function ProductPage() {
   } = useDetailQuery({
     queryKey: productsQueryKeys.detail(productId),
     queryFn: () => getProductRequest(productId),
-    enabled: Boolean(productId) && portal !== Portal.OPS,
+    enabled: Boolean(productId),
   })
-
-  if (portal === Portal.OPS) {
-    return <NotFoundPage />
-  }
 
   if (isLoading) {
     return (

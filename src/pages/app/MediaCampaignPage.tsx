@@ -28,10 +28,8 @@ import { mediaCampaignQueryKeys } from '@/features/media-campaigns/query-keys'
 import { getMediaColumns } from '@/features/media/media-columns'
 import { MediaService } from '@/features/media/media-service'
 import { useDetailQuery } from '@/lib/query-hooks'
-import { NotFoundPage } from '@/pages/NotFoundPage'
 import type { Media, MediaCampaign, MediaCampaignDevice } from '@/types/media'
 import { DateUtils } from '@/utils'
-import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const modules: DetailPageModule[] = [
@@ -122,7 +120,6 @@ function CampaignModulesLoading() {
 export default function MediaCampaignPage() {
   const { campaignId = '' } = useParams()
   const navigate = useNavigate()
-  const portal = getPortalSafe()
   const {
     data: campaign,
     isLoading,
@@ -130,12 +127,8 @@ export default function MediaCampaignPage() {
   } = useDetailQuery({
     queryKey: mediaCampaignQueryKeys.detail(campaignId),
     queryFn: () => getMediaCampaignDetailRequest(campaignId),
-    enabled: Boolean(campaignId) && portal !== Portal.OPS,
+    enabled: Boolean(campaignId),
   })
-
-  if (portal === Portal.OPS) {
-    return <NotFoundPage />
-  }
 
   if (isLoading) {
     return (

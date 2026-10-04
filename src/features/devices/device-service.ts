@@ -690,23 +690,7 @@ export const DeviceService = {
             { label: 'Reboot', entity: 'device', onClick: () => void this.rebootDevice(context) },
             { label: 'Print label', onClick: () => void this.printLabel(context) },
           ]
-        : portal === Portal.OPS
-          ? [
-              {
-                label: 'Assign to Contract (swap)',
-                entity: 'contract',
-                onClick: () => void this.addToContract(context),
-              },
-              { label: 'Assign to store', entity: 'store', onClick: () => void this.assignToStore(context) },
-              { label: 'Update settings', entity: 'device', onClick: () => void this.openModifySettings(context) },
-              { label: 'Add to group', entity: 'deviceGroup', onClick: () => void this.addToGroup(context) },
-              { label: 'Reboot', entity: 'device', onClick: () => void this.rebootDevice(context) },
-              { label: 'Update Firmware', entity: 'device', onClick: () => void this.updateFirmware(context) },
-              { label: 'Add to campaign', entity: 'mediaCampaign', onClick: () => void this.addToCampaign(context) },
-              { label: 'Create issue', entity: 'issue', onClick: () => this.createIssue() },
-              { label: 'Print label', onClick: () => void this.printLabel(context) },
-            ]
-          : [
+        : [
               {
                 label: 'Assign to Contract (swap)',
                 entity: 'contract',
@@ -733,7 +717,7 @@ export const DeviceService = {
 
     const deviceActions: DeviceDetailAction[] = [
       editAction,
-      ...(portal === Portal.CUSTOMER || portal === Portal.OPS
+      ...(portal === Portal.CUSTOMER
         ? []
         : [...(enableDisableAction ? [enableDisableAction] : []), archiveAction, destroyAction]),
     ]

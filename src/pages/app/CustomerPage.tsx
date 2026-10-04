@@ -68,7 +68,6 @@ import type { Product } from '@/types/product'
 import type { User } from '@/types/user'
 import { TimezoneUtils } from '@/utils'
 import { formatDateTime } from '@/utils/date-utils'
-import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const CUSTOMER_BATCH_QUERY_KEY = 'customer-detail-batch'
@@ -176,16 +175,11 @@ export default function CustomerPage() {
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const permissions = session?.permissions.customers
-  const portal = getPortalSafe()
-  const currentOrganizationId = session?.currentOrganization?.id ?? undefined
   const canEditUserPermissions = session?.permissions.users?.edit
   const canManageCustomer = CustomerService.canManage(permissions)
-  const canShowUsers = canManageCustomer || portal === Portal.OPS
+  const canShowUsers = canManageCustomer
   const canEditCustomer = !permissions || permissions.edit
-  const customerUsersHiddenFilters = useMemo(
-    () => (portal === Portal.OPS ? { customerId, partnerId: currentOrganizationId } : { organizationId: customerId }),
-    [currentOrganizationId, customerId, portal],
-  )
+  const customerUsersHiddenFilters = useMemo(() => ({ organizationId: customerId }), [customerId])
   const batchEntries = useMemo<BatchCacheEntry[]>(() => {
     if (!customerId) return []
 
@@ -276,7 +270,7 @@ export default function CustomerPage() {
   })
   const customer = detailQuery.data
   const customerBatchQuery = useQuery({
-    queryKey: [CUSTOMER_BATCH_QUERY_KEY, customerId, canManageCustomer, canShowUsers, currentOrganizationId, portal],
+    queryKey: [CUSTOMER_BATCH_QUERY_KEY, customerId, canManageCustomer, canShowUsers],
     queryFn: async () => {
       const data = await batchListRequest(toBatchRequestDto(batchEntries))
       const failedKeys = writeBatchEntriesToQueryCache({ data, entries: batchEntries, queryClient })
@@ -398,17 +392,13 @@ export default function CustomerPage() {
                   loadData={(state: DataTableState<User>) =>
                     getUsersRequest(
                       state,
-                      portal === Portal.OPS
-                        ? { customerId: customer.id, partnerId: currentOrganizationId }
-                        : { organizationId: customer.id },
+                      { organizationId: customer.id },
                     )
                   }
                   tableKey="customers.detail.modules.users"
                   columns={getUserListColumns({
                     usage: 'customer-details',
-                    portal,
                     customerId: customer.id,
-                    partnerId: portal === Portal.OPS ? currentOrganizationId : undefined,
                     canEditPermissions: canEditUserPermissions,
                   })}
                   getRowCommands={(user) => UserService.getActions(user, session?.permissions.users)}

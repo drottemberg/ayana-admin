@@ -25,8 +25,8 @@ type EditPermissionsStepProps = {
 
 // ADMIN sees all 3 membership kinds as tabs, each with its own independent Save button — a
 // staff member can also be a customer contact and/or ops technician at once (spec 2.2), so
-// these are genuinely separate memberships, not mutually exclusive states. Customer/Ops portals
-// only ever manage their own membership on this user, scoped to the org you're currently in.
+// these are genuinely separate memberships, not mutually exclusive states. The Customer portal
+// only manages its own membership on this user, scoped to the current organization.
 export function EditPermissionsStep({ user, permissionScope, onEditFullPermissions }: EditPermissionsStepProps) {
   const portal = getPortalSafe()
   const currentOrgId = readSelectedOrgId() ?? undefined
@@ -94,14 +94,6 @@ export function EditPermissionsStep({ user, permissionScope, onEditFullPermissio
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <CustomerPermissionTab user={currentUser} scopeToOrgId={currentOrgId} />
-      </div>
-    )
-  }
-
-  if (portal === Portal.OPS) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <PartnerPermissionTab user={currentUser} scopeToOrgId={currentOrgId} />
       </div>
     )
   }

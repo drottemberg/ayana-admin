@@ -34,9 +34,7 @@ import {
 import { MediaService } from '@/features/media/media-service'
 import { mediaQueryKeys } from '@/features/media/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
-import { NotFoundPage } from '@/pages/NotFoundPage'
 import type { Media, MediaCampaign } from '@/types/media'
-import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const modules: DetailPageModule[] = [{ key: 'mediaCampaigns', label: 'Media campaigns' }]
@@ -98,7 +96,6 @@ function MediaModulesLoading() {
 export default function MediaPage() {
   const { mediaId = '' } = useParams()
   const navigate = useNavigate()
-  const portal = getPortalSafe()
   const {
     data: media,
     isLoading,
@@ -106,12 +103,8 @@ export default function MediaPage() {
   } = useDetailQuery({
     queryKey: mediaQueryKeys.detail(mediaId),
     queryFn: () => getMediaDetailRequest(mediaId),
-    enabled: Boolean(mediaId) && portal !== Portal.OPS,
+    enabled: Boolean(mediaId),
   })
-
-  if (portal === Portal.OPS) {
-    return <NotFoundPage />
-  }
 
   if (isLoading) {
     return (

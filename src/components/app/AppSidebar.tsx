@@ -162,7 +162,7 @@ function SidebarBrand() {
         {isCollapsed ? (
           <img src={icon} alt="Gaudier" className="h-8 w-8" />
         ) : (
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-start gap-1.5">
             <img src={logo} alt="Gaudier" className="h-8 w-auto" />
             <AppModeBadge />
           </span>

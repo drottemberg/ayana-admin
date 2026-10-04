@@ -8,12 +8,10 @@ type AppModeBadgeProps = {
 export function AppModeBadge({ className }: AppModeBadgeProps) {
   const mode = getAppMode()
 
-  if (mode === 'customer') return null
-
   return (
     <span
       className={cn(
-        'shrink-0 text-[10px] font-normal leading-none tracking-normal text-muted-foreground/70',
+        'shrink-0 self-start pt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70',
         className,
       )}
     >

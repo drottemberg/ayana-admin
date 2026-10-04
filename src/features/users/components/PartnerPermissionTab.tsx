@@ -39,7 +39,7 @@ import type { User } from '@/types/user'
 
 type PartnerPermissionTabProps = {
   user: User
-  /** Set in the Ops portal — roots the tree at just this partner and saves only its membership. */
+  /** Roots the tree at this partner and saves only its membership. */
   scopeToOrgId?: string
   readOnly?: boolean
 }

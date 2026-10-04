@@ -6,17 +6,10 @@ import { getMediaCampaignsRequest } from '@/features/media-campaigns/api'
 import { getMediaCampaignColumns } from '@/features/media-campaigns/media-campaign-columns'
 import { MediaCampaignService } from '@/features/media-campaigns/media-campaign-service'
 import { mediaCampaignQueryKeys } from '@/features/media-campaigns/query-keys'
-import { NotFoundPage } from '@/pages/NotFoundPage'
 import type { MediaCampaign } from '@/types/media'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 export default function MediaCampaignsPage() {
-  const portal = getPortalSafe()
-
-  if (portal === Portal.OPS) {
-    return <NotFoundPage />
-  }
-
   return (
     <>
       <PageHeader

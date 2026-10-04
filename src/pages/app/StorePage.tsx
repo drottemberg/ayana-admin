@@ -64,7 +64,6 @@ import type { User } from '@/types/user'
 import { StringUtils, TimezoneUtils } from '@/utils'
 import * as GeoUtils from '@/utils/geo-utils'
 import { formatDateTime } from '@/utils/date-utils'
-import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const STORE_BATCH_QUERY_KEY = 'store-detail-batch'
@@ -216,19 +215,11 @@ export default function StorePage() {
   const { storeId = '' } = useParams()
   const { session } = useConnect()
   const queryClient = useQueryClient()
-  const portal = getPortalSafe()
-  const currentOrganizationId = session?.currentOrganization?.id ?? undefined
   const canEditUserPermissions = session?.permissions.users?.edit
   const canManageStoreDetails = StoreService.canManageDetails()
-  const canShowUsers = canManageStoreDetails || portal === Portal.OPS
+  const canShowUsers = canManageStoreDetails
   const modules = StoreService.getDetailModules()
-  const userHiddenFilters = useMemo(
-    () => ({
-      storeId,
-      partnerId: portal === Portal.OPS ? currentOrganizationId : undefined,
-    }),
-    [currentOrganizationId, portal, storeId],
-  )
+  const userHiddenFilters = useMemo(() => ({ storeId }), [storeId])
   const {
     data: store,
     isError,
@@ -307,7 +298,7 @@ export default function StorePage() {
   }, [canManageStoreDetails, canShowUsers, storeId, userHiddenFilters])
 
   const storeBatchQuery = useQuery({
-    queryKey: [STORE_BATCH_QUERY_KEY, storeId, canShowUsers, currentOrganizationId, portal],
+    queryKey: [STORE_BATCH_QUERY_KEY, storeId, canShowUsers],
     queryFn: async () => {
       const data = await batchListRequest(toBatchRequestDto(batchEntries))
       const failedKeys = writeBatchEntriesToQueryCache({ data, entries: batchEntries, queryClient })
@@ -387,16 +378,13 @@ export default function StorePage() {
                 loadData={(tableState) =>
                   getUsersRequest(tableState, {
                     storeId: store.id,
-                    partnerId: portal === Portal.OPS ? currentOrganizationId : undefined,
                   })
                 }
                 tableKey="stores.detail.modules.users"
                 columns={getUserListColumns({
                   usage: 'store-details',
-                  portal,
                   storeId: store.id,
                   customerId,
-                  partnerId: portal === Portal.OPS ? currentOrganizationId : undefined,
                   canEditPermissions: canEditUserPermissions,
                 })}
                 getRowCommands={(user: User) => UserService.getActions(user, session?.permissions.users)}

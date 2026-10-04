@@ -53,7 +53,6 @@ export function UsersTable({
     usage: 'users',
     portal,
     customerId: portal === Portal.CUSTOMER ? currentOrganizationId : undefined,
-    partnerId: portal === Portal.OPS ? currentOrganizationId : undefined,
     canEditPermissions: permissions?.edit,
   })
 

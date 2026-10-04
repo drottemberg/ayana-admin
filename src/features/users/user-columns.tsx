@@ -221,19 +221,6 @@ function opsScopeColumn(partnerId?: string, canEdit?: boolean, customerId?: stri
   }
 }
 
-function opsStoreRoleColumn(partnerId?: string, customerId?: string, storeId?: string): ColumnDef<User> {
-  return {
-    id: 'opsStoreRole',
-    header: 'Role',
-    cell: ({ row }) => {
-      const membership = opsMembership(row.original, partnerId)
-      if (!opsHasStoreAccess(membership, customerId, storeId)) return NO_VALUE_STR
-
-      return UserService.technicianRoleToString(membership!.role)
-    },
-  }
-}
-
 export function getUserListColumns(options: UserListColumnOptions = {}) {
   const portal = options.portal ?? getPortalSafe()
   const usage = options.usage ?? 'users'
@@ -244,34 +231,15 @@ export function getUserListColumns(options: UserListColumnOptions = {}) {
     if (portal === Portal.CUSTOMER) {
       return [...userColumns, customerRoleColumn(options.customerId), customerScopeColumn(options.customerId, canEdit)]
     }
-    if (portal === Portal.OPS) {
-      return [...userColumns, opsRoleColumn(options.partnerId), opsScopeColumn(options.partnerId, canEdit)]
-    }
 
     return userColumns
   }
 
   if (usage === 'customer-details') {
-    if (portal === Portal.OPS) {
-      return [
-        ...userColumns,
-        opsRoleColumn(options.partnerId, options.customerId),
-        opsScopeColumn(options.partnerId, canEdit, options.customerId),
-      ]
-    }
-
     return [...userColumns, customerRoleColumn(options.customerId), customerScopeColumn(options.customerId, canEdit)]
   }
 
   if (usage === 'store-details') {
-    if (portal === Portal.OPS) {
-      return [
-        ...userColumns,
-        opsStoreRoleColumn(options.partnerId, options.customerId, options.storeId),
-        opsScopeColumn(options.partnerId, canEdit, options.customerId, options.storeId),
-      ]
-    }
-
     return [...userColumns, customerStoreRoleColumn(options.customerId, options.storeId)]
   }
 

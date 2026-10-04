@@ -6,17 +6,10 @@ import { getMediaRequest } from '@/features/media/api'
 import { getMediaColumns } from '@/features/media/media-columns'
 import { MediaService } from '@/features/media/media-service'
 import { mediaQueryKeys } from '@/features/media/query-keys'
-import { NotFoundPage } from '@/pages/NotFoundPage'
 import type { Media } from '@/types/media'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 export default function MediasPage() {
-  const portal = getPortalSafe()
-
-  if (portal === Portal.OPS) {
-    return <NotFoundPage />
-  }
-
   return (
     <>
       <PageHeader
