@@ -204,12 +204,6 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
       <p className="font-semibold">
         {hasPassword ? 'Change password' : 'Add a password'}
       </p>
-      {!hasPassword && (
-        <p className="text-sm text-muted-foreground">
-          Your account uses SSO to sign in. You can add a password to also sign in with email and password.
-        </p>
-      )}
-
       {(
         <form
           className="grid gap-4"

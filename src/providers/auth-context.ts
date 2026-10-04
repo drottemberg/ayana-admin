@@ -7,7 +7,6 @@ export type AuthContextValue = {
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
-  completeSsoLogin: (token: string, refreshToken: string) => Promise<void>
   logout: () => Promise<void> | void
   requestPasswordReset: (email: string) => Promise<string | null>
   completePasswordReset: (password: string, token?: string) => Promise<void>

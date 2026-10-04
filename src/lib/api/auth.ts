@@ -1,30 +1,12 @@
 import { apiClient } from '@/lib/api-client'
 
-export const SsoProvider = {
-  GOOGLE: 'GOOGLE',
-  MICROSOFT: 'MICROSOFT',
-} as const
-
-export type SsoProvider = (typeof SsoProvider)[keyof typeof SsoProvider]
-
 export type AuthResponse = {
   token: string
   refreshToken: string
 }
 
-type SsoUrlResponse = {
-  url: string
-}
-
 export function loginRequest(email: string, password: string): Promise<AuthResponse> {
   return apiClient.login<AuthResponse>('/auth/login', { email, password })
-}
-
-export async function getSsoAuthUrl(provider: SsoProvider, returnUrl: string): Promise<string> {
-  const path = provider === SsoProvider.GOOGLE ? '/auth/google/auth' : '/auth/microsoft/auth'
-  const response = await apiClient.get<SsoUrlResponse>(`${path}?returnUrl=${encodeURIComponent(returnUrl)}`)
-
-  return response.url
 }
 
 export async function logoutRequest(): Promise<void> {

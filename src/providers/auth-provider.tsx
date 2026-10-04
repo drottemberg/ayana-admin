@@ -96,11 +96,6 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
       login: async (email, password) => {
         await loginMutation.mutateAsync({ email, password })
       },
-      completeSsoLogin: async (token, refreshToken) => {
-        apiClient.setTokens(token, refreshToken)
-        await refreshAppSession()
-        setAuthVersion((version) => version + 1)
-      },
       logout: async () => {
         try {
           await logoutRequest()

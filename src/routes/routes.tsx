@@ -2,7 +2,6 @@ import { lazy } from 'react'
 import { CreatePasswordPage } from '@/pages/auth/CreatePasswordPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
-import { SsoCallbackPage } from '@/pages/auth/SsoCallbackPage'
 import { PublicOnlyRoute } from '@/routes/route-guards'
 import { ProtectedRoute } from '@/routes/route-guards'
 import { RootLayout } from '@/components/layout/RootLayout'
@@ -97,7 +96,6 @@ export const router = createBrowserRouter([
         ),
         children: [
           { path: '/login', element: <LoginPage /> },
-          { path: '/auth/sso/callback', element: <SsoCallbackPage /> },
           { path: '/forgot-password', element: <ForgotPasswordPage /> },
           { path: '/create-password', element: <CreatePasswordPage /> },
           { path: '/reset-password', element: <CreatePasswordPage /> },

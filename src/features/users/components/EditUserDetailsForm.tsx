@@ -209,12 +209,6 @@ function PasswordChangeFields({ hasPassword }: { hasPassword: boolean }) {
   return (
     <form className="grid gap-4" noValidate onSubmit={handleSubmit(onSubmit)}>
       <p className="font-semibold">{hasPassword ? 'Change password' : 'Add a password'}</p>
-      {!hasPassword && (
-        <p className="text-sm text-muted-foreground">
-          This account uses SSO to sign in. You can add a password to also sign in with email and password.
-        </p>
-      )}
-
       <FieldGroup className="gap-4">
         {hasPassword && (
           <PasswordInput

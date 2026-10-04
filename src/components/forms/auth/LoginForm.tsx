@@ -7,10 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/providers/use-auth'
-import { FieldSeparator } from '@/components/ui/field'
-import { getSsoAuthUrl, SsoProvider, type SsoProvider as SsoProviderType } from '@/lib/api/auth'
-import { MicrosoftButton, GoogleButton } from '@/components/auth/SsoButtons'
-import { getPortal, Portal } from '@/utils/portal-utils'
 
 const loginFormSchema = z.object({
   email: z.email('Please enter a valid email address.'),
@@ -39,7 +35,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
   })
   const email = watch('email').trim()
   const forgotPasswordUrl = email ? `/forgot-password?email=${encodeURIComponent(email)}` : '/forgot-password'
-  const showSso = getPortal() === Portal.CUSTOMER
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
@@ -48,18 +43,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
     } catch (error) {
       setError('root', {
         message: error instanceof Error ? error.message : 'Unable to login. Please try again.',
-      })
-    }
-  }
-
-  const startSso = async (provider: SsoProviderType) => {
-    try {
-      const returnUrl = `${window.location.origin}/auth/sso/callback`
-      const url = await getSsoAuthUrl(provider, returnUrl)
-      window.location.assign(url)
-    } catch (error) {
-      setError('root', {
-        message: error instanceof Error ? error.message : 'Unable to start SSO. Please try again.',
       })
     }
   }
@@ -95,15 +78,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
             <Button type="submit" size="lg" disabled={isSubmitting}>
               Login
             </Button>
-            {showSso && (
-              <>
-                <FieldSeparator className="my-3">Or</FieldSeparator>
-                <div className="grid gap-2">
-                  <MicrosoftButton onClick={() => void startSso(SsoProvider.MICROSOFT)} />
-                  <GoogleButton onClick={() => void startSso(SsoProvider.GOOGLE)} />
-                </div>
-              </>
-            )}
           </div>
         </div>
       </form>
