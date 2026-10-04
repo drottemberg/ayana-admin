@@ -1,0 +1,1124 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "firstName": "Demo",
+      "lastName": "Admin",
+      "email": "admin@example.com",
+      "password": "password123",
+      "role": "admin",
+      "phone": "(275) 828-3634",
+      "customer": null,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-04-23T13:05:26.930Z",
+      "resetToken": "f5bc2ed0-353f-4c2f-9b45-b339c187aa43"
+    },
+    {
+      "id": "user-2",
+      "firstName": "Judith",
+      "lastName": "Rodriguez",
+      "email": "judith.rodriguez@loreal.com",
+      "password": "password123",
+      "role": "user",
+      "phone": "(275) 828-3634",
+      "customer": "L’Oréal",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "user-3",
+      "firstName": "Arthur",
+      "lastName": "Hagiage",
+      "email": "arthur@gaudier.com",
+      "password": "password123",
+      "role": "admin",
+      "phone": "(275) 828-3634",
+      "customer": null,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "user-4",
+      "firstName": "Full",
+      "lastName": "name",
+      "email": "p.name@email.com",
+      "password": "password123",
+      "role": "user",
+      "phone": "(231) 587-6165",
+      "customer": "Customer name",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "customers": [
+    {
+      "id": "customer-1",
+      "name": "Customer name",
+      "email": "customer@example.com",
+      "phone": "+380000000001"
+    },
+    {
+      "id": "customer-2",
+      "name": "Givaudan",
+      "email": "contact@givaudan.example",
+      "phone": "+410000000001"
+    },
+    {
+      "id": "customer-3",
+      "name": "Macy’s",
+      "email": "contact@macys.example",
+      "phone": "+10000000003"
+    },
+    {
+      "id": "customer-4",
+      "name": "Cartier"
+    },
+    {
+      "id": "customer-5",
+      "name": "Valentino"
+    },
+    {
+      "id": "customer-6",
+      "name": "L’Oréal"
+    },
+    {
+      "id": "a5ead631-e55d-4268-a49e-73ad3f781dcb",
+      "name": "ddd"
+    }
+  ],
+  "devices": [
+    {
+      "id": "device-1",
+      "name": "Device name",
+      "serialNumber": "PMRRKXV",
+      "type": ["screen"],
+      "status": "online",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "store": {
+        "id": "store-1",
+        "name": "Store name",
+        "location": "Kyiv, Ukraine"
+      },
+      "contract": {
+        "id": "contract-1",
+        "name": "Standard",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-2",
+      "name": "Device name",
+      "serialNumber": "DMGCXKJ",
+      "type": ["dropper"],
+      "status": "online",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "store": {
+        "id": "store-1",
+        "name": "Store name",
+        "location": "Kyiv, Ukraine"
+      },
+      "contract": {
+        "id": "contract-1",
+        "name": "Standard",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-3",
+      "name": "Grand piano",
+      "serialNumber": "PMRRKXV",
+      "type": ["dropper", "maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-2",
+        "name": "Givaudan",
+        "email": "contact@givaudan.example",
+        "phone": "+410000000001"
+      },
+      "store": {
+        "id": "store-2",
+        "name": "Givaudan headquarter",
+        "location": "Vernier, Switzerland"
+      },
+      "contract": {
+        "id": "contract-2",
+        "name": "Premium",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2027-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-4",
+      "name": "Mini piano unit #1",
+      "serialNumber": "PMRRKXV",
+      "type": ["dropper", "maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-2",
+        "name": "Givaudan",
+        "email": "contact@givaudan.example",
+        "phone": "+410000000001"
+      },
+      "store": {
+        "id": "store-3",
+        "name": "École de parfumerie",
+        "location": "Paris, France"
+      },
+      "contract": {
+        "id": "contract-2",
+        "name": "Premium",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2027-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-5",
+      "name": "Device name",
+      "serialNumber": "D83ADD8",
+      "type": ["dropper", "maestro"],
+      "status": "disconnected",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "store": {
+        "id": "store-1",
+        "name": "Store name",
+        "location": "Kyiv, Ukraine"
+      },
+      "contract": {
+        "id": "contract-3",
+        "name": "Trial",
+        "startDate": "2026-04-01T00:00:00.000Z",
+        "endDate": "2026-04-30T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-6",
+      "name": "Device name",
+      "serialNumber": "DMVABSV",
+      "type": ["dropper", "maestro"],
+      "status": "not_connected",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "store": {
+        "id": "store-1",
+        "name": "Store name",
+        "location": "Kyiv, Ukraine"
+      },
+      "contract": {
+        "id": "contract-3",
+        "name": "Trial",
+        "startDate": "2026-04-01T00:00:00.000Z",
+        "endDate": "2026-04-30T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-7",
+      "name": "Atelier dispenser A",
+      "serialNumber": "ATD9012",
+      "type": ["dropper"],
+      "status": "online",
+      "customer": {
+        "id": "customer-3",
+        "name": "Maison Aroma",
+        "email": "ops@maison-aroma.example",
+        "phone": "+330000000101"
+      },
+      "store": {
+        "id": "store-4",
+        "name": "Maison Aroma Lab",
+        "location": "Lyon, France"
+      },
+      "contract": {
+        "id": "contract-4",
+        "name": "Enterprise",
+        "startDate": "2026-02-01T00:00:00.000Z",
+        "endDate": "2028-01-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-8",
+      "name": "Atelier dispenser B",
+      "serialNumber": "ATD9013",
+      "type": ["dropper", "maestro"],
+      "status": "disconnected",
+      "customer": {
+        "id": "customer-3",
+        "name": "Maison Aroma",
+        "email": "ops@maison-aroma.example",
+        "phone": "+330000000101"
+      },
+      "store": {
+        "id": "store-4",
+        "name": "Maison Aroma Lab",
+        "location": "Lyon, France"
+      },
+      "contract": {
+        "id": "contract-4",
+        "name": "Enterprise",
+        "startDate": "2026-02-01T00:00:00.000Z",
+        "endDate": "2028-01-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-9",
+      "name": "Retail counter 01",
+      "serialNumber": "RTL1001",
+      "type": ["maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-4",
+        "name": "Nordic Scents",
+        "email": "support@nordic-scents.example",
+        "phone": "+460000000201"
+      },
+      "store": {
+        "id": "store-5",
+        "name": "Stockholm Flagship",
+        "location": "Stockholm, Sweden"
+      },
+      "contract": {
+        "id": "contract-5",
+        "name": "Standard Plus",
+        "startDate": "2026-03-15T00:00:00.000Z",
+        "endDate": "2027-03-14T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-10",
+      "name": "Retail counter 02",
+      "serialNumber": "RTL1002",
+      "type": ["dropper"],
+      "status": "not_connected",
+      "customer": {
+        "id": "customer-4",
+        "name": "Nordic Scents",
+        "email": "support@nordic-scents.example",
+        "phone": "+460000000201"
+      },
+      "store": {
+        "id": "store-6",
+        "name": "Gothenburg Studio",
+        "location": "Gothenburg, Sweden"
+      },
+      "contract": {
+        "id": "contract-5",
+        "name": "Standard Plus",
+        "startDate": "2026-03-15T00:00:00.000Z",
+        "endDate": "2027-03-14T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-11",
+      "name": "Training unit East",
+      "serialNumber": "TRN4431",
+      "type": ["dropper", "maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-5",
+        "name": "Scent Academy",
+        "email": "admin@scent-academy.example",
+        "phone": "+490000000301"
+      },
+      "store": {
+        "id": "store-7",
+        "name": "Berlin Campus",
+        "location": "Berlin, Germany"
+      },
+      "contract": {
+        "id": "contract-6",
+        "name": "Education",
+        "startDate": "2026-01-10T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-12",
+      "name": "Training unit West",
+      "serialNumber": "TRN4432",
+      "type": ["maestro"],
+      "status": "disconnected",
+      "customer": {
+        "id": "customer-5",
+        "name": "Scent Academy",
+        "email": "admin@scent-academy.example",
+        "phone": "+490000000301"
+      },
+      "store": {
+        "id": "store-8",
+        "name": "Hamburg Campus",
+        "location": "Hamburg, Germany"
+      },
+      "contract": {
+        "id": "contract-6",
+        "name": "Education",
+        "startDate": "2026-01-10T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-13",
+      "name": "Showroom mixer 01",
+      "serialNumber": "SHW5501",
+      "type": ["dropper"],
+      "status": "online",
+      "customer": {
+        "id": "customer-6",
+        "name": "Olfactive Works",
+        "email": "hello@olfactive-works.example",
+        "phone": "+310000000401"
+      },
+      "store": {
+        "id": "store-9",
+        "name": "Amsterdam Showroom",
+        "location": "Amsterdam, Netherlands"
+      },
+      "contract": {
+        "id": "contract-7",
+        "name": "Showroom",
+        "startDate": "2026-04-01T00:00:00.000Z",
+        "endDate": "2026-09-30T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-14",
+      "name": "Showroom mixer 02",
+      "serialNumber": "SHW5502",
+      "type": ["dropper", "maestro"],
+      "status": "not_connected",
+      "customer": {
+        "id": "customer-6",
+        "name": "Olfactive Works",
+        "email": "hello@olfactive-works.example",
+        "phone": "+310000000401"
+      },
+      "store": {
+        "id": "store-9",
+        "name": "Amsterdam Showroom",
+        "location": "Amsterdam, Netherlands"
+      },
+      "contract": {
+        "id": "contract-7",
+        "name": "Showroom",
+        "startDate": "2026-04-01T00:00:00.000Z",
+        "endDate": "2026-09-30T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-15",
+      "name": "Boutique station A",
+      "serialNumber": "BTQ7721",
+      "type": ["maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-7",
+        "name": "Kyiv Fragrance House",
+        "email": "it@kyiv-fragrance.example",
+        "phone": "+380000000501"
+      },
+      "store": {
+        "id": "store-10",
+        "name": "Podil Boutique",
+        "location": "Kyiv, Ukraine"
+      },
+      "contract": {
+        "id": "contract-8",
+        "name": "Maintenance",
+        "startDate": "2026-02-20T00:00:00.000Z",
+        "endDate": "2027-02-19T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-16",
+      "name": "Boutique station B",
+      "serialNumber": "BTQ7722",
+      "type": ["dropper"],
+      "status": "disconnected",
+      "customer": {
+        "id": "customer-7",
+        "name": "Kyiv Fragrance House",
+        "email": "it@kyiv-fragrance.example",
+        "phone": "+380000000501"
+      },
+      "store": {
+        "id": "store-11",
+        "name": "Lviv Boutique",
+        "location": "Lviv, Ukraine"
+      },
+      "contract": {
+        "id": "contract-8",
+        "name": "Maintenance",
+        "startDate": "2026-02-20T00:00:00.000Z",
+        "endDate": "2027-02-19T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-17",
+      "name": "Airport kiosk 1",
+      "serialNumber": "AIR3301",
+      "type": ["dropper", "maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-8",
+        "name": "Travel Retail Group",
+        "email": "devices@travel-retail.example",
+        "phone": "+440000000601"
+      },
+      "store": {
+        "id": "store-12",
+        "name": "Heathrow T3",
+        "location": "London, United Kingdom"
+      },
+      "contract": {
+        "id": "contract-9",
+        "name": "Retail Fleet",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2028-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-18",
+      "name": "Airport kiosk 2",
+      "serialNumber": "AIR3302",
+      "type": ["dropper"],
+      "status": "not_connected",
+      "customer": {
+        "id": "customer-8",
+        "name": "Travel Retail Group",
+        "email": "devices@travel-retail.example",
+        "phone": "+440000000601"
+      },
+      "store": {
+        "id": "store-13",
+        "name": "Gatwick North",
+        "location": "London, United Kingdom"
+      },
+      "contract": {
+        "id": "contract-9",
+        "name": "Retail Fleet",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2028-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-19",
+      "name": "Concept lab alpha",
+      "serialNumber": "CPT8801",
+      "type": ["maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-9",
+        "name": "Concept Labs",
+        "email": "lab@concept-labs.example",
+        "phone": "+390000000701"
+      },
+      "store": {
+        "id": "store-14",
+        "name": "Milan Lab",
+        "location": "Milan, Italy"
+      },
+      "contract": {
+        "id": "contract-10",
+        "name": "Research",
+        "startDate": "2026-05-01T00:00:00.000Z",
+        "endDate": "2026-10-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-20",
+      "name": "Concept lab beta",
+      "serialNumber": "CPT8802",
+      "type": ["dropper", "maestro"],
+      "status": "disconnected",
+      "customer": {
+        "id": "customer-9",
+        "name": "Concept Labs",
+        "email": "lab@concept-labs.example",
+        "phone": "+390000000701"
+      },
+      "store": {
+        "id": "store-15",
+        "name": "Rome Lab",
+        "location": "Rome, Italy"
+      },
+      "contract": {
+        "id": "contract-10",
+        "name": "Research",
+        "startDate": "2026-05-01T00:00:00.000Z",
+        "endDate": "2026-10-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-21",
+      "name": "Service spare 01",
+      "serialNumber": "SRV0101",
+      "type": ["dropper"],
+      "status": "not_connected",
+      "customer": {
+        "id": "customer-10",
+        "name": "GK Service Pool",
+        "email": "service@gk.example",
+        "phone": "+380000000801"
+      },
+      "store": {
+        "id": "store-16",
+        "name": "Service Warehouse",
+        "location": "Warsaw, Poland"
+      },
+      "contract": {
+        "id": "contract-11",
+        "name": "Internal",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "id": "device-22",
+      "name": "Service spare 02",
+      "serialNumber": "SRV0102",
+      "type": ["maestro"],
+      "status": "online",
+      "customer": {
+        "id": "customer-10",
+        "name": "GK Service Pool",
+        "email": "service@gk.example",
+        "phone": "+380000000801"
+      },
+      "store": {
+        "id": "store-16",
+        "name": "Service Warehouse",
+        "location": "Warsaw, Poland"
+      },
+      "contract": {
+        "id": "contract-11",
+        "name": "Internal",
+        "startDate": "2026-01-01T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.999Z"
+      }
+    },
+    {
+      "name": "asd",
+      "serialNumber": "asdasd",
+      "type": ["maestro"],
+      "status": "not_connected",
+      "customer": null,
+      "store": null,
+      "contract": null,
+      "id": "D6pBPa1LmaQ"
+    },
+    {
+      "name": "asd",
+      "serialNumber": "asd",
+      "type": ["maestro"],
+      "status": "not_connected",
+      "customer": null,
+      "store": null,
+      "contract": null,
+      "id": "j3MFizKpYfg"
+    },
+    {
+      "name": "asdf",
+      "serialNumber": "as sdf asdf df",
+      "type": ["maestro", "dropper"],
+      "status": "not_connected",
+      "customer": null,
+      "store": null,
+      "contract": null,
+      "id": "FgKmuuLAzEI"
+    },
+    {
+      "name": "s",
+      "serialNumber": "ad",
+      "type": ["maestro", "dropper"],
+      "status": "not_connected",
+      "customer": null,
+      "store": null,
+      "contract": null,
+      "id": "dnqZ7OW6WuQ"
+    },
+    {
+      "name": "er",
+      "serialNumber": "er",
+      "type": ["maestro", "dropper"],
+      "status": "not_connected",
+      "customer": null,
+      "store": null,
+      "contract": null,
+      "id": "EMhO6Pb3G8k"
+    },
+    {
+      "name": "lh",
+      "serialNumber": "hp",
+      "type": ["maestro"],
+      "tags": ["dropper"],
+      "id": "sXNRs3fKmpk"
+    },
+    {
+      "id": "91985a2d-c8b6-475c-9921-f7dc469432bf",
+      "name": "sdf",
+      "serialNumber": "sdf",
+      "type": ["dropper"],
+      "tags": ["Modem"]
+    },
+    {
+      "id": "3adbb9b5-fa15-4afe-82e0-097403732b02",
+      "name": "asd",
+      "serialNumber": "fgjfghfghj",
+      "type": ["maestro"],
+      "tags": ["maestro"]
+    }
+  ],
+  "stores": [
+    {
+      "id": "store-1",
+      "name": "Store name",
+      "number": "GEKZ63533",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "address": "Street, City zip code",
+      "city": "Los Angeles",
+      "state": "CA",
+      "zipCode": "90001",
+      "country": "United States",
+      "timezone": "America/Los_Angeles",
+      "location": "Street, City zip code",
+      "phone": "(212) 925-0882",
+      "email": "sacramento-contact@company.co",
+      "status": "offline",
+      "productLevel": "Full",
+      "lastSeen": "2025-05-01 | 14:42:03",
+      "tags": ["[Tag label]", "[Tag label2]"],
+      "data": {
+        "weekData": {
+          "totalTests": {
+            "value": 9597,
+            "dir": "down"
+          },
+          "averageTestsPerDevice": {
+            "value": 649,
+            "dir": "up"
+          },
+          "averageTestsPerDay": {
+            "value": 710,
+            "dir": "down"
+          }
+        },
+        "monthData": {
+          "totalTests": {
+            "value": 28844,
+            "dir": "up"
+          },
+          "averageTestsPerDevice": {
+            "value": 2588,
+            "dir": "equal"
+          },
+          "averageTestsPerDay": {
+            "value": 950,
+            "dir": "up"
+          }
+        }
+      },
+      "activityFeed": [
+        {
+          "id": "store-activity-1",
+          "message": "Device has been offline for 10 minutes",
+          "createdAt": "2026-02-01T14:42:03",
+          "type": "comment"
+        },
+        {
+          "id": "store-activity-2",
+          "message": "Paper has been load",
+          "createdAt": "2025-11-27T14:01:08",
+          "type": "intervention"
+        }
+      ]
+    },
+    {
+      "id": "store-3",
+      "name": "École de parfumerie",
+      "number": "GEKZ63534",
+      "customer": {
+        "id": "customer-2",
+        "name": "Givaudan",
+        "email": "contact@givaudan.example",
+        "phone": "+410000000001"
+      },
+      "address": "13 Rue Miollis, 75015 Paris",
+      "city": "Paris",
+      "zipCode": "75015",
+      "country": "France",
+      "timezone": "Europe/Paris",
+      "location": "13 Rue Miollis, 75015 Paris",
+      "phone": "(212) 925-0882",
+      "email": "sacramento-contact@company.co",
+      "status": "offline",
+      "productLevel": "Full",
+      "lastSeen": "2025-05-01 | 14:42:03",
+      "tags": ["[Tag label]", "[Tag label2]"],
+      "data": {
+        "weekData": {
+          "totalTests": {
+            "value": 9597,
+            "dir": "down"
+          },
+          "averageTestsPerDevice": {
+            "value": 649,
+            "dir": "up"
+          },
+          "averageTestsPerDay": {
+            "value": 710,
+            "dir": "down"
+          }
+        },
+        "monthData": {
+          "totalTests": {
+            "value": 28844,
+            "dir": "up"
+          },
+          "averageTestsPerDevice": {
+            "value": 2588,
+            "dir": "equal"
+          },
+          "averageTestsPerDay": {
+            "value": 950,
+            "dir": "up"
+          }
+        }
+      },
+      "activityFeed": [
+        {
+          "id": "store-activity-3",
+          "message": "Device has been offline for 10 minutes",
+          "createdAt": "2026-02-01T14:42:03",
+          "type": "comment"
+        },
+        {
+          "id": "store-activity-4",
+          "message": "Paper has been load",
+          "createdAt": "2025-11-27T14:01:08",
+          "type": "intervention"
+        }
+      ]
+    },
+    {
+      "id": "store-4",
+      "name": "Serramonte",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "address": "2781 Albertha Knolls, South Franco 37017",
+      "city": "South Franco",
+      "zipCode": "37017",
+      "country": "United States",
+      "timezone": "America/Los_Angeles",
+      "location": "2781 Albertha Knolls, South Franco 37017",
+      "phone": "(212) 925-0882",
+      "email": "serramonte-contact@company.co",
+      "status": "online",
+      "productLevel": "Full",
+      "lastSeen": "2025-05-01 | 14:42:03",
+      "tags": ["[Tag label]"],
+      "activityFeed": []
+    },
+    {
+      "id": "store-5",
+      "name": "Burbank Town",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "address": "183 Schmeler Mall, New Gerson 12703",
+      "city": "New Gerson",
+      "zipCode": "12703",
+      "country": "United States",
+      "timezone": "America/Los_Angeles",
+      "location": "183 Schmeler Mall, New Gerson 12703",
+      "phone": "(212) 925-0882",
+      "email": "burbank-contact@company.co",
+      "status": "online",
+      "productLevel": "Full",
+      "lastSeen": "2025-05-01 | 14:42:03",
+      "tags": ["[Tag label]"],
+      "activityFeed": []
+    },
+    {
+      "id": "store-6",
+      "name": "Glendale",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "address": "1161 W River Road, Jessycaworth 99667",
+      "city": "Jessycaworth",
+      "zipCode": "99667",
+      "country": "United States",
+      "timezone": "America/Los_Angeles",
+      "location": "1161 W River Road, Jessycaworth 99667",
+      "phone": "(212) 925-0882",
+      "email": "glendale-contact@company.co",
+      "status": "offline",
+      "productLevel": "Full",
+      "lastSeen": "2025-05-01 | 14:42:03",
+      "tags": ["[Tag label]"],
+      "activityFeed": []
+    },
+    {
+      "id": "store-7",
+      "name": "Macy’s HQ",
+      "customer": {
+        "id": "customer-3",
+        "name": "Macy’s",
+        "email": "contact@macys.example",
+        "phone": "+10000000003"
+      },
+      "address": "64165 Crist Unions, Cape Coral 29282",
+      "city": "Cape Coral",
+      "zipCode": "29282",
+      "country": "United States",
+      "timezone": "America/Los_Angeles",
+      "location": "64165 Crist Unions, Cape Coral 29282",
+      "phone": "(212) 925-0882",
+      "email": "hq-contact@macys.example",
+      "status": "online",
+      "productLevel": "Full",
+      "lastSeen": "2025-05-01 | 14:42:03",
+      "tags": ["[Tag label]"],
+      "activityFeed": []
+    }
+  ],
+  "contracts": [
+    {
+      "id": "contract-1",
+      "name": "Standard",
+      "status": "created",
+      "slaType": "none",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "stores": [
+        {
+          "id": "store-1",
+          "name": "Store name",
+          "location": "Kyiv, Ukraine"
+        }
+      ],
+      "devices": [
+        {
+          "id": "device-1",
+          "name": "Device name",
+          "serialNumber": "PMRRKXV"
+        },
+        {
+          "id": "device-2",
+          "name": "Device name",
+          "serialNumber": "DMGCXKJ"
+        }
+      ],
+      "startDate": "2026-01-01",
+      "endDate": "2026-12-31",
+      "documents": []
+    },
+    {
+      "id": "contract-2",
+      "name": "Premium",
+      "status": "active",
+      "slaType": "class_a",
+      "customer": {
+        "id": "customer-2",
+        "name": "Givaudan",
+        "email": "contact@givaudan.example",
+        "phone": "+410000000001"
+      },
+      "stores": [
+        {
+          "id": "store-2",
+          "name": "Givaudan headquarter",
+          "location": "Vernier, Switzerland"
+        },
+        {
+          "id": "store-3",
+          "name": "École de parfumerie",
+          "location": "Paris, France"
+        }
+      ],
+      "devices": [
+        {
+          "id": "device-3",
+          "name": "Grand piano",
+          "serialNumber": "PMRRKXV"
+        },
+        {
+          "id": "device-4",
+          "name": "Mini piano unit #1",
+          "serialNumber": "PMRRKXV"
+        }
+      ],
+      "startDate": "2026-01-01",
+      "endDate": "2027-12-31",
+      "documents": []
+    },
+    {
+      "id": "contract-3",
+      "name": "Enterprise",
+      "status": "active",
+      "slaType": "class_aa",
+      "customer": {
+        "id": "customer-1",
+        "name": "Customer name",
+        "email": "customer@example.com",
+        "phone": "+380000000001"
+      },
+      "stores": [
+        {
+          "id": "store-1",
+          "name": "Store name",
+          "location": "Kyiv, Ukraine"
+        }
+      ],
+      "devices": [
+        {
+          "id": "device-5",
+          "name": "Device name",
+          "serialNumber": "D83ADD8"
+        }
+      ],
+      "startDate": "2026-01-01",
+      "endDate": "2026-12-31",
+      "documents": []
+    },
+    {
+      "id": "contract-4",
+      "name": "Completed rollout",
+      "status": "completed",
+      "slaType": "class_aaa",
+      "customer": {
+        "id": "customer-2",
+        "name": "Givaudan",
+        "email": "contact@givaudan.example",
+        "phone": "+410000000001"
+      },
+      "stores": [
+        {
+          "id": "store-2",
+          "name": "Givaudan headquarter",
+          "location": "Vernier, Switzerland"
+        }
+      ],
+      "devices": [
+        {
+          "id": "device-6",
+          "name": "Device name",
+          "serialNumber": "A9C4411"
+        }
+      ],
+      "startDate": "2026-01-01",
+      "endDate": "2026-12-31",
+      "documents": []
+    }
+  ],
+  "deviceTypes": [
+    {
+      "id": "dropper",
+      "name": "Dropper"
+    },
+    {
+      "id": "maestro",
+      "name": "Maestro"
+    },
+    {
+      "id": "screen",
+      "name": "Screen"
+    },
+    {
+      "id": "modem",
+      "name": "Modem"
+    }
+  ],
+  "deviceDetails": {
+    "tags": ["[Tag label1]", "[Tag label2]"],
+    "firmwareVersion": "0.8.0",
+    "selectMode": "Always selected",
+    "deviceMode": "Normal",
+    "dispensedDoses": 1,
+    "lastDistance": "102mm",
+    "connectedDevice": null,
+    "broker": "Public",
+    "data": {
+      "weekData": {
+        "totalTests": {
+          "value": 9597,
+          "dir": "down"
+        },
+        "averageTestsPerDevice": {
+          "value": 649,
+          "dir": "up"
+        },
+        "averageTestsPerDay": {
+          "value": 710,
+          "dir": "down"
+        }
+      },
+      "monthData": {
+        "totalTests": {
+          "value": 38124,
+          "dir": "up"
+        },
+        "averageTestsPerDevice": {
+          "value": 2588,
+          "dir": "equal"
+        },
+        "averageTestsPerDay": {
+          "value": 1241,
+          "dir": "down"
+        }
+      }
+    },
+    "maintenanceDocuments": [
+      {
+        "id": "maintenance-document",
+        "name": "Maintenance-document.pdf",
+        "size": 2560
+      },
+      {
+        "id": "certification",
+        "name": "Certification",
+        "size": 2560
+      }
+    ],
+    "activityFeed": []
+  },
+  "$schema": "./node_modules/json-server/schema.json"
+}
