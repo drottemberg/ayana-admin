@@ -21,6 +21,8 @@ import { getCampaignColumns } from '@/features/customer-messaging/campaign-colum
 import {
   getBroadcastCustomerOptions,
   getApprovedWhatsappTemplatesRequest,
+  getWhatsappTemplateLibraryRequest,
+  createWhatsappTemplateFromLibraryRequest,
   getBroadcastCampaignDetailRequest,
   getBroadcastCampaignsRequest,
   getCustomerBroadcastAudienceRequest,
@@ -31,6 +33,7 @@ import {
   type BroadcastHistoryDetail,
   type BroadcastHistoryItem,
   type BroadcastRecipient,
+  type WhatsappLibraryTemplate,
 } from '@/features/customer-messaging/api'
 
 const MAX_IMAGE_COUNT = 5
@@ -67,6 +70,12 @@ export default function MessagesPage() {
   const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState('')
   const [whatsappTemplateParameters, setWhatsappTemplateParameters] = useState('')
   const [whatsappTemplateHeaderImage, setWhatsappTemplateHeaderImage] = useState(false)
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false)
+  const [libraryLanguage, setLibraryLanguage] = useState('fr')
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [selectedLibraryTemplateKey, setSelectedLibraryTemplateKey] = useState('')
+  const [libraryTemplateName, setLibraryTemplateName] = useState('')
+  const [libraryButtonValues, setLibraryButtonValues] = useState<Record<number, { baseUrl?: string; urlSuffixExample?: string; phoneNumber?: string }>>({})
   const [campaignRequestKey, setCampaignRequestKey] = useState(getCampaignKey)
   const [mode, setMode] = useState<'LIST' | 'CREATE' | 'DETAIL'>(searchParams.get('campaignId') ? 'DETAIL' : searchParams.get('customerId') ? 'CREATE' : 'LIST')
   const [selectedBroadcastId, setSelectedBroadcastId] = useState(searchParams.get('campaignId') ?? '')
@@ -106,8 +115,15 @@ export default function MessagesPage() {
     queryFn: () => getApprovedWhatsappTemplatesRequest(customerId),
     enabled: Boolean(customerId && canSend && sendWhatsappTemplate && selectedChannels.includes('WHATSAPP')),
   })
+  const whatsappTemplateLibraryQuery = useQuery({
+    queryKey: ['customer-broadcast', customerId, 'whatsapp-template-library', libraryLanguage, librarySearch],
+    queryFn: () => getWhatsappTemplateLibraryRequest(customerId, libraryLanguage, librarySearch),
+    enabled: Boolean(customerId && canSend && showTemplateLibrary && sendWhatsappTemplate && selectedChannels.includes('WHATSAPP')),
+  })
   const approvedWhatsappTemplates = whatsappTemplatesQuery.data ?? []
   const selectedWhatsappTemplate = approvedWhatsappTemplates.find((template) => template.name === whatsappTemplateName && template.language === whatsappTemplateLanguage)
+  const libraryTemplates = whatsappTemplateLibraryQuery.data ?? []
+  const selectedLibraryTemplate = libraryTemplates.find((template) => `${template.name}::${template.language}` === selectedLibraryTemplateKey)
   const recipients = audienceQuery.data?.items ?? EMPTY_RECIPIENTS
   const filteredRecipients = useMemo(() => {
     const search = recipientSearch.trim().toLocaleLowerCase()
@@ -160,6 +176,55 @@ export default function MessagesPage() {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not send the message.'),
   })
+  const importLibraryTemplateMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedLibraryTemplate) throw new Error('Choose a template from the library first.')
+      const dynamicButtons = selectedLibraryTemplate.buttons
+        .map((button, index) => ({ button, index }))
+        .filter(({ button }) => ['URL', 'PHONE_NUMBER'].includes(button.type.toUpperCase()))
+      if (dynamicButtons.some(({ button, index }) => button.type.toUpperCase() === 'URL' && !libraryButtonValues[index]?.baseUrl?.trim())) {
+        throw new Error('Enter a base URL for every URL button.')
+      }
+      if (dynamicButtons.some(({ button, index }) => button.type.toUpperCase() === 'PHONE_NUMBER' && !libraryButtonValues[index]?.phoneNumber?.trim())) {
+        throw new Error('Enter a phone number for every phone button.')
+      }
+      const unsupported = selectedLibraryTemplate.buttons.some((button) => !['URL', 'PHONE_NUMBER', 'QUICK_REPLY'].includes(button.type.toUpperCase()))
+      if (unsupported) throw new Error('This library template has a button type that is not supported by the campaign importer. Choose another template or add it in WhatsApp Manager.')
+      const buttonInputs = dynamicButtons.map(({ button, index }) => button.type.toUpperCase() === 'URL'
+        ? {
+            type: 'URL',
+            url: {
+              base_url: libraryButtonValues[index]?.baseUrl?.trim(),
+              ...(libraryButtonValues[index]?.urlSuffixExample?.trim() ? { url_suffix_example: libraryButtonValues[index].urlSuffixExample.trim() } : {}),
+            },
+          }
+        : { type: 'PHONE_NUMBER', phone_number: libraryButtonValues[index]?.phoneNumber?.trim() },
+      )
+      return createWhatsappTemplateFromLibraryRequest({
+        customerId,
+        name: libraryTemplateName.trim(),
+        libraryTemplateName: selectedLibraryTemplate.name,
+        language: selectedLibraryTemplate.language,
+        buttonInputs,
+      })
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['customer-broadcast', customerId, 'whatsapp-templates'] })
+      if (result.status === 'APPROVED') {
+        setWhatsappTemplateName(result.name)
+        setWhatsappTemplateLanguage(result.language)
+        setWhatsappTemplateParameters(Array.from({ length: selectedLibraryTemplate?.bodyParameterCount ?? 0 }, () => '').join('\n'))
+        toast.success('Template added and ready to use.')
+      } else {
+        toast.info(`Template added to this customer’s WhatsApp account with status ${result.status}. It will appear for sending when approved.`)
+      }
+      setShowTemplateLibrary(false)
+      setSelectedLibraryTemplateKey('')
+      setLibraryTemplateName('')
+      setLibraryButtonValues({})
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not add the library template.'),
+  })
 
   useEffect(() => {
     const next = new URLSearchParams()
@@ -178,6 +243,10 @@ export default function MessagesPage() {
     setWhatsappTemplateLanguage('')
     setWhatsappTemplateParameters('')
     setWhatsappTemplateHeaderImage(false)
+    setShowTemplateLibrary(false)
+    setSelectedLibraryTemplateKey('')
+    setLibraryTemplateName('')
+    setLibraryButtonValues({})
   }, [customerId])
 
   useEffect(() => {
@@ -457,6 +526,86 @@ export default function MessagesPage() {
                     Also send an approved WhatsApp template
                   </label>
                   <p className="text-xs text-muted-foreground">The regular message and images are still sent. The approved template is an additional WhatsApp message and can reach people outside the 24-hour window.</p>
+                  <div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowTemplateLibrary((current) => !current)}>
+                      {showTemplateLibrary ? 'Hide Meta template library' : 'Browse Meta template library'}
+                    </Button>
+                  </div>
+                  {showTemplateLibrary ? (
+                    <div className="grid gap-3 rounded-md border p-3">
+                      <div>
+                        <p className="text-sm font-medium">Add a Meta utility template to {selectedCustomer?.name ?? 'this customer'}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">The template is added to this customer’s WhatsApp account. Its text comes from Meta’s library and cannot be edited here.</p>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
+                        <Input value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Search templates..." />
+                        <Input value={libraryLanguage} onChange={(event) => setLibraryLanguage(event.target.value)} placeholder="Language (e.g. fr)" aria-label="Template library language" />
+                      </div>
+                      {whatsappTemplateLibraryQuery.isError ? <p className="text-sm text-destructive">{whatsappTemplateLibraryQuery.error instanceof Error ? whatsappTemplateLibraryQuery.error.message : 'Could not load Meta’s template library.'}</p> : null}
+                      {whatsappTemplateLibraryQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading Meta templates…</p> : null}
+                      {!whatsappTemplateLibraryQuery.isLoading && !whatsappTemplateLibraryQuery.isError && !libraryTemplates.length ? <p className="text-sm text-muted-foreground">No utility templates were found for this language and search.</p> : null}
+                      {libraryTemplates.length ? (
+                        <div className="max-h-72 space-y-2 overflow-y-auto">
+                          {libraryTemplates.map((template) => {
+                            const key = `${template.name}::${template.language}`
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedLibraryTemplateKey(key)
+                                  setLibraryTemplateName(`ayana_${template.name}`.slice(0, 512))
+                                  const values: Record<number, { baseUrl?: string; urlSuffixExample?: string; phoneNumber?: string }> = {}
+                                  template.buttons.forEach((button, index) => {
+                                    if (button.type.toUpperCase() === 'URL') values[index] = { baseUrl: '', urlSuffixExample: '' }
+                                    if (button.type.toUpperCase() === 'PHONE_NUMBER') values[index] = { phoneNumber: '' }
+                                  })
+                                  setLibraryButtonValues(values)
+                                }}
+                                className={`w-full rounded-md border p-3 text-left transition-colors hover:bg-muted/50 ${selectedLibraryTemplateKey === key ? 'border-primary bg-muted/40' : 'border-border'}`}
+                              >
+                                <span className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-medium">{template.name}</span>
+                                  <span className="text-xs text-muted-foreground">{template.language} · {template.topic ?? 'Utility'}</span>
+                                </span>
+                                <span className="mt-1 block whitespace-pre-wrap text-xs text-muted-foreground">{template.body}</span>
+                                {template.buttons.length ? <span className="mt-2 block text-xs">Buttons: {template.buttons.map((button) => button.text ?? button.type).join(', ')}</span> : null}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                      {selectedLibraryTemplate ? (
+                        <div className="grid gap-3 rounded-md border border-primary/30 p-3">
+                          <p className="text-sm font-medium">Add “{selectedLibraryTemplate.name}” to this customer’s WhatsApp account</p>
+                          <label className="grid gap-1.5 text-sm font-medium">
+                            <span>Template name in WhatsApp</span>
+                            <Input value={libraryTemplateName} onChange={(event) => setLibraryTemplateName(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))} placeholder="ayana_template_name" />
+                          </label>
+                          {selectedLibraryTemplate.buttons.map((button, index) => button.type.toUpperCase() === 'URL' ? (
+                            <div key={`${button.type}-${index}`} className="grid gap-2 sm:grid-cols-2">
+                              <label className="grid gap-1.5 text-sm font-medium"><span>URL button: {button.text ?? `Button ${index + 1}`} · base URL</span><Input value={libraryButtonValues[index]?.baseUrl ?? ''} onChange={(event) => setLibraryButtonValues((current) => ({ ...current, [index]: { ...current[index], baseUrl: event.target.value } }))} placeholder="https://ayana.club/booking" /></label>
+                              <label className="grid gap-1.5 text-sm font-medium"><span>URL example (if required)</span><Input value={libraryButtonValues[index]?.urlSuffixExample ?? ''} onChange={(event) => setLibraryButtonValues((current) => ({ ...current, [index]: { ...current[index], urlSuffixExample: event.target.value } }))} placeholder="Example URL" /></label>
+                            </div>
+                          ) : button.type.toUpperCase() === 'PHONE_NUMBER' ? (
+                            <label key={`${button.type}-${index}`} className="grid gap-1.5 text-sm font-medium"><span>Phone button: {button.text ?? `Button ${index + 1}`}</span><Input value={libraryButtonValues[index]?.phoneNumber ?? ''} onChange={(event) => setLibraryButtonValues((current) => ({ ...current, [index]: { ...current[index], phoneNumber: event.target.value } }))} placeholder="+33123456789" /></label>
+                          ) : null)}
+                          {selectedLibraryTemplate.buttons.some((button) => !['URL', 'PHONE_NUMBER', 'QUICK_REPLY'].includes(button.type.toUpperCase())) ? <p className="text-xs text-destructive">This template contains a button type the campaign importer cannot configure. Add it through WhatsApp Manager instead.</p> : null}
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              loading={importLibraryTemplateMutation.isPending}
+                              disabled={!libraryTemplateName.trim() || selectedLibraryTemplate.buttons.some((button, index) => (button.type.toUpperCase() === 'URL' && !libraryButtonValues[index]?.baseUrl?.trim()) || (button.type.toUpperCase() === 'PHONE_NUMBER' && !libraryButtonValues[index]?.phoneNumber?.trim()) || !['URL', 'PHONE_NUMBER', 'QUICK_REPLY'].includes(button.type.toUpperCase()))}
+                              onClick={() => importLibraryTemplateMutation.mutate()}
+                            >
+                              Add to customer WhatsApp
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {sendWhatsappTemplate ? <>
                     {whatsappTemplatesQuery.isError ? (
                       <div className="grid gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">

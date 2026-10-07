@@ -20,6 +20,27 @@ export type ApprovedWhatsappTemplate = {
   headerImage: boolean
 }
 
+export type WhatsappLibraryTemplate = {
+  name: string
+  language: string
+  category: string
+  topic: string | null
+  usecase: string | null
+  industry: string[]
+  header: string | null
+  body: string
+  buttons: Array<{ type: string; text?: string; [key: string]: unknown }>
+  bodyParameterCount: number
+}
+
+export type CreateWhatsappTemplateFromLibraryResult = {
+  id: string | null
+  name: string
+  language: string
+  category: string
+  status: string
+}
+
 export type BroadcastRecipient = {
   id: string
   userId: string
@@ -149,6 +170,34 @@ export async function getCustomerBroadcastAudienceRequest(
 
 export async function getApprovedWhatsappTemplatesRequest(customerId: string): Promise<ApprovedWhatsappTemplate[]> {
   return apiClient.get<ApprovedWhatsappTemplate[]>(`/messaging/broadcast/customers/${customerId}/whatsapp-templates`)
+}
+
+export async function getWhatsappTemplateLibraryRequest(
+  customerId: string,
+  language: string,
+  search: string,
+): Promise<WhatsappLibraryTemplate[]> {
+  const params = new URLSearchParams({ language })
+  if (search.trim()) params.set('search', search.trim())
+  return apiClient.get<WhatsappLibraryTemplate[]>(`/messaging/broadcast/customers/${customerId}/whatsapp-template-library?${params}`)
+}
+
+export async function createWhatsappTemplateFromLibraryRequest(input: {
+  customerId: string
+  name: string
+  libraryTemplateName: string
+  language: string
+  buttonInputs: Array<Record<string, unknown>>
+}): Promise<CreateWhatsappTemplateFromLibraryResult> {
+  return apiClient.post<CreateWhatsappTemplateFromLibraryResult>(
+    `/messaging/broadcast/customers/${input.customerId}/whatsapp-template-library`,
+    {
+      name: input.name,
+      libraryTemplateName: input.libraryTemplateName,
+      language: input.language,
+      buttonInputs: input.buttonInputs,
+    },
+  )
 }
 
 export async function sendCustomerBroadcastRequest(input: {
