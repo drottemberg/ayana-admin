@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { NO_VALUE_STR } from '@/constants'
 import type { ClientContract } from '@/types/client-contract'
+import { DateUtils } from '@/utils'
 
 const statusStyles: Record<ClientContract['status'], string> = {
   ACTIVE: 'border-green-200 text-green-800',
@@ -19,6 +20,11 @@ export function getClientContractColumns(options: { showCustomer?: boolean; show
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => <Badge variant="outline" className={statusStyles[row.original.status]}>{row.original.status}</Badge>,
+    },
+    {
+      accessorKey: 'createdAt',
+      header: 'Created at',
+      cell: ({ row }) => DateUtils.formatDateTime(row.original.createdAt, NO_VALUE_STR),
     },
     {
       id: 'pricingOptionName',

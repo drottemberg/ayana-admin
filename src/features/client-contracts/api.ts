@@ -5,7 +5,10 @@ import type { ClientContract } from '@/types/client-contract'
 
 export const clientContractsListConfig = {
   url: '/client-contracts/list',
-  toPayload: (state: DataTableState<ClientContract>, filters?: Record<string, unknown>) => toApiListDto(state, filters),
+  toPayload: (state: DataTableState<ClientContract>, filters?: Record<string, unknown>) => {
+    const payload = toApiListDto(state, filters)
+    return payload.orderBy ? payload : { ...payload, orderBy: 'createdAt', order: 'desc' as const }
+  },
   toResult: (result: ApiListResult<unknown>): DataTableAsyncResult<ClientContract> =>
     toDataTableResult(result as ApiListResult<ClientContract>),
 }
