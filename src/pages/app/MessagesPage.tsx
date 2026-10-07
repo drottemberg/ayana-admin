@@ -20,12 +20,14 @@ import { useConnect } from '@/features/app/use-connect'
 import { getCampaignColumns } from '@/features/customer-messaging/campaign-columns'
 import {
   getBroadcastCustomerOptions,
+  getApprovedWhatsappTemplatesRequest,
   getBroadcastCampaignDetailRequest,
   getBroadcastCampaignsRequest,
   getCustomerBroadcastAudienceRequest,
   sendCustomerBroadcastRequest,
   type BroadcastActivity,
   type BroadcastAudienceFilters,
+  type BroadcastChannel,
   type BroadcastHistoryDetail,
   type BroadcastHistoryItem,
   type BroadcastRecipient,
@@ -52,16 +54,24 @@ export default function MessagesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { session } = useConnect()
   const [customerSearch, setCustomerSearch] = useState('')
+  const [recipientSearch, setRecipientSearch] = useState('')
   const [customerId, setCustomerId] = useState(searchParams.get('customerId') ?? '')
   const [locationIds, setLocationIds] = useState<string[]>([])
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
   const [message, setMessage] = useState('')
   const [files, setFiles] = useState<File[]>([])
+  const [selectedChannels, setSelectedChannels] = useState<BroadcastChannel[]>(['WHATSAPP', 'TELEGRAM', 'EMAIL'])
+  const [sendWhatsappTemplate, setSendWhatsappTemplate] = useState(false)
+  const [whatsappTemplateName, setWhatsappTemplateName] = useState('')
+  const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState('')
+  const [whatsappTemplateParameters, setWhatsappTemplateParameters] = useState('')
+  const [whatsappTemplateHeaderImage, setWhatsappTemplateHeaderImage] = useState(false)
   const [campaignRequestKey, setCampaignRequestKey] = useState(getCampaignKey)
   const [mode, setMode] = useState<'LIST' | 'CREATE' | 'DETAIL'>(searchParams.get('campaignId') ? 'DETAIL' : searchParams.get('customerId') ? 'CREATE' : 'LIST')
   const [selectedBroadcastId, setSelectedBroadcastId] = useState(searchParams.get('campaignId') ?? '')
   const [failedDeliveries, setFailedDeliveries] = useState<BroadcastAudienceResult['failed']>([])
+  const [deliveryWarnings, setDeliveryWarnings] = useState<BroadcastAudienceResult['warnings']>([])
   const queryClient = useQueryClient()
 
   const canSend = Boolean(session?.permissions.customers?.edit)
@@ -91,29 +101,60 @@ export default function MessagesPage() {
     queryFn: () => getBroadcastCampaignDetailRequest(selectedBroadcastId),
     enabled: Boolean(selectedBroadcastId && canSend && mode === 'DETAIL'),
   })
+  const whatsappTemplatesQuery = useQuery({
+    queryKey: ['customer-broadcast', customerId, 'whatsapp-templates'],
+    queryFn: () => getApprovedWhatsappTemplatesRequest(customerId),
+    enabled: Boolean(customerId && canSend && sendWhatsappTemplate && selectedChannels.includes('WHATSAPP')),
+  })
+  const approvedWhatsappTemplates = whatsappTemplatesQuery.data ?? []
+  const selectedWhatsappTemplate = approvedWhatsappTemplates.find((template) => template.name === whatsappTemplateName && template.language === whatsappTemplateLanguage)
   const recipients = audienceQuery.data?.items ?? EMPTY_RECIPIENTS
+  const filteredRecipients = useMemo(() => {
+    const search = recipientSearch.trim().toLocaleLowerCase()
+    if (!search) return recipients
+    return recipients.filter((recipient) => [recipient.userName, recipient.email, recipient.phone, recipient.channelLabel]
+      .some((value) => value?.toLocaleLowerCase().includes(search)),
+    )
+  }, [recipientSearch, recipients])
   const sendMutation = useMutation({
     mutationFn: () => sendCustomerBroadcastRequest({
       customerId,
       idempotencyKey: campaignRequestKey,
       recipientIds: selectedRecipientIds,
       filters,
+      channels: selectedChannels,
       message,
       files,
+      whatsappTemplate: sendWhatsappTemplate && selectedChannels.includes('WHATSAPP') && whatsappTemplateName.trim()
+        ? {
+            name: whatsappTemplateName.trim(),
+            language: whatsappTemplateLanguage.trim(),
+            bodyParameters: whatsappTemplateParameters.split('\n').map((value) => value.trim()).filter(Boolean),
+            headerImage: whatsappTemplateHeaderImage,
+          }
+        : undefined,
     }),
     onSuccess: (result) => {
       try { sessionStorage.removeItem(CAMPAIGN_KEY_STORAGE) } catch { /* Ignore unavailable session storage. */ }
       setFailedDeliveries(result.failed)
+      setDeliveryWarnings(result.warnings ?? [])
       void queryClient.invalidateQueries({ queryKey: ['customer-broadcast', 'campaigns'] })
       if (result.inProgress) {
         toast.info('This campaign is already being processed. No duplicate messages were sent.')
       } else if (result.failed.length) {
         toast.warning(`Sent via ${result.channelsSent}/${result.channelsTotal} chat channels and emailed ${result.emailsSent}/${result.emailsTotal} people.`)
+      } else if (result.warnings?.length) {
+        toast.warning(`Another WhatsApp message failed for ${result.warnings.length} recipient(s); the template or regular message was accepted.`)
       } else {
         toast.success(`Message sent via ${result.channelsSent} chat channels and emailed ${result.emailsSent} people.`)
       }
       setMessage('')
       setFiles([])
+      setSendWhatsappTemplate(false)
+      setWhatsappTemplateName('')
+      setWhatsappTemplateLanguage('')
+      setWhatsappTemplateParameters('')
+      setWhatsappTemplateHeaderImage(false)
       setSelectedBroadcastId(result.campaignId)
       setMode('DETAIL')
     },
@@ -131,6 +172,12 @@ export default function MessagesPage() {
     setLocationIds([])
     setSelectedRecipientIds([])
     setFailedDeliveries([])
+    setDeliveryWarnings([])
+    setSendWhatsappTemplate(false)
+    setWhatsappTemplateName('')
+    setWhatsappTemplateLanguage('')
+    setWhatsappTemplateParameters('')
+    setWhatsappTemplateHeaderImage(false)
   }, [customerId])
 
   useEffect(() => {
@@ -157,10 +204,16 @@ export default function MessagesPage() {
   }
 
   const selectedRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id))
-  const selectedEmailCount = new Set(selectedRecipients.filter((recipient) => recipient.email).map((recipient) => recipient.userId)).size
+  const selectedChatCount = selectedRecipients.filter((recipient) => selectedChannels.includes(recipient.channel)).length
+  const selectedEmailCount = selectedChannels.includes('EMAIL')
+    ? new Set(selectedRecipients.filter((recipient) => recipient.email).map((recipient) => recipient.userId)).size
+    : 0
   const availableEmailCount = new Set(recipients.filter((recipient) => recipient.email).map((recipient) => recipient.userId)).size
-  const allSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id))
-  const toggleAll = () => setSelectedRecipientIds(allSelected ? [] : recipients.map((recipient) => recipient.id))
+  const allSelected = filteredRecipients.length > 0 && filteredRecipients.every((recipient) => selectedRecipientIds.includes(recipient.id))
+  const toggleAll = () => setSelectedRecipientIds((current) => allSelected
+    ? current.filter((id) => !filteredRecipients.some((recipient) => recipient.id === id))
+    : [...new Set([...current, ...filteredRecipients.map((recipient) => recipient.id)])],
+  )
   const toggleRecipient = (recipientId: string) => setSelectedRecipientIds((current) =>
     current.includes(recipientId) ? current.filter((id) => id !== recipientId) : [...current, recipientId],
   )
@@ -168,6 +221,12 @@ export default function MessagesPage() {
     setLocationIds((current) => current.includes(locationId)
       ? current.filter((id) => id !== locationId)
       : [...current, locationId],
+    )
+  }
+  const toggleChannel = (channel: BroadcastChannel) => {
+    setSelectedChannels((current) => current.includes(channel)
+      ? current.filter((item) => item !== channel)
+      : [...current, channel],
     )
   }
   const addFiles = (incoming: FileList | null) => {
@@ -194,11 +253,30 @@ export default function MessagesPage() {
   const handleSend = () => {
     if (sendMutation.isPending) return
     if (!selectedRecipientIds.length) return toast.error('Select at least one recipient.')
-    if (!message.trim() && !files.length) return toast.error('Write a message or attach an image.')
+    if (!selectedChannels.length) return toast.error('Select at least one channel.')
+    if (sendWhatsappTemplate && selectedChannels.includes('WHATSAPP') && !whatsappTemplateName.trim()) {
+      return toast.error('Enter the approved WhatsApp template name.')
+    }
+    if (sendWhatsappTemplate && selectedChannels.includes('WHATSAPP') && !whatsappTemplateLanguage.trim()) {
+      return toast.error('Enter the approved WhatsApp template language.')
+    }
+    if (sendWhatsappTemplate && selectedWhatsappTemplate) {
+      const enteredCount = whatsappTemplateParameters.split('\n').map((value) => value.trim()).filter(Boolean).length
+      if (enteredCount !== selectedWhatsappTemplate.bodyParameterCount) {
+        return toast.error(`This template needs exactly ${selectedWhatsappTemplate.bodyParameterCount} body variable value(s).`)
+      }
+      if (selectedWhatsappTemplate.headerImage && !files.length) {
+        return toast.error('This template requires an image header. Attach an image first.')
+      }
+    }
+    if (!message.trim() && !files.length && !(sendWhatsappTemplate && selectedChannels.includes('WHATSAPP'))) {
+      return toast.error('Write a message, attach an image, or choose an approved WhatsApp template.')
+    }
     if (files.reduce((total, file) => total + file.size, 0) > 25 * 1024 * 1024) {
       return toast.error('Images must total 25 MB or less.')
     }
     setFailedDeliveries([])
+    setDeliveryWarnings([])
     sendMutation.mutate()
   }
 
@@ -324,16 +402,22 @@ export default function MessagesPage() {
                     {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.length} chat channels · ${availableEmailCount} with email`}
                   </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={toggleAll} disabled={!recipients.length || audienceQuery.isFetching}>
+                <Button variant="outline" size="sm" onClick={toggleAll} disabled={!filteredRecipients.length || audienceQuery.isFetching}>
                   {allSelected ? 'Deselect all' : 'Select all'}
                 </Button>
+              </div>
+              <div className="border-b border-border p-3">
+                <Input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search by name, email, or phone..." />
               </div>
               <div className="max-h-[520px] divide-y divide-border overflow-y-auto">
                 {audienceQuery.isError ? <p className="p-4 text-sm text-destructive">Could not load recipients.</p> : null}
                 {!audienceQuery.isFetching && !recipients.length ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">No reachable contacts match these filters.</p>
                 ) : null}
-                {recipients.map((recipient) => (
+                {!audienceQuery.isFetching && recipients.length > 0 && !filteredRecipients.length ? (
+                  <p className="p-6 text-center text-sm text-muted-foreground">No recipients match this search.</p>
+                ) : null}
+                {filteredRecipients.map((recipient) => (
                   <RecipientRow
                     key={recipient.id}
                     recipient={recipient}
@@ -347,8 +431,88 @@ export default function MessagesPage() {
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <div>
                 <h2 className="font-semibold">Compose</h2>
-                <p className="text-sm text-muted-foreground">Sending to {selectedRecipients.length} selected chat channels and {selectedEmailCount} email addresses for {selectedCustomer?.name ?? 'this customer'}.</p>
+                <p className="text-sm text-muted-foreground">Sending through {selectedChatCount} selected chat channels and {selectedEmailCount} email addresses for {selectedCustomer?.name ?? 'this customer'}.</p>
               </div>
+              <fieldset className="grid gap-2 rounded-lg border border-border p-3">
+                <legend className="px-1 text-sm font-medium">Delivery channels</legend>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {([
+                    ['WHATSAPP', 'WhatsApp'],
+                    ['TELEGRAM', 'Telegram'],
+                    ['EMAIL', 'Email'],
+                  ] as const).map(([channel, label]) => (
+                    <label key={channel} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={selectedChannels.includes(channel)} onChange={() => toggleChannel(channel)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Email is sent once per selected person who has an email address.</p>
+              </fieldset>
+              {selectedChannels.includes('WHATSAPP') ? (
+                <fieldset className="grid gap-3 rounded-lg border border-border p-3">
+                  <legend className="px-1 text-sm font-medium">WhatsApp template</legend>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={sendWhatsappTemplate} onChange={(event) => setSendWhatsappTemplate(event.target.checked)} />
+                    Also send an approved WhatsApp template
+                  </label>
+                  <p className="text-xs text-muted-foreground">The regular message and images are still sent. The approved template is an additional WhatsApp message and can reach people outside the 24-hour window.</p>
+                  {sendWhatsappTemplate ? <>
+                    {whatsappTemplatesQuery.isError ? (
+                      <div className="grid gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                        <p className="text-xs text-muted-foreground">{whatsappTemplatesQuery.error instanceof Error ? whatsappTemplatesQuery.error.message : 'Could not load templates from Meta.'} Enter the exact approved template name and language translation below.</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="grid gap-1.5 text-sm font-medium"><span>Approved template name</span><Input value={whatsappTemplateName} onChange={(event) => setWhatsappTemplateName(event.target.value)} placeholder="Template name from WhatsApp Manager" /></label>
+                          <label className="grid gap-1.5 text-sm font-medium"><span>Exact language code</span><Input value={whatsappTemplateLanguage} onChange={(event) => setWhatsappTemplateLanguage(event.target.value)} placeholder="e.g. fr_FR" /></label>
+                        </div>
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          <span>Body variables <span className="font-normal text-muted-foreground">(one value per placeholder, in order)</span></span>
+                          <Textarea value={whatsappTemplateParameters} onChange={(event) => setWhatsappTemplateParameters(event.target.value)} rows={3} placeholder={'Value for {{1}}\nValue for {{2}}'} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="grid gap-1.5 text-sm font-medium">
+                        <span>Approved template and language</span>
+                        <Select
+                          value={selectedWhatsappTemplate ? `${selectedWhatsappTemplate.name}::${selectedWhatsappTemplate.language}` : ''}
+                          onValueChange={(value) => {
+                            const template = approvedWhatsappTemplates.find((item) => `${item.name}::${item.language}` === value)
+                            if (!template) return
+                            setWhatsappTemplateName(template.name)
+                            setWhatsappTemplateLanguage(template.language)
+                            setWhatsappTemplateParameters(Array.from({ length: template.bodyParameterCount }, () => '').join('\n'))
+                            setWhatsappTemplateHeaderImage(template.headerImage)
+                          }}
+                          disabled={whatsappTemplatesQuery.isLoading || !approvedWhatsappTemplates.length}
+                        >
+                          <SelectTrigger className="w-full"><SelectValue placeholder={whatsappTemplatesQuery.isLoading ? 'Loading approved templates…' : 'Choose an approved template'} /></SelectTrigger>
+                          <SelectContent>
+                            {approvedWhatsappTemplates.map((template) => <SelectItem key={`${template.name}-${template.language}`} value={`${template.name}::${template.language}`}>{template.name} · {template.language} · {template.category}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {!whatsappTemplatesQuery.isLoading && !approvedWhatsappTemplates.length ? <span className="text-xs font-normal text-muted-foreground">No approved templates were returned by Meta for this customer.</span> : null}
+                      </label>
+                    )}
+                    {selectedWhatsappTemplate ? <div className="space-y-2 rounded-md border p-3 text-xs">
+                      <p className="font-medium">Approved template text</p>
+                      <p className="whitespace-pre-wrap text-muted-foreground">{selectedWhatsappTemplate.bodyText || 'No text body.'}</p>
+                    </div> : null}
+                    {selectedWhatsappTemplate?.bodyParameterCount ? <label className="grid gap-1.5 text-sm font-medium">
+                      <span>Body variables <span className="font-normal text-muted-foreground">({selectedWhatsappTemplate.bodyParameterCount} values, in template order)</span></span>
+                      <Textarea value={whatsappTemplateParameters} onChange={(event) => setWhatsappTemplateParameters(event.target.value)} rows={Math.min(8, Math.max(2, selectedWhatsappTemplate.bodyParameterCount))} placeholder={'Value for {{1}}\nValue for {{2}}'} />
+                      <span className="text-xs font-normal text-muted-foreground">Each line replaces the matching placeholder, for example line 1 replaces {'{{1}}'}.</span>
+                    </label> : null}
+                    {selectedWhatsappTemplate?.headerImage ? <>
+                      <p className="text-sm">This template requires an image header; the first attached image will be used.</p>
+                      {whatsappTemplateHeaderImage && !files.length ? <p className="text-xs text-destructive">Attach an image for the template header.</p> : null}
+                    </> : null}
+                    {whatsappTemplatesQuery.isError ? <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={whatsappTemplateHeaderImage} onChange={(event) => setWhatsappTemplateHeaderImage(event.target.checked)} />
+                      This manually entered template requires an image header
+                    </label> : null}
+                  </> : null}
+                </fieldset>
+              ) : null}
               <label className="grid gap-1.5 text-sm font-medium">
                 <span>Message</span>
                 <Textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={4096} rows={6} placeholder="Write your message..." />
@@ -371,13 +535,19 @@ export default function MessagesPage() {
                   ))}
                 </div>
               ) : null}
+              {deliveryWarnings.length ? (
+                <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+                  <p className="font-medium">One WhatsApp message failed, but another message for these recipients was accepted.</p>
+                  {deliveryWarnings.map((warning) => <p key={`${warning.recipientId}-${warning.channel}`} className="text-muted-foreground">{warning.userName} · {warning.channel}: {warning.warning}</p>)}
+                </div>
+              ) : null}
               <div className="flex justify-end border-t border-border pt-3">
                 <Button
                   onClick={handleSend}
                   loading={sendMutation.isPending}
-                  disabled={!customerId || !selectedRecipientIds.length || (!message.trim() && !files.length) || audienceQuery.isFetching}
+                  disabled={!customerId || !selectedRecipientIds.length || !selectedChannels.length || (!message.trim() && !files.length && !(sendWhatsappTemplate && selectedChannels.includes('WHATSAPP'))) || audienceQuery.isFetching}
                 >
-                  Send to {selectedRecipients.length} channels + {selectedEmailCount} emails
+                  Send to {selectedChatCount} chat channels + {selectedEmailCount} emails
                 </Button>
               </div>
             </section>
@@ -424,6 +594,8 @@ function CampaignDetailPage({
       { label: 'Recipients', value: detail.total },
       { label: 'Accepted', value: sentCount },
       { label: 'Failed', value: detail.counts.FAILED ?? 0 },
+      { label: 'Channels', value: (detail.filters?.channels ?? []).map(channelLabel).join(', ') || 'All channels' },
+      ...(detail.filters?.whatsappTemplate ? [{ label: 'WhatsApp template', value: `${detail.filters.whatsappTemplate.name} (${detail.filters.whatsappTemplate.language})` }] : []),
     ],
   }, {
     title: 'Audience',
@@ -465,7 +637,14 @@ function CampaignDetailPage({
       <Card id="module-message" className="border border-border p-0 ring-0">
         <CardHeader className="border-b p-5"><CardTitle>Message</CardTitle></CardHeader>
         <CardContent className="space-y-4 p-5">
-          {detail.message ? <p className="whitespace-pre-wrap text-sm">{detail.message}</p> : <p className="text-sm text-muted-foreground">This campaign contains images only.</p>}
+          {detail.message ? <p className="whitespace-pre-wrap text-sm">{detail.message}</p> : detail.filters?.whatsappTemplate ? <p className="text-sm text-muted-foreground">WhatsApp template campaign.</p> : <p className="text-sm text-muted-foreground">This campaign contains images only.</p>}
+          {detail.filters?.whatsappTemplate ? (
+            <div className="rounded-md border p-3 text-sm">
+              <p className="font-medium">WhatsApp template: {detail.filters.whatsappTemplate.name} · {detail.filters.whatsappTemplate.language}</p>
+              {detail.filters.whatsappTemplate.bodyParameters.length ? <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{detail.filters.whatsappTemplate.bodyParameters.join('\n')}</p> : null}
+              {detail.filters.whatsappTemplate.headerImage ? <p className="mt-1 text-muted-foreground">First attached image used as header.</p> : null}
+            </div>
+          ) : null}
           {detail.media.length ? <div className="flex flex-wrap gap-3">{detail.media.map((media) => <a key={`${media.name}-${media.url}`} href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-md border p-2 text-sm underline-offset-2 hover:underline"><img src={media.url} alt="" className="size-12 rounded object-cover" /><span>{media.name}</span></a>)}</div> : null}
           <StatusCounts counts={detail.counts} />
           <p className="text-xs text-muted-foreground">WhatsApp may report delivered/read. Telegram and email report provider acceptance.</p>
@@ -526,6 +705,10 @@ function activityLabel(activity: BroadcastActivity) {
   return ({ ALL: 'Everyone who contacted this customer', CLASS_BOOKING: 'Booked a class', PRODUCT_PURCHASE: 'Purchased a product', BOTH: 'Booked a class and purchased a product' } as const)[activity]
 }
 
+function channelLabel(channel: BroadcastChannel) {
+  return ({ WHATSAPP: 'WhatsApp', TELEGRAM: 'Telegram', EMAIL: 'Email' } as const)[channel]
+}
+
 function StatusCounts({ counts }: { counts: Record<string, number> }) {
   const labels = ['SENT', 'DELIVERED', 'READ', 'FAILED', 'PENDING'].filter((status) => counts[status])
   return <span className="flex flex-wrap gap-1.5">{labels.map((status) => <Badge key={status} variant={status === 'FAILED' ? 'destructive' : 'outline'}>{counts[status]} {statusLabel(status)}</Badge>)}</span>
@@ -543,6 +726,7 @@ function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRe
         <span className="block truncate text-sm font-medium">{recipient.userName}</span>
         <span className="block truncate text-xs text-muted-foreground">{recipient.channelLabel}</span>
         {recipient.email ? <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span> : null}
+        {recipient.phone ? <span className="block truncate text-xs text-muted-foreground">{recipient.phone}</span> : null}
       </span>
       <Badge variant="outline">{recipient.channel === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}</Badge>
       <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(recipient.lastContactAt).toLocaleDateString()}</span>

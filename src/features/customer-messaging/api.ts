@@ -9,11 +9,23 @@ export type BroadcastAudienceFilters = {
   activity: BroadcastActivity
 }
 
+export type BroadcastChannel = 'WHATSAPP' | 'TELEGRAM' | 'EMAIL'
+
+export type ApprovedWhatsappTemplate = {
+  name: string
+  language: string
+  category: string
+  bodyText: string
+  bodyParameterCount: number
+  headerImage: boolean
+}
+
 export type BroadcastRecipient = {
   id: string
   userId: string
   userName: string
   email: string | null
+  phone: string | null
   channel: 'WHATSAPP' | 'TELEGRAM'
   channelId: string
   channelLabel: string
@@ -34,6 +46,12 @@ export type BroadcastSendResult = {
   channelsSent: number
   emailsTotal: number
   emailsSent: number
+  warnings: Array<{
+    recipientId: string
+    userName: string
+    channel: BroadcastRecipient['channel']
+    warning: string
+  }>
   failed: Array<{
     recipientId: string
     userName: string
@@ -53,7 +71,12 @@ export type BroadcastHistoryItem = Record<string, unknown> & {
   createdAt: string
   total: number
   counts: Record<string, number>
-  filters?: { locationIds: string[]; activity: BroadcastActivity } | null
+  filters?: {
+    locationIds: string[]
+    activity: BroadcastActivity
+    channels?: BroadcastChannel[]
+    whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; headerImage: boolean } | null
+  } | null
 }
 
 export type BroadcastDelivery = Record<string, unknown> & {
@@ -76,7 +99,12 @@ export type BroadcastDelivery = Record<string, unknown> & {
 }
 
 export type BroadcastHistoryDetail = BroadcastHistoryItem & {
-  filters: { locationIds: string[]; activity: BroadcastActivity } | null
+  filters: {
+    locationIds: string[]
+    activity: BroadcastActivity
+    channels?: BroadcastChannel[]
+    whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; headerImage: boolean } | null
+  } | null
   deliveries: BroadcastDelivery[]
 }
 
@@ -119,20 +147,33 @@ export async function getCustomerBroadcastAudienceRequest(
   return apiClient.post<BroadcastAudience>(`/messaging/broadcast/customers/${customerId}/audience`, filters)
 }
 
+export async function getApprovedWhatsappTemplatesRequest(customerId: string): Promise<ApprovedWhatsappTemplate[]> {
+  return apiClient.get<ApprovedWhatsappTemplate[]>(`/messaging/broadcast/customers/${customerId}/whatsapp-templates`)
+}
+
 export async function sendCustomerBroadcastRequest(input: {
   customerId: string
   idempotencyKey: string
   recipientIds: string[]
   filters: BroadcastAudienceFilters
+  channels: BroadcastChannel[]
   message: string
   files: File[]
+  whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; headerImage: boolean }
 }): Promise<BroadcastSendResult> {
   const body = new FormData()
   body.append('idempotencyKey', input.idempotencyKey)
   body.append('recipientIds', JSON.stringify(input.recipientIds))
   body.append('locationIds', JSON.stringify(input.filters.locationIds))
   body.append('activity', input.filters.activity)
+  body.append('channels', JSON.stringify(input.channels))
   body.append('message', input.message)
+  if (input.whatsappTemplate) {
+    body.append('whatsappTemplateName', input.whatsappTemplate.name)
+    body.append('whatsappTemplateLanguage', input.whatsappTemplate.language)
+    body.append('whatsappTemplateBodyParameters', JSON.stringify(input.whatsappTemplate.bodyParameters))
+    body.append('whatsappTemplateHeaderImage', String(input.whatsappTemplate.headerImage))
+  }
   input.files.forEach((file) => body.append('files', file, file.name))
 
   return apiClient.post<BroadcastSendResult>(
