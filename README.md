@@ -29,7 +29,9 @@ The development server runs at `http://localhost:5173` by default.
 Pushing to the `production` branch runs `.github/workflows/deploy.yml`. The
 workflow builds the Vite app with the production Ayana API and Socket.IO URLs,
 then uploads `dist/` to `/data/project/ayana-admin` on the production server.
-The GitHub repository needs the `SSH_PRIVATE_KEY` secret used by the backend
-deployment workflow. The production web server should serve that directory for
+The repository needs an Actions secret named `SSH_PRIVATE_KEY` containing the
+unencrypted private deploy key authorized on the production server (not its
+`.pub` file). Raw PEM/OpenSSH text, escaped `\n` line breaks, or Base64-encoded
+PEM are accepted. The production web server should serve that directory for
 `admin.ayana.club` and route unknown paths to `index.html` for client-side
 routing.

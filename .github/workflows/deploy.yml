@@ -38,10 +38,36 @@ jobs:
         run: npm run build
 
       - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          key = os.environ.get("SSH_PRIVATE_KEY", "").strip()
+          if not key:
+              raise SystemExit("SSH_PRIVATE_KEY is empty. Add the server's private deploy key as a repository secret.")
+
+          key = key.replace("\\r\\n", "\\n").replace("\\n", "\n").replace("\r\n", "\n")
+          if "-----BEGIN " not in key:
+              try:
+                  decoded = base64.b64decode(key, validate=True).decode("utf-8")
+                  if "-----BEGIN " in decoded:
+                      key = decoded
+              except (ValueError, UnicodeDecodeError):
+                  pass
+
+          if "-----BEGIN " not in key or "PRIVATE KEY-----" not in key:
+              raise SystemExit("SSH_PRIVATE_KEY must be a private PEM/OpenSSH key, raw or Base64 encoded.")
+
+          path = Path.home() / ".ssh" / "deploy_key"
+          path.write_text(key.rstrip() + "\n")
+          path.chmod(0o600)
+          PY
+          ssh-keygen -y -P "" -f ~/.ssh/deploy_key >/dev/null
           ssh-keyscan -H 104.156.53.38 >> ~/.ssh/known_hosts
 
       - name: Create remote directory
