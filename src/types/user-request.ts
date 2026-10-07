@@ -23,6 +23,9 @@ export type UserRequestRecipient = {
 }
 
 export type UserRequestOrgInviteMetadata = {
+  kind?: string | null
+  name?: string | null
+  recipientUserId?: string | null
   orgId?: string | null
   organizationId?: string | null
   orgName?: string | null
@@ -35,6 +38,7 @@ export type UserRequest = {
   id: string
   userId?: string | null
   isSent: boolean
+  isReceived?: boolean
   status: UserRequestStatus
   type: UserRequestType
   recipients: UserRequestRecipient[]

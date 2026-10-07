@@ -4,7 +4,6 @@ import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CustomerPermissionTab } from '@/features/users/components/CustomerPermissionTab'
-import { PartnerPermissionTab } from '@/features/users/components/PartnerPermissionTab'
 import { StaffPermissionTab } from '@/features/users/components/StaffPermissionTab'
 import { getUserRequest } from '@/features/users/api'
 import { usersQueryKeys } from '@/features/users/query-keys'
@@ -15,7 +14,7 @@ import type { User } from '@/types/user'
 type EditPermissionsStepProps = {
   user: User
   permissionScope?: {
-    kind: 'customer' | 'partner'
+    kind: 'customer'
     organizationId: string
     readOnly?: boolean
     canEdit?: boolean
@@ -23,17 +22,15 @@ type EditPermissionsStepProps = {
   onEditFullPermissions?: () => Promise<void> | void
 }
 
-// ADMIN sees all 3 membership kinds as tabs, each with its own independent Save button — a
-// staff member can also be a customer contact and/or ops technician at once (spec 2.2), so
-// these are genuinely separate memberships, not mutually exclusive states. The Customer portal
-// only manages its own membership on this user, scoped to the current organization.
+// Admin can edit Staff and Customer memberships. The Customer portal only manages the
+// selected user's membership in its current organization.
 export function EditPermissionsStep({ user, permissionScope, onEditFullPermissions }: EditPermissionsStepProps) {
   const portal = getPortalSafe()
   const currentOrgId = readSelectedOrgId() ?? undefined
 
   // The `user` prop is whatever the caller had in hand (a list row, a stale cache entry) — load
   // the real record fresh so every tab's default values (isStaff/staffRole/customerMemberships/
-  // technicianMemberships) reflect what's actually on the user right now, not what was on screen
+  // customerMemberships) reflect what's actually on the user right now, not what was on screen
   // before this drawer opened.
   const userQuery = useQuery({
     queryKey: usersQueryKeys.detail(String(user.id)),
@@ -75,21 +72,6 @@ export function EditPermissionsStep({ user, permissionScope, onEditFullPermissio
     )
   }
 
-  if (permissionScope?.kind === 'partner') {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <PartnerPermissionTab user={currentUser} scopeToOrgId={scopedOrgId} readOnly={readOnly} />
-        {readOnly && onEditFullPermissions ? (
-          <div className="mt-auto flex justify-end px-7 py-6">
-            <Button size="lg" onClick={() => void onEditFullPermissions()}>
-              Edit
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
   if (portal === Portal.CUSTOMER) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -104,7 +86,6 @@ export function EditPermissionsStep({ user, permissionScope, onEditFullPermissio
         <TabsList>
           <TabsTrigger value="staff">Staff</TabsTrigger>
           <TabsTrigger value="customer">Customer</TabsTrigger>
-          <TabsTrigger value="partner">Partner</TabsTrigger>
         </TabsList>
       </div>
       <TabsContent value="staff" className="flex min-h-0 flex-1 flex-col">
@@ -112,9 +93,6 @@ export function EditPermissionsStep({ user, permissionScope, onEditFullPermissio
       </TabsContent>
       <TabsContent value="customer" className="flex min-h-0 flex-1 flex-col">
         <CustomerPermissionTab user={currentUser} />
-      </TabsContent>
-      <TabsContent value="partner" className="flex min-h-0 flex-1 flex-col">
-        <PartnerPermissionTab user={currentUser} />
       </TabsContent>
     </Tabs>
   )

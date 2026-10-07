@@ -68,11 +68,13 @@ type SelectInputProps = {
   container?: ComboboxContentContainer
   id?: string
   name?: string
+  autoComplete?: string
   value?: SelectInputValue
   defaultValue?: SelectInputValue
   required?: boolean
   disabled?: boolean
   readOnly?: boolean
+  'aria-label'?: string
   isLoading?: boolean
   loadingMessage?: React.ReactNode
   searchable?: boolean
@@ -265,11 +267,13 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
       hintClassName,
       errorClassName,
       id,
+      autoComplete,
       value,
       defaultValue = '',
       required,
       disabled,
       readOnly = false,
+      'aria-label': ariaLabel,
       isLoading = false,
       loadingMessage = 'Loading...',
       searchable = true,
@@ -406,9 +410,11 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
             <ComboboxInput
               id={inputId}
               placeholder={placeholder}
+              autoComplete={autoComplete}
               disabled={disabled}
               showClear={false}
               showTrigger={!readOnly}
+              aria-label={ariaLabel}
               aria-invalid={isInvalid || undefined}
               className={cn(
                 'h-9 w-full rounded-[10px] bg-white text-base',

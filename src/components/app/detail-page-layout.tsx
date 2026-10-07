@@ -231,6 +231,7 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
   errorMessage?: string
   pageSize?: number
   refetchOnMount?: DataTableAsyncProps<TData>['refetchOnMount']
+  showPagination?: boolean
 }
 
 export function RelatedEntityModule<TData extends Record<string, unknown>>({
@@ -251,6 +252,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
   errorMessage,
   pageSize = RELATED_ENTITY_MODULE_PAGE_SIZE,
   refetchOnMount,
+  showPagination = false,
 }: RelatedEntityModuleProps<TData>) {
   const [loadedTotal, setLoadedTotal] = useState<number | null>(null)
   const resolvedTotal = loadedTotal ?? initialTotal
@@ -284,7 +286,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
         <DataTableAsync
           queryKey={queryKey}
           loadData={async (state: DataTableState<TData>) => {
-            const result = await loadData({ ...state, pagination: { pageIndex: 0, pageSize } })
+            const result = await loadData(showPagination ? state : { ...state, pagination: { pageIndex: 0, pageSize } })
             setLoadedTotal(result.count)
 
             return result
@@ -295,7 +297,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
           getRowCommands={getRowCommands}
           pageSize={pageSize}
           showToolbar={false}
-          showPagination={false}
+          showPagination={showPagination}
           disabledSelection
           customizeColumns={false}
           perPageOptions={false}

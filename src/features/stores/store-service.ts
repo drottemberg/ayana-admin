@@ -17,8 +17,8 @@ import type { SelectTableRow } from '@/providers/modal-types'
 import type { StoreGroup } from '@/types/group'
 import type { Store } from '@/types/store'
 
-export type StoreDetailModule = 'users' | 'devices' | 'storeGroups' | 'partners' | 'issues'
-type StoreDetailActionEntity = 'user' | 'device' | 'partner' | 'issue' | 'group'
+export type StoreDetailModule = 'users' | 'devices' | 'storeGroups' | 'issues'
+type StoreDetailActionEntity = 'user' | 'device' | 'issue' | 'group'
 type StoreDetailAction = DropdownActionItem & {
   entity?: StoreDetailActionEntity
 }
@@ -31,7 +31,6 @@ const moduleActionEntity: Record<StoreDetailModule, StoreDetailActionEntity> = {
   users: 'user',
   devices: 'device',
   storeGroups: 'group',
-  partners: 'partner',
   issues: 'issue',
 }
 
@@ -70,7 +69,6 @@ export const StoreService = {
       { key: 'users', label: 'Active users' },
       { key: 'devices', label: 'Active devices' },
       { key: 'storeGroups', label: 'Store groups' },
-      { key: 'partners', label: 'Maintenance partners' },
       { key: 'issues', label: 'Last issues' },
     ]
   },
@@ -126,7 +124,6 @@ export const StoreService = {
           label: 'Add user',
           onClick: () => Drawer.show(DrawerId.CreateUser, { customerId: store.id }),
         },
-        { entity: 'partner', label: 'Assign partner', onClick: () => showUnavailable('Assign partner') },
       )
     }
 

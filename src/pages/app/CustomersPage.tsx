@@ -8,7 +8,7 @@ import { customerColumns } from '@/features/customers/customer-columns'
 import { CustomerService } from '@/features/customers/customer-service'
 import { customersQueryKeys } from '@/features/customers/query-keys'
 import type { Customer } from '@/types/customer'
-import { OrganizationStatusValues } from '@/types/organization'
+import { OrganizationStatus } from '@/types/organization'
 
 export default function CustomersPage() {
   const { session } = useConnect()
@@ -29,6 +29,7 @@ export default function CustomersPage() {
         <DataTableAsync
           queryKey={[...customersQueryKeys.all, 'table']}
           loadData={loadData}
+          refetchOnMount="always"
           tableKey="customers.root"
           columns={customerColumns}
           searchPlaceholder="Search by ID, name, contact email, phone"
@@ -41,7 +42,7 @@ export default function CustomersPage() {
               // Backend's OrganizationEntity.getStatus() (mirroring UserEntity.getStatus()) folds
               // isArchived/isDeleted into `status` directly now — one Status filter covers all 4
               // states, no separate "Show deleted"/"Show archived" toggles needed anymore.
-              options: [...OrganizationStatusValues],
+              options: [OrganizationStatus.ACTIVE, OrganizationStatus.PENDING, OrganizationStatus.DELETED],
               getValue: (customer) => customer.status,
             },
           ]}

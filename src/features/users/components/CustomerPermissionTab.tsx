@@ -99,7 +99,7 @@ export function CustomerPermissionTab({ user, scopeToOrgId, readOnly = false }: 
         id: customer.id,
         name: customer.name,
         type: OrganizationType.CUSTOMER,
-        hasChildren: (customer.stores ?? 0) > 0,
+        hasChildren: (customer.locations ?? 0) > 0,
         children: [],
       } satisfies OrganizationPermissionNode
     },

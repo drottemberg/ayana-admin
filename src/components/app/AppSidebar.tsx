@@ -5,9 +5,7 @@ import * as React from 'react'
 import logo from '@/assets/logo.svg'
 import icon from '@/assets/icon.svg'
 import { AppModeBadge } from '@/components/app/AppModeBadge'
-import { CreateMenu } from '@/components/create-menu'
 import { NavMain } from '@/components/nav-main'
-import { NavSecondary } from '@/components/nav-secondary'
 import { NavUser } from '@/components/nav-user'
 import { OrgSwitcher } from '@/components/org-switcher'
 import {
@@ -15,6 +13,9 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
@@ -22,12 +23,13 @@ import {
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { canUseFeature } from '@/features/app/features'
 import { useConnect } from '@/features/app/use-connect'
 import { Feature } from '@/types/feature'
+import { getAppMode } from '@/features/app/app-mode'
 
 const Icon = ({ icon }: { icon: IconSvgElement }) => {
   return <HugeiconsIcon icon={icon} strokeWidth={2} />
@@ -43,34 +45,46 @@ const data = {
   ],
   manage: [
     {
-      title: 'Devices',
-      url: '/devices',
-      icon: <Icon icon={EntityIcon.devices} />,
-      feature: Feature.DEVICES,
+      title: 'Locations',
+      url: '/locations',
+      icon: <Icon icon={EntityIcon.locations} />,
+      feature: Feature.LOCATIONS,
     },
     {
-      title: 'Contracts',
-      url: '/contracts',
-      icon: <Icon icon={EntityIcon.contracts} />,
-      feature: Feature.CONTRACTS,
+      title: 'Pricing options',
+      url: '/pricing-options',
+      icon: <Icon icon={EntityIcon.pricingOptions} />,
+      feature: Feature.CUSTOMERS,
     },
     {
-      title: 'Stores',
-      url: '/stores',
-      icon: <Icon icon={EntityIcon.stores} />,
-      feature: Feature.STORES,
+      title: 'Classes',
+      url: '/classes',
+      icon: <Icon icon={EntityIcon.classes} />,
+      feature: Feature.CUSTOMERS,
     },
     {
-      title: 'Media',
-      url: '/media',
-      icon: <Icon icon={EntityIcon.media} />,
-      feature: Feature.MEDIA,
+      title: 'Class sessions',
+      url: '/class-sessions',
+      icon: <Icon icon={EntityIcon.classes} />,
+      feature: Feature.CUSTOMERS,
     },
     {
-      title: 'Campaigns',
-      url: '/media-campaigns',
-      icon: <Icon icon={EntityIcon.mediaCampaigns} />,
-      feature: Feature.MEDIA,
+      title: 'Client contracts',
+      url: '/client-contracts',
+      icon: <Icon icon={EntityIcon.clientContracts} />,
+      feature: Feature.CUSTOMERS,
+    },
+    {
+      title: 'Orders',
+      url: '/orders',
+      icon: <Icon icon={EntityIcon.orders} />,
+      feature: Feature.ORDERS,
+    },
+    {
+      title: 'Messages',
+      url: '/messages',
+      icon: <Icon icon={EntityIcon.users} />,
+      feature: Feature.CUSTOMERS,
     },
     {
       title: 'Products',
@@ -79,8 +93,8 @@ const data = {
       feature: Feature.PRODUCTS,
     },
     {
-      title: 'Issues',
-      url: '/issues',
+      title: 'AI support issues',
+      url: '/agent-support-issues',
       icon: <Icon icon={EntityIcon.issues} />,
       feature: Feature.ISSUES,
     },
@@ -90,33 +104,20 @@ const data = {
       icon: <Icon icon={EntityIcon.commandLogs} />,
       feature: Feature.LOGS,
     },
-    {
-      title: 'Data',
-      url: '/data',
-      icon: <Icon icon={EntityIcon.data} />,
-      feature: Feature.DATA,
-    },
   ],
-  tools: [
-    {
-      title: 'AI Planogram',
-      url: '/ai-planogram',
-      icon: <Icon icon={EntityIcon.planograms} />,
-      feature: Feature.PLANOGRAMS,
-    },
-  ],
+  tools: [],
   settings: [
+    {
+      title: 'Devices',
+      url: '/devices',
+      icon: <Icon icon={EntityIcon.devices} />,
+      feature: Feature.DEVICES,
+    },
     {
       title: 'Customers',
       url: '/customers',
       icon: <Icon icon={EntityIcon.customers} />,
       feature: Feature.CUSTOMERS,
-    },
-    {
-      title: 'Maintenance Partners',
-      url: '/partners',
-      icon: <Icon icon={EntityIcon.partners} />,
-      feature: Feature.MAINTENANCE,
     },
     {
       title: 'Users',
@@ -130,24 +131,6 @@ const data = {
       activeUrls: ['/device-types'],
       icon: <Icon icon={EntityIcon.deviceTypes} />,
       feature: Feature.DEVICE_TYPE,
-    },
-  ],
-  groups: [
-    {
-      title: 'Groups',
-      icon: <Icon icon={EntityIcon.groups} />,
-      items: [
-        {
-          title: 'Device Groups',
-          url: '/device-groups',
-          feature: Feature.DEVICES,
-        },
-        {
-          title: 'Store Groups',
-          url: '/store-groups',
-          feature: Feature.STORES,
-        },
-      ],
     },
   ],
 }
@@ -186,27 +169,20 @@ function SidebarCollapseTrigger({ className }: { className?: string }) {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { state } = useSidebar()
+  const { state, setOpenMobile } = useSidebar()
   const isCollapsed = state === 'collapsed'
+  const { pathname } = useLocation()
   const { session } = useConnect()
+  const isAdminContext = getAppMode() === 'admin'
   const hasFeature = React.useCallback((feature: Feature) => Boolean(session?.hasFeature(feature)), [session])
   const manageItems = React.useMemo(() => data.manage.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const settingsItems = React.useMemo(
-    () => data.settings.filter((item) => canUseFeature(item, hasFeature)),
-    [hasFeature],
+    () => data.settings
+      .filter((item) => item.title !== 'Devices' || isAdminContext)
+      .filter((item) => canUseFeature(item, hasFeature)),
+    [hasFeature, isAdminContext],
   )
-  const groupItems = React.useMemo(
-    () =>
-      data.groups
-        .map((item) => ({
-          ...item,
-          items: item.items.filter((child) => canUseFeature(child, hasFeature)),
-        }))
-        .filter((item) => item.items.length),
-    [hasFeature],
-  )
-
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -225,13 +201,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarCollapseTrigger className="opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
           </div>
         )}
-        <CreateMenu />
         <OrgSwitcher />
+        {hasFeature(Feature.ORDERS) ? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                render={<Link to="/orders/kitchen" onClick={() => setOpenMobile(false)} />}
+                isActive={pathname === '/orders/kitchen'}
+                tooltip="Order Dashboard"
+                className="!bg-black !text-white hover:!bg-neutral-800 hover:!text-white data-[active=true]:!bg-black data-[active=true]:!text-white"
+              >
+                <Icon icon={EntityIcon.orders} />
+                <span className="group-data-[collapsible=icon]:hidden !text-white">Order Dashboard</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : null}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.home} />
         {manageItems.length ? <NavMain label="Manage" items={manageItems} /> : null}
-        {groupItems.length ? <NavSecondary items={groupItems} /> : null}
         {toolItems.length ? (
           <>
             <SidebarSeparator />

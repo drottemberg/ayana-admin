@@ -17,6 +17,9 @@ export type EntityPermissions = {
 export type AppPermissions = {
   customers?: EntityPermissions
   users?: EntityPermissions
+  classes?: EntityPermissions
+  classSchedules?: EntityPermissions
+  classSessions?: EntityPermissions
   organization?: { editSelf: boolean }
 }
 

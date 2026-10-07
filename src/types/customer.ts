@@ -7,8 +7,12 @@ export type Customer = Pick<
   | 'email'
   | 'phone'
   | 'timezone'
+  | 'currency'
+  | 'address'
+  | 'description'
   | 'users'
   | 'stores'
+  | 'locations'
   | 'status'
   | 'isDeleted'
   | 'isArchived'
@@ -20,6 +24,9 @@ export type Customer = Pick<
   type: typeof OrganizationType.CUSTOMER
 }
 
-export type CreateCustomerPayload = Pick<Customer, 'name' | 'contactName' | 'contactEmail' | 'contactPhone'>
+export type CreateCustomerPayload = Pick<
+  Customer,
+  'name' | 'email' | 'phone' | 'timezone' | 'currency' | 'description' | 'contactName' | 'contactEmail' | 'contactPhone'
+>
 
 export type { CreateStorePayload, Store } from '@/types/store'

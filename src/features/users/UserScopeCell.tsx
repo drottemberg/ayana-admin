@@ -21,7 +21,7 @@ export function UserScopeCell({
   canEdit,
 }: {
   user: User
-  kind: 'customer' | 'partner'
+  kind: 'customer'
   organizationId?: string
   scope?: StoreScope
   canEdit?: boolean

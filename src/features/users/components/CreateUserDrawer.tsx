@@ -6,11 +6,9 @@ import { AppDrawer } from '@/components/app/AppDrawer'
 import { CreateUserStep } from '@/features/users/components/user-drawer-steps/CreateUserStep'
 import { EditPermissionsStep } from '@/features/users/components/user-drawer-steps/EditPermissionsStep'
 import { EditUserDetailsForm } from '@/features/users/components/EditUserDetailsForm'
-import { InviteOpsStep } from '@/features/users/components/user-drawer-steps/InviteOpsStep'
 import { InviteStaffStep } from '@/features/users/components/user-drawer-steps/InviteStaffStep'
 import { InviteUserStep } from '@/features/users/components/user-drawer-steps/InviteUserStep'
 import { InviteUserSuccessStep } from '@/features/users/components/user-drawer-steps/InviteUserSuccessStep'
-import { OpsPermissionsStep } from '@/features/users/components/user-drawer-steps/OpsPermissionsStep'
 import { UserActionStep } from '@/features/users/components/user-drawer-steps/UserActionStep'
 import { UserPermissionsStep } from '@/features/users/components/user-drawer-steps/UserPermissionsStep'
 import type {
@@ -28,16 +26,19 @@ import { Drawer, DrawerId } from '@/providers/drawer'
 import { Modals } from '@/providers/modal'
 import { useDrawerController } from '@/providers/use-overlay-controller'
 import { UserRole, type User } from '@/types/user'
-import { CustomerRole, TechnicianRole } from '@/types/membership'
+import { CustomerRole } from '@/types/membership'
 import { UserService } from '@/features/users/user-service'
-import { createOrganizationPermission } from '@/features/users/components/user-drawer-steps/organization-permissions'
+import {
+  createOrganizationPermission,
+  replaceDefaultPermissionRoles,
+} from '@/features/users/components/user-drawer-steps/organization-permissions'
 
 export type CreateUserDrawerProps = {
   user?: User
   customerId?: string
   mode?: 'create' | 'invite' | 'permissions' | 'edit-details' | 'edit-permissions' | 'view-permissions'
   permissionScope?: {
-    kind: 'customer' | 'partner'
+    kind: 'customer'
     organizationId: string
     readOnly?: boolean
     canEdit?: boolean
@@ -63,7 +64,6 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
   const initialRole = user?.role ?? UserRole.MEMBER
   const [flowRole, setFlowRole] = useState(initialRole)
   const [customerInviteRole, setCustomerInviteRole] = useState<CustomerRole>(CustomerRole.MEMBER)
-  const [opsInviteRole, setOpsInviteRole] = useState<TechnicianRole>(TechnicianRole.TECHNICIAN)
   const [flowPosition, setFlowPosition] = useState(user?.position ?? '')
   const initialPermissions = useMemo(() => {
     if (user?.permissions?.length) return user.permissions
@@ -87,16 +87,6 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
         id: 'invite-staff',
         title: 'Invite Staff',
         description: 'Send an invitation to a Gaudier staff member.',
-      },
-      {
-        id: 'invite-ops',
-        title: 'Invite Partner User',
-        description: 'Send an invitation to a maintenance partner contact.',
-      },
-      {
-        id: 'ops-permissions',
-        title: 'Permissions',
-        description: 'Choose which partners, customers, and stores this user can access.',
       },
       {
         id: 'create',
@@ -170,7 +160,12 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
         <InviteUserStep
           customerId={customerId}
           role={customerInviteRole}
-          onRoleChange={setCustomerInviteRole}
+          onRoleChange={(role) => {
+            steps.patchData((data) => ({
+              permissions: replaceDefaultPermissionRoles(data.permissions ?? [], customerInviteRole, role),
+            }))
+            setCustomerInviteRole(role)
+          }}
           position={flowPosition}
           onPositionChange={setFlowPosition}
           permissions={steps.data.permissions}
@@ -206,41 +201,6 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
           onCancel={() => drawer.requestClose(false)}
           onDirtyChange={(dirty) => {
             isFormDirtyRef.current = dirty
-          }}
-        />
-      ) : null}
-
-      {steps.currentId === 'invite-ops' ? (
-        <InviteOpsStep
-          role={opsInviteRole}
-          onRoleChange={setOpsInviteRole}
-          selectedIds={steps.data.opsSelectedIds ?? []}
-          onOpenPermissions={(formValues) => {
-            steps.patchData({ formValues: { email: formValues.email } })
-            steps.push('ops-permissions')
-          }}
-          onInvited={async () => {
-            isFormDirtyRef.current = false
-            steps.patchData({ action: 'invite-ops', savedUser: undefined, savedPayload: undefined })
-            steps.push('success')
-          }}
-          onCancel={() => drawer.requestClose(false)}
-          onDirtyChange={(dirty) => {
-            isFormDirtyRef.current = dirty
-          }}
-          initialFormValues={steps.data.formValues ? { email: steps.data.formValues.email } : undefined}
-        />
-      ) : null}
-
-      {steps.currentId === 'ops-permissions' ? (
-        <OpsPermissionsStep
-          role={opsInviteRole}
-          selectedIds={steps.data.opsSelectedIds ?? []}
-          onCancel={steps.canGoBack ? steps.pop : () => drawer.requestClose(false)}
-          onConfirm={(selectedIds, role) => {
-            setOpsInviteRole(role)
-            steps.patchData({ opsSelectedIds: selectedIds })
-            steps.pop()
           }}
         />
       ) : null}

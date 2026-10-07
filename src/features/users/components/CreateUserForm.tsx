@@ -248,11 +248,21 @@ export function CreateUserForm({
               {...register('password')}
             />
           ) : null}
-          <PhoneInput
-            label="Phone number"
-            error={errors.phone?.message}
-            placeholder="988-710-9998"
-            {...register('phone')}
+          <Controller
+            control={control}
+            name="phone"
+            render={({ field, fieldState }) => (
+              <PhoneInput
+                label="Phone number"
+                error={fieldState.error?.message}
+                placeholder="6 12 34 56 78"
+                value={field.value}
+                onValueChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                ref={field.ref}
+              />
+            )}
           />
           <TextInput
             label="Position"

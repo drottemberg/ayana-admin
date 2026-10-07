@@ -23,25 +23,22 @@ function showUnavailable(label: string) {
 }
 
 export type CustomerDetailModule =
-  | 'stores'
+  | 'locations'
   | 'users'
   | 'contracts'
   | 'products'
   | 'devices'
   | 'media'
   | 'mediaCampaigns'
-  | 'partners'
   | 'issues'
 
 type CustomerDetailActionEntity =
-  | 'store'
   | 'user'
   | 'contract'
   | 'product'
   | 'device'
   | 'media'
   | 'mediaCampaign'
-  | 'partner'
   | 'issue'
 
 type CustomerDetailAction = DropdownActionItem & {
@@ -69,15 +66,13 @@ const toSelectLoader =
   (state: DataTableState<SelectTableRow>) =>
     loader(state as DataTableState<T>) as Promise<DataTableAsyncResult<SelectTableRow>>
 
-const moduleActionEntity: Record<CustomerDetailModule, CustomerDetailActionEntity> = {
-  stores: 'store',
+const moduleActionEntity: Partial<Record<CustomerDetailModule, CustomerDetailActionEntity>> = {
   users: 'user',
   contracts: 'contract',
   products: 'product',
   devices: 'device',
   media: 'media',
   mediaCampaigns: 'mediaCampaign',
-  partners: 'partner',
   issues: 'issue',
 }
 
@@ -128,11 +123,6 @@ export const CustomerService = {
     return [
       { type: 'label', label: 'Related' },
       {
-        entity: 'store',
-        label: 'Add store',
-        onClick: () => Drawer.show(DrawerId.CreateStore, { customerId: customer.id }),
-      },
-      {
         entity: 'user',
         label: 'Add user',
         onClick: () => Drawer.show(DrawerId.CreateUser, { customerId: customer.id }),
@@ -158,7 +148,6 @@ export const CustomerService = {
         onClick: () => Drawer.show(DrawerId.CreateMedia, { customerId: customer.id }),
       },
       { entity: 'mediaCampaign', label: 'Create campaign', onClick: () => showUnavailable('Create campaign') },
-      { entity: 'partner', label: 'Assign partner', onClick: () => showUnavailable('Assign partner') },
       { entity: 'issue', label: 'Create issue', onClick: () => showUnavailable('Create issue') },
       { type: 'separator', key: 'account-separator' },
       { type: 'label', label: 'Account' },
@@ -198,6 +187,7 @@ export const CustomerService = {
     permissions?: EntityPermissions,
   ): CustomerModuleAction | undefined {
     const actionEntity = moduleActionEntity[module]
+    if (!actionEntity) return undefined
     const action = this.getDetailActions(customer, permissions).find((item) => item.entity === actionEntity)
     return action && 'label' in action && action.type !== 'label'
       ? { label: action.label, onClick: 'onClick' in action ? action.onClick : undefined }

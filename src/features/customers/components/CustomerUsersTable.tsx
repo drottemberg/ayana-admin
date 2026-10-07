@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { Checkbox } from '@/components/ui/checkbox'
 import { NO_VALUE_STR } from '@/constants'
+import { formatPhoneNumber } from '@/lib/phone'
 import { getUsersRequest } from '@/features/users/api'
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
 import { usersQueryKeys } from '@/features/users/query-keys'
@@ -32,7 +33,7 @@ const userColumns: ColumnDef<User>[] = [
   {
     accessorKey: 'phone',
     header: 'Phone',
-    cell: ({ row }) => row.original.phone ?? NO_VALUE_STR,
+    cell: ({ row }) => formatPhoneNumber(row.original.phone) || NO_VALUE_STR,
   },
   {
     accessorKey: 'status',

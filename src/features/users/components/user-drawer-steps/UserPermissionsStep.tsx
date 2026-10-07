@@ -22,6 +22,7 @@ import {
   getPermissionsWithParentFilled,
   getTreeSelectedOrganizationIds,
   mergeOrganizationPermissionNode,
+  replaceDefaultPermissionRoles,
   type OrganizationPermissionNode,
 } from '@/features/users/components/user-drawer-steps/organization-permissions'
 import { UserRole, type User, type UserOrganizationPermission } from '@/types/user'
@@ -41,7 +42,16 @@ type UserPermissionsStepProps = {
   onConfirm: (permissions: UserOrganizationPermission[], role: string, position: string) => void
 }
 
-export function UserPermissionsStep({ user, role, position, showPosition = true, permissions = [], roleOptions, onCancel, onConfirm }: UserPermissionsStepProps) {
+export function UserPermissionsStep({
+  user,
+  role,
+  position,
+  showPosition = true,
+  permissions = [],
+  roleOptions,
+  onCancel,
+  onConfirm,
+}: UserPermissionsStepProps) {
   const queryClient = useQueryClient()
   const [searchValue, setSearchValue] = useState('')
   const [selectedRole, setSelectedRole] = useState<string>(role ?? user?.role ?? UserRole.MEMBER)
@@ -50,8 +60,8 @@ export function UserPermissionsStep({ user, role, position, showPosition = true,
   const [draftPermissions, setDraftPermissions] = useState<UserOrganizationPermission[]>(() =>
     Array.isArray(permissions) ? permissions : [],
   )
-  const [lazyTree, setLazyTree] = useState<OrganizationPermissionNode | null>(() =>
-    queryClient.getQueryData<OrganizationPermissionNode | null>(organizationTreeQueryKeys.lazyRoot) ?? null,
+  const [lazyTree, setLazyTree] = useState<OrganizationPermissionNode | null>(
+    () => queryClient.getQueryData<OrganizationPermissionNode | null>(organizationTreeQueryKeys.lazyRoot) ?? null,
   )
   const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(() => new Set())
   const [loadChildrenError, setLoadChildrenError] = useState<string | null>(null)
@@ -65,9 +75,7 @@ export function UserPermissionsStep({ user, role, position, showPosition = true,
   const partiallySelectedCustomerIds = useMemo(() => {
     const directIds = new Set(draftPermissions.map((p) => p.organizationId))
     return new Set(
-      draftPermissions
-        .filter((p) => p.parentId && !directIds.has(p.parentId))
-        .map((p) => p.parentId as string),
+      draftPermissions.filter((p) => p.parentId && !directIds.has(p.parentId)).map((p) => p.parentId as string),
     )
   }, [draftPermissions])
 
@@ -129,10 +137,15 @@ export function UserPermissionsStep({ user, role, position, showPosition = true,
   }
 
   const handleConfirm = () => {
-    onConfirm(getPermissionsWithParentFilled(removeRedundantPermissions(draftPermissions), tree), selectedRole, draftPosition)
+    onConfirm(
+      getPermissionsWithParentFilled(removeRedundantPermissions(draftPermissions), tree),
+      selectedRole,
+      draftPosition,
+    )
   }
 
   const handleRoleChange = (nextRole: string) => {
+    setDraftPermissions((current) => replaceDefaultPermissionRoles(current, selectedRole, nextRole))
     setSelectedRole(nextRole)
   }
 
@@ -184,7 +197,12 @@ export function UserPermissionsStep({ user, role, position, showPosition = true,
 
       pageByNodeId.current.set(node.id, nextPage)
       const appendLoadedNode = (currentTree: OrganizationPermissionNode | null | undefined) =>
-        appendOrganizationPermissionNodeChildren(currentTree ?? tree, node.id, loadedNode.children, loadedNode.hasMore ?? false)
+        appendOrganizationPermissionNodeChildren(
+          currentTree ?? tree,
+          node.id,
+          loadedNode.children,
+          loadedNode.hasMore ?? false,
+        )
 
       setLazyTree((currentTree) => appendLoadedNode(currentTree))
       queryClient.setQueryData<OrganizationPermissionNode | null>(organizationTreeQueryKeys.lazyRoot, (currentTree) =>
@@ -285,7 +303,12 @@ type OrganizationRoleSelectProps = {
 function OrganizationRoleSelect({ items, value, onChange }: OrganizationRoleSelectProps) {
   return (
     <div className="w-32" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
-      <SelectInput items={items} value={value} onValueChange={(value) => onChange(String(value))} className="h-7 text-sm" />
+      <SelectInput
+        items={items}
+        value={value}
+        onValueChange={(value) => onChange(String(value))}
+        className="h-7 text-sm"
+      />
     </div>
   )
 }

@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import {
   DetailPageLayout,
@@ -17,10 +17,6 @@ import type { DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { NO_VALUE_STR } from '@/constants'
-import { contractsListConfig, getContractsRequest } from '@/features/contracts/api'
-import { contractColumns } from '@/features/contracts/contract-columns'
-import { ContractService } from '@/features/contracts/contract-service'
-import { contractsQueryKeys } from '@/features/contracts/query-keys'
 import { getCustomerRequest } from '@/features/customers/api'
 import { CustomerService } from '@/features/customers/customer-service'
 import { customersQueryKeys } from '@/features/customers/query-keys'
@@ -32,24 +28,35 @@ import { getIssuesRequest, issuesListConfig } from '@/features/issues/api'
 import { issueColumns } from '@/features/issues/issue-columns'
 import { IssueService } from '@/features/issues/issue-service'
 import { issuesQueryKeys } from '@/features/issues/query-keys'
-import { getMediaRequest, mediaListConfig } from '@/features/media/api'
-import { mediaColumns } from '@/features/media/media-columns'
-import { MediaService } from '@/features/media/media-service'
-import { mediaQueryKeys } from '@/features/media/query-keys'
-import { OrganizationService } from '@/features/organizations/organization-service'
 import { OrganizationStatusBadge } from '@/features/organizations/OrganizationStatusBadge'
 import { getProductsRequest, productsListConfig } from '@/features/products/api'
-import { productColumns } from '@/features/products/product-columns'
-import { ProductService } from '@/features/products/product-service'
+import { getProductColumns } from '@/features/products/product-columns'
+import { ProductManagementService } from '@/features/products/product-management-service'
+import { ProductScopeDrawer } from '@/features/products/ProductScopeDrawer'
+import { ProductEditDrawer } from '@/features/products/ProductEditDrawer'
 import { productsQueryKeys } from '@/features/products/query-keys'
-import { getStoresRequest, storesListConfig } from '@/features/stores/api'
-import { storeColumns } from '@/features/stores/store-columns'
-import { storesQueryKeys } from '@/features/stores/query-keys'
+import { getLocationsRequest, locationsListConfig } from '@/features/locations/api'
+import { locationColumns } from '@/features/locations/location-columns'
+import { LocationService } from '@/features/locations/location-service'
+import { locationsQueryKeys } from '@/features/locations/query-keys'
 import { getUsersRequest, usersListConfig } from '@/features/users/api'
 import { getUserListColumns } from '@/features/users/user-columns'
 import { UserService } from '@/features/users/user-service'
 import { usersQueryKeys } from '@/features/users/query-keys'
+import { getPricingOptionsRequest } from '@/features/pricing-options/api'
+import { pricingOptionsQueryKeys } from '@/features/pricing-options/query-keys'
+import { getPricingOptionColumns } from '@/features/pricing-options/pricing-option-columns'
+import { PricingOptionService } from '@/features/pricing-options/pricing-option-service'
+import { CreatePricingOptionDialog } from '@/features/pricing-options/CreatePricingOptionDialog'
+import { classSessionsListConfig, classTypesListConfig, getClassTypesRequest, getClassSessionsRequest } from '@/features/classes/api'
+import { getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { getClassTypeColumns } from '@/features/classes/class-type-columns'
+import { ClassTypeService } from '@/features/classes/class-type-service'
+import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { classTypesQueryKeys } from '@/features/classes/query-keys'
+import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
+import { Drawer, DrawerId } from '@/providers/drawer'
 import { batchListRequest } from '@/lib/batch-api'
 import {
   createTableBatchCacheEntry,
@@ -58,16 +65,28 @@ import {
   type BatchCacheEntry,
 } from '@/lib/batch-query-cache'
 import { useDetailQuery } from '@/lib/query-hooks'
-import type { Contract } from '@/types/contract'
-import type { Customer, Store } from '@/types/customer'
+import type { Customer } from '@/types/customer'
 import type { Device } from '@/types/device'
+import type { Location } from '@/types/location'
 import type { Issue } from '@/types/issue'
-import type { Media } from '@/types/media'
-import { OrganizationStatus } from '@/types/organization'
 import type { Product } from '@/types/product'
+import type { PricingOption } from '@/types/pricing-option'
+import type { ClassType } from '@/types/class-type'
+import type { ClassSession } from '@/types/class-type'
 import type { User } from '@/types/user'
 import { TimezoneUtils } from '@/utils'
 import { formatDateTime } from '@/utils/date-utils'
+import { formatPhoneNumber } from '@/lib/phone'
+import { getClientContractsRequest } from '@/features/client-contracts/api'
+import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
+import { ClientContractService } from '@/features/client-contracts/client-contract-service'
+import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
+import type { ClientContract } from '@/types/client-contract'
+import { getOrdersRequest } from '@/features/orders/api'
+import { getOrderColumns } from '@/features/orders/order-columns'
+import { OrderService } from '@/features/orders/order-service'
+import { ordersQueryKeys } from '@/features/orders/query-keys'
+import type { Order } from '@/types/order'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const CUSTOMER_BATCH_QUERY_KEY = 'customer-detail-batch'
@@ -103,9 +122,9 @@ function getCustomerDetailSections(customer?: Customer, canEdit = false): Detail
         { label: 'ID', value: customer?.id ?? NO_VALUE_STR },
         { label: 'Contact name', value: customer?.contactName ?? NO_VALUE_STR },
         { label: 'Contact email', value: customer?.contactEmail ?? NO_VALUE_STR },
-        { label: 'Contact phone', value: customer?.contactPhone ?? NO_VALUE_STR },
+        { label: 'Contact phone', value: formatPhoneNumber(customer?.contactPhone) || NO_VALUE_STR },
         { label: 'Account email', value: customer?.email ?? NO_VALUE_STR },
-        { label: 'Phone', value: customer?.phone ?? NO_VALUE_STR },
+        { label: 'Phone', value: formatPhoneNumber(customer?.phone) || NO_VALUE_STR },
         { label: 'Timezone', value: TimezoneUtils.getTimezoneLabel(customer?.timezone) || NO_VALUE_STR },
         {
           label: 'Created at',
@@ -119,6 +138,10 @@ function getCustomerDetailSections(customer?: Customer, canEdit = false): Detail
 function makeViewAllTo(path: string, customer: Customer) {
   const params = new URLSearchParams({ 'f.customerId': customer.id })
   return `${path}?${params.toString()}`
+}
+
+function makePricingOptionsViewAllTo(customer: Customer) {
+  return `/pricing-options?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`
 }
 
 function getBatchListTotal(data: Record<string, unknown> | undefined, key: string) {
@@ -172,6 +195,12 @@ function CustomerModuleError({ module }: { module: { key: string; label: string 
 
 export default function CustomerPage() {
   const { customerId = '' } = useParams()
+  const navigate = useNavigate()
+  const [isCreatePricingOptionOpen, setIsCreatePricingOptionOpen] = useState(false)
+  const [editingPricingOption, setEditingPricingOption] = useState<PricingOption | null>(null)
+  const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [editingProductScope, setEditingProductScope] = useState<Product | null>(null)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const permissions = session?.permissions.customers
@@ -184,15 +213,37 @@ export default function CustomerPage() {
     if (!customerId) return []
 
     const entries: BatchCacheEntry[] = [
-      createTableBatchCacheEntry<Store>({
-        key: 'stores',
-        queryKey: [...storesQueryKeys.customer(customerId), 'module'],
-        tableKey: 'customers.detail.modules.stores',
+      createTableBatchCacheEntry<Location>({
+        key: 'locations',
+        queryKey: [...locationsQueryKeys.customer(customerId), 'module'],
+        tableKey: 'customers.detail.modules.locations',
         pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
-        url: storesListConfig.url,
-        payload: (tableState) => storesListConfig.toPayload(tableState, { customerId }),
-        map: storesListConfig.toResult,
+        url: locationsListConfig.url,
+        payload: (tableState) => locationsListConfig.toPayload(tableState, { customerId }),
+        map: locationsListConfig.toResult,
       }),
+      ...(canManageCustomer
+        ? [
+            createTableBatchCacheEntry<ClassType>({
+              key: 'classes',
+              queryKey: [...classTypesQueryKeys.customer(customerId), 'module'],
+              tableKey: 'customers.detail.modules.classes',
+              pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
+              url: classTypesListConfig.url,
+              payload: (tableState) => classTypesListConfig.toPayload(tableState, { customerId }),
+              map: classTypesListConfig.toResult,
+            }),
+            createTableBatchCacheEntry<ClassSession>({
+              key: 'class-sessions',
+              queryKey: [...classSessionsQueryKeys.all, 'customer-module', customerId],
+              tableKey: 'customers.detail.modules.class-sessions',
+              pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
+              url: classSessionsListConfig.url,
+              payload: (tableState) => classSessionsListConfig.toPayload(tableState, { customerId }),
+              map: classSessionsListConfig.toResult,
+            }),
+          ]
+        : []),
       ...(canShowUsers
         ? [
             createTableBatchCacheEntry<User>({
@@ -206,19 +257,6 @@ export default function CustomerPage() {
             }),
           ]
         : []),
-      createTableBatchCacheEntry<Contract>({
-        key: 'contracts',
-        queryKey: [...contractsQueryKeys.all, 'customer-module', customerId, canManageCustomer ? 'all' : 'active'],
-        tableKey: 'customers.detail.modules.contracts',
-        pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
-        url: contractsListConfig.url,
-        payload: (tableState) =>
-          contractsListConfig.toPayload(tableState, {
-            organizationId: customerId,
-            ...(canManageCustomer ? {} : { status: OrganizationStatus.ACTIVE }),
-          }),
-        map: contractsListConfig.toResult,
-      }),
       createTableBatchCacheEntry<Product>({
         key: 'products',
         queryKey: [...productsQueryKeys.all, 'customer-module', customerId],
@@ -237,19 +275,6 @@ export default function CustomerPage() {
         payload: (tableState) => devicesListConfig.toPayload(tableState, { customerId }),
         map: devicesListConfig.toResult,
       }),
-      ...(canManageCustomer
-        ? [
-            createTableBatchCacheEntry<Media>({
-              key: 'media',
-              queryKey: [...mediaQueryKeys.all, 'customer-module', customerId],
-              tableKey: 'customers.detail.modules.media',
-              pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
-              url: mediaListConfig.url,
-              payload: (tableState) => mediaListConfig.toPayload(tableState, { customerId }),
-              map: mediaListConfig.toResult,
-            }),
-          ]
-        : []),
       createTableBatchCacheEntry<Issue>({
         key: 'issues',
         queryKey: [...issuesQueryKeys.all, 'customer-module', customerId],
@@ -291,18 +316,14 @@ export default function CustomerPage() {
 
   const detailModules = useMemo(
     () => [
-      { key: 'stores', label: 'Stores' },
+      { key: 'locations', label: 'Locations' },
       ...(canShowUsers ? [{ key: 'users', label: 'Users' }] : []),
-      { key: 'contracts', label: canManageCustomer ? 'Contracts' : 'Active contracts' },
+      ...(canManageCustomer ? [{ key: 'pricing-options', label: 'Pricing options' }] : []),
+      ...(canManageCustomer ? [{ key: 'classes', label: 'Classes' }] : []),
+      ...(canManageCustomer ? [{ key: 'class-sessions', label: 'Class sessions' }] : []),
+      ...(canManageCustomer ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }] : []),
       { key: 'products', label: 'Products' },
       { key: 'devices', label: 'Devices' },
-      ...(canManageCustomer
-        ? [
-            { key: 'media', label: 'Media' },
-            { key: 'mediaCampaigns', label: 'Media campaigns' },
-            { key: 'partners', label: 'Maintenance partners' },
-          ]
-        : []),
       { key: 'issues', label: 'Issues' },
     ],
     [canManageCustomer, canShowUsers],
@@ -344,7 +365,9 @@ export default function CustomerPage() {
           title: customer.name,
           subtitle: customer.contactEmail ?? undefined,
           backTo: '/customers',
-          primaryAction: headerActions.primaryAction,
+          primaryAction: canManageCustomer
+            ? { children: 'Message contacts', onClick: () => navigate(`/messages?customerId=${encodeURIComponent(customer.id)}`) }
+            : headerActions.primaryAction,
           secondaryAction: headerActions.secondaryAction,
           options: headerActions.options,
         }}
@@ -355,23 +378,36 @@ export default function CustomerPage() {
         {areModulesErrored ? <CustomerModulesError modules={detailModules} /> : null}
         {!areModulesLoading && !areModulesErrored ? (
           <>
-            {failedModuleKeys.has('stores') ? (
-              <CustomerModuleError module={{ key: 'stores', label: 'Stores' }} />
+            {failedModuleKeys.has('locations') ? (
+              <CustomerModuleError module={{ key: 'locations', label: 'Locations' }} />
             ) : (
               <RelatedEntityModule
-                id={`${MODULE_ANCHOR_PREFIX}-stores`}
-                title="Stores"
-                icon={EntityIcon.stores}
-                initialTotal={getInitialTotal('stores', customer.stores)}
-                viewAllTo={makeViewAllTo('/stores', customer)}
-                action={CustomerService.getModuleAction(customer, 'stores', permissions)}
-                queryKey={[...storesQueryKeys.customer(customer.id), 'module']}
-                loadData={(state: DataTableState<Store>) => getStoresRequest(state, { customerId: customer.id })}
-                tableKey="customers.detail.modules.stores"
-                columns={storeColumns}
-                getRowCommands={(store) => OrganizationService.getActions({ kind: 'store', organization: store })}
-                loadingMessage="Loading stores..."
-                emptyMessage="No stores found."
+                id={`${MODULE_ANCHOR_PREFIX}-locations`}
+                title="Locations"
+                icon={EntityIcon.locations}
+                initialTotal={getInitialTotal('locations', customer.locations)}
+                viewAllTo={makeViewAllTo('/locations', customer)}
+                action={
+                  canManageCustomer
+                    ? {
+                        label: 'Add location',
+                        onClick: () => Drawer.show(DrawerId.CreateLocation, { customerId: customer.id }),
+                      }
+                    : undefined
+                }
+                queryKey={[...locationsQueryKeys.customer(customer.id), 'module']}
+                loadData={(state: DataTableState<Location>) => getLocationsRequest(state, { customerId: customer.id })}
+                tableKey="customers.detail.modules.locations"
+                columns={locationColumns}
+                getRowCommands={(location) =>
+                  LocationService.getRowActions(location, {
+                    edit: Boolean(permissions?.edit),
+                    manageStatus: Boolean(permissions?.edit),
+                    delete: Boolean(permissions?.delete),
+                  })
+                }
+                loadingMessage="Loading locations..."
+                emptyMessage="No locations found."
                 refetchOnMount={false}
               />
             )}
@@ -389,12 +425,7 @@ export default function CustomerPage() {
                     canManageCustomer ? CustomerService.getModuleAction(customer, 'users', permissions) : undefined
                   }
                   queryKey={[...usersQueryKeys.organization(customer.id), 'module']}
-                  loadData={(state: DataTableState<User>) =>
-                    getUsersRequest(
-                      state,
-                      { organizationId: customer.id },
-                    )
-                  }
+                  loadData={(state: DataTableState<User>) => getUsersRequest(state, { organizationId: customer.id })}
                   tableKey="customers.detail.modules.users"
                   columns={getUserListColumns({
                     usage: 'customer-details',
@@ -408,38 +439,105 @@ export default function CustomerPage() {
                 />
               )
             ) : null}
-            {failedModuleKeys.has('contracts') ? (
-              <CustomerModuleError
-                module={{ key: 'contracts', label: canManageCustomer ? 'Contracts' : 'Active contracts' }}
-              />
-            ) : (
+            {canManageCustomer ? (
               <RelatedEntityModule
-                id={`${MODULE_ANCHOR_PREFIX}-contracts`}
-                title={canManageCustomer ? 'Contracts' : 'Active contracts'}
-                icon={EntityIcon.contracts}
-                initialTotal={getInitialTotal('contracts')}
-                viewAllTo={makeViewAllTo('/contracts', customer)}
-                action={CustomerService.getModuleAction(customer, 'contracts', permissions)}
-                queryKey={[
-                  ...contractsQueryKeys.all,
-                  'customer-module',
-                  customer.id,
-                  canManageCustomer ? 'all' : 'active',
-                ]}
-                loadData={(state: DataTableState<Contract>) =>
-                  getContractsRequest(state, {
-                    organizationId: customer.id,
-                    ...(canManageCustomer ? {} : { status: OrganizationStatus.ACTIVE }),
-                  })
-                }
-                tableKey="customers.detail.modules.contracts"
-                columns={contractColumns}
-                getRowCommands={(contract) => ContractService.getActions(contract)}
-                loadingMessage="Loading contracts..."
-                emptyMessage="No contracts found."
+                id={`${MODULE_ANCHOR_PREFIX}-pricing-options`}
+                title="Pricing options"
+                icon={EntityIcon.pricingOptions}
+                viewAllTo={makePricingOptionsViewAllTo(customer)}
+                action={{ label: 'Add pricing option', onClick: () => setIsCreatePricingOptionOpen(true) }}
+                queryKey={pricingOptionsQueryKeys.customer(customer.id)}
+                loadData={(state: DataTableState<PricingOption>) => getPricingOptionsRequest(state, { customerId: customer.id })}
+                tableKey="customers.detail.modules.pricing-options"
+                columns={getPricingOptionColumns()}
+                getRowCommands={(option) => PricingOptionService.getRowActions(option, {
+                  canEdit: Boolean(session?.permissions.customers?.edit),
+                  canDelete: Boolean(session?.permissions.customers?.delete),
+                  onEdit: (selectedOption) => {
+                    setEditingPricingOption(selectedOption)
+                    setIsCreatePricingOptionOpen(true)
+                  },
+                })}
+                emptyMessage="No pricing options found."
+                loadingMessage="Loading pricing options..."
                 refetchOnMount={false}
               />
-            )}
+            ) : null}
+            {canManageCustomer ? (
+              failedModuleKeys.has('classes') ? (
+                <CustomerModuleError module={{ key: 'classes', label: 'Classes' }} />
+              ) : (
+                <RelatedEntityModule
+                  id={`${MODULE_ANCHOR_PREFIX}-classes`}
+                  title="Classes"
+                  icon={EntityIcon.classes}
+                  viewAllTo={`/classes?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`}
+                  queryKey={[...classTypesQueryKeys.customer(customer.id), 'module']}
+                  loadData={(state: DataTableState<ClassType>) => getClassTypesRequest(state, { customerId: customer.id })}
+                  tableKey="customers.detail.modules.classes"
+                  columns={getClassTypeColumns({ showLocation: true })}
+                  getRowCommands={(classType) => ClassTypeService.getRowActions(classType, {
+                    canEdit: Boolean(session?.permissions.customers?.edit),
+                    onEdit: setEditingClassType,
+                  })}
+                  loadingMessage="Loading classes..."
+                  emptyMessage="No classes found."
+                  refetchOnMount={false}
+                />
+              )
+            ) : null}
+            {canManageCustomer ? (
+              failedModuleKeys.has('class-sessions') ? (
+                <CustomerModuleError module={{ key: 'class-sessions', label: 'Class sessions' }} />
+              ) : (
+                <RelatedEntityModule
+                  id={`${MODULE_ANCHOR_PREFIX}-class-sessions`}
+                  title="Class sessions"
+                  icon={EntityIcon.classes}
+                  initialTotal={getInitialTotal('class-sessions')}
+                  viewAllTo={`/class-sessions?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`}
+                  queryKey={[...classSessionsQueryKeys.all, 'customer-module', customer.id]}
+                  loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(state, { customerId: customer.id })}
+                  tableKey="customers.detail.modules.class-sessions"
+                  columns={getClassSessionColumns({ showLocation: true })}
+                  loadingMessage="Loading class sessions..."
+                  emptyMessage="No class sessions found."
+                  refetchOnMount={false}
+                />
+              )
+            ) : null}
+            {canManageCustomer ? (
+              <RelatedEntityModule
+                id={`${MODULE_ANCHOR_PREFIX}-client-contracts`}
+                title="Client contracts"
+                icon={EntityIcon.clientContracts}
+                viewAllTo={`/client-contracts?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`}
+                queryKey={clientContractsQueryKeys.customer(customer.id)}
+                loadData={(state: DataTableState<ClientContract>) => getClientContractsRequest(state, { customerId: customer.id })}
+                tableKey="customers.detail.modules.client-contracts"
+                columns={getClientContractColumns({ showCustomer: false })}
+                getRowCommands={(contract) => ClientContractService.getRowActions(contract, Boolean(permissions?.edit))}
+                loadingMessage="Loading client contracts..."
+                emptyMessage="No client contracts found."
+                refetchOnMount={false}
+              />
+            ) : null}
+            {canManageCustomer ? (
+              <RelatedEntityModule
+                id={`${MODULE_ANCHOR_PREFIX}-orders`}
+                title="Orders"
+                icon={EntityIcon.orders}
+                viewAllTo={`/orders?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`}
+                queryKey={ordersQueryKeys.customer(customer.id)}
+                loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { customerId: customer.id })}
+                tableKey="customers.detail.modules.orders"
+                columns={getOrderColumns({ showCustomer: false })}
+                getRowCommands={(order) => OrderService.getRowActions(order, Boolean(permissions?.edit))}
+                loadingMessage="Loading orders..."
+                emptyMessage="No orders found."
+                refetchOnMount={false}
+              />
+            ) : null}
             {failedModuleKeys.has('products') ? (
               <CustomerModuleError module={{ key: 'products', label: 'Products' }} />
             ) : (
@@ -449,12 +547,15 @@ export default function CustomerPage() {
                 icon={EntityIcon.products}
                 initialTotal={getInitialTotal('products')}
                 viewAllTo={makeViewAllTo('/products', customer)}
-                action={CustomerService.getModuleAction(customer, 'products', permissions)}
                 queryKey={[...productsQueryKeys.all, 'customer-module', customer.id]}
                 loadData={(state: DataTableState<Product>) => getProductsRequest(state, { customerId: customer.id })}
                 tableKey="customers.detail.modules.products"
-                columns={productColumns}
-                getRowCommands={(product) => ProductService.getActions(product)}
+                columns={getProductColumns({ showCustomer: false })}
+                getRowCommands={(product) => ProductManagementService.getRowActions(product, {
+                  canEdit: Boolean(permissions?.edit),
+                  onEdit: setEditingProduct,
+                  onEditScope: setEditingProductScope,
+                })}
                 loadingMessage="Loading products..."
                 emptyMessage="No products found."
                 refetchOnMount={false}
@@ -480,44 +581,6 @@ export default function CustomerPage() {
                 refetchOnMount={false}
               />
             )}
-            {canManageCustomer ? (
-              <>
-                {failedModuleKeys.has('media') ? (
-                  <CustomerModuleError module={{ key: 'media', label: 'Media' }} />
-                ) : (
-                  <RelatedEntityModule
-                    id={`${MODULE_ANCHOR_PREFIX}-media`}
-                    title="Media"
-                    icon={EntityIcon.media}
-                    initialTotal={getInitialTotal('media')}
-                    viewAllTo={makeViewAllTo('/media', customer)}
-                    action={CustomerService.getModuleAction(customer, 'media', permissions)}
-                    queryKey={[...mediaQueryKeys.all, 'customer-module', customer.id]}
-                    loadData={(state: DataTableState<Media>) => getMediaRequest(state, { customerId: customer.id })}
-                    tableKey="customers.detail.modules.media"
-                    columns={mediaColumns}
-                    getRowCommands={(media) => MediaService.getMediaActions(media)}
-                    loadingMessage="Loading media..."
-                    emptyMessage="No media found."
-                    refetchOnMount={false}
-                  />
-                )}
-                <EmptyRelatedEntityModule
-                  id={`${MODULE_ANCHOR_PREFIX}-mediaCampaigns`}
-                  title="Media campaigns"
-                  icon={EntityIcon.mediaCampaigns}
-                  action={CustomerService.getModuleAction(customer, 'mediaCampaigns', permissions)}
-                  description="Media campaign preview is not connected yet."
-                />
-                <EmptyRelatedEntityModule
-                  id={`${MODULE_ANCHOR_PREFIX}-partners`}
-                  title="Maintenance partners"
-                  icon={EntityIcon.partners}
-                  action={CustomerService.getModuleAction(customer, 'partners', permissions)}
-                  description="Maintenance partner preview is not connected yet."
-                />
-              </>
-            ) : null}
             {failedModuleKeys.has('issues') ? (
               <CustomerModuleError module={{ key: 'issues', label: 'Issues' }} />
             ) : (
@@ -541,6 +604,31 @@ export default function CustomerPage() {
           </>
         ) : null}
       </DetailPageLayout>
+      <CreatePricingOptionDialog
+        customerId={editingPricingOption?.organizationId ?? customer.id}
+        currency={customer.currency ?? 'EUR'}
+        option={editingPricingOption ?? undefined}
+        open={isCreatePricingOptionOpen}
+        onOpenChange={(open) => {
+          setIsCreatePricingOptionOpen(open)
+          if (!open) setEditingPricingOption(null)
+        }}
+      />
+      <ClassTypeEditDrawer
+        classType={editingClassType}
+        open={Boolean(editingClassType)}
+        onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
+      />
+      <ProductScopeDrawer
+        product={editingProductScope}
+        open={Boolean(editingProductScope)}
+        onOpenChange={(open) => { if (!open) setEditingProductScope(null) }}
+      />
+      <ProductEditDrawer
+        product={editingProduct}
+        open={Boolean(editingProduct)}
+        onOpenChange={(open) => { if (!open) setEditingProduct(null) }}
+      />
     </>
   )
 }

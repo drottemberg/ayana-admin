@@ -9,9 +9,7 @@ import { Drawer, DrawerId } from '@/providers/drawer'
 import { Feature, type Feature as FeatureType } from '@/types/feature'
 import { HugeiconsIcon } from '@hugeicons/react'
 import PlusSignIcon from '@hugeicons/core-free-icons/PlusSignIcon'
-import FolderAddIcon from '@hugeicons/core-free-icons/FolderAddIcon'
 import UserAdd01Icon from '@hugeicons/core-free-icons/UserAdd01Icon'
-import Store01Icon from '@hugeicons/core-free-icons/Store01Icon'
 import { Button } from './ui/button'
 
 type CreateMenuItem = DropdownActionItem & {
@@ -26,18 +24,6 @@ export function CreateMenu() {
 
   const items: DropdownActionItem[] = React.useMemo(() => {
     const createItems: CreateMenuItem[] = [
-      {
-        label: 'New device',
-        icon: FolderAddIcon,
-        feature: Feature.DEVICES,
-        onClick: () => Drawer.show(DrawerId.CreateDevice, {}),
-      },
-      {
-        label: 'New store',
-        icon: Store01Icon,
-        feature: Feature.STORES,
-        onClick: () => Drawer.show(DrawerId.CreateStore, {}),
-      },
       {
         label: 'New user',
         icon: UserAdd01Icon,

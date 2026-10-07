@@ -29,8 +29,10 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
     try {
       await requestPasswordReset(values.email)
       setSent(true)
-    } catch {
-      setError('root', { message: 'Something went wrong. Please try again.' })
+    } catch (error) {
+      setError('root', {
+        message: error instanceof Error ? error.message : 'Unable to send reset instructions. Please try again.',
+      })
     }
   }
 

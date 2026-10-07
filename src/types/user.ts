@@ -1,4 +1,4 @@
-import type { CustomerMembershipRecord, OpsMembershipRecord, StaffRole } from '@/types/membership'
+import type { CustomerMembershipRecord, StaffRole } from '@/types/membership'
 
 export const UserRole = {
   OWNER: 'OWNER',
@@ -58,7 +58,6 @@ export type User = {
   isStaff?: boolean
   staffRole?: StaffRole | null
   customerMemberships?: CustomerMembershipRecord[]
-  technicianMemberships?: OpsMembershipRecord[]
   role: UserRole
   hasPassword?: boolean
   permissions?: UserOrganizationPermission[]

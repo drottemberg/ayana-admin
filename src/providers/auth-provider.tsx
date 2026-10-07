@@ -1,15 +1,40 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createPasswordRequest, forgotPasswordRequest, loginRequest, logoutRequest } from '@/lib/api/auth'
+import {
+  createPasswordRequest,
+  forgotPasswordRequest,
+  loginRequest,
+  logoutRequest,
+  signupRequest,
+} from '@/lib/api/auth'
 import { AuthContext, type AuthContextValue } from '@/providers/auth-context'
 import { appQueryKeys } from '@/features/app/query-keys'
 import { clearSelectedOrgId } from '@/features/organizations/storage'
 import { connectAppRequest } from '@/lib/api/app'
-import { apiClient } from '@/lib/api-client'
+import { apiClient, AUTH_TOKEN_REFRESHED_EVENT_NAME } from '@/lib/api-client'
 import { AppConnectEntity } from '@/lib/entities/app-connect.entity'
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
 const RESET_TOKEN_KEY = 'reset_token'
+const DEFAULT_ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000
+const REFRESH_EARLY_BY_MS = 60 * 1000
+
+function getRefreshDelay(token: string | null): number {
+  if (!token) return DEFAULT_ACCESS_TOKEN_TTL_MS - REFRESH_EARLY_BY_MS
+  try {
+    const payload = token.split('.')[1]
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='))) as {
+      exp?: number
+    }
+    if (typeof decoded.exp === 'number') {
+      return Math.max(0, decoded.exp * 1000 - Date.now() - REFRESH_EARLY_BY_MS)
+    }
+  } catch {
+    // Use the configured access-token lifetime when the token cannot be decoded.
+  }
+  return DEFAULT_ACCESS_TOKEN_TTL_MS - REFRESH_EARLY_BY_MS
+}
 
 export function AuthProvider({ children }: React.PropsWithChildren) {
   const queryClient = useQueryClient()
@@ -35,14 +60,32 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
   }, [session])
 
   useEffect(() => {
-    if (!hasToken || !connectQuery.isError) return
+    const handleTokenRefresh = () => setAuthVersion((version) => version + 1)
+    window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT_NAME, handleTokenRefresh)
+    return () => window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT_NAME, handleTokenRefresh)
+  }, [])
 
-    apiClient.clearTokens()
-    clearSelectedOrgId()
-    queryClient.setQueryData(appQueryKeys.connect, null)
-    queryClient.removeQueries({ queryKey: appQueryKeys.connect })
-    setAuthVersion((version) => version + 1)
-  }, [connectQuery.isError, hasToken, queryClient])
+  useEffect(() => {
+    if (!hasToken || !apiClient.getRefreshToken()) return
+    let timer: number | undefined
+    let cancelled = false
+
+    const scheduleRefresh = (delay: number) => {
+      timer = window.setTimeout(async () => {
+        if (cancelled) return
+        const refreshed = await apiClient.refreshSession()
+        if (!refreshed && !cancelled && apiClient.getAuthToken() && apiClient.getRefreshToken()) {
+          scheduleRefresh(30 * 1000)
+        }
+      }, delay)
+    }
+
+    scheduleRefresh(getRefreshDelay(token))
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [hasToken, token, authVersion])
 
   useEffect(() => {
     if (hasToken) return
@@ -64,6 +107,24 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
 
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => loginRequest(email, password),
+    onSuccess: async () => {
+      await refreshAppSession()
+      setAuthVersion((version) => version + 1)
+    },
+  })
+
+  const signupMutation = useMutation({
+    mutationFn: ({
+      requestId,
+      email,
+      name,
+      password,
+    }: {
+      requestId: string | undefined
+      email: string
+      name: string
+      password: string
+    }) => signupRequest(requestId, { email, name, password }),
     onSuccess: async () => {
       await refreshAppSession()
       setAuthVersion((version) => version + 1)
@@ -96,6 +157,9 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
       login: async (email, password) => {
         await loginMutation.mutateAsync({ email, password })
       },
+      signup: async (requestId, email, name, password) => {
+        await signupMutation.mutateAsync({ requestId, email, name, password })
+      },
       logout: async () => {
         try {
           await logoutRequest()
@@ -121,7 +185,16 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
         await createPasswordMutation.mutateAsync({ resetToken, password })
       },
     }),
-    [createPasswordMutation, forgotPasswordMutation, isLoading, loginMutation, queryClient, token, user],
+    [
+      createPasswordMutation,
+      forgotPasswordMutation,
+      isLoading,
+      loginMutation,
+      queryClient,
+      signupMutation,
+      token,
+      user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

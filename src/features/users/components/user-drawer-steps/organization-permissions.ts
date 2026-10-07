@@ -2,29 +2,12 @@ import type { Customer } from '@/types/customer'
 import { OrganizationType, type Organization } from '@/types/organization'
 import type { Store } from '@/types/store'
 import type { UserOrganizationPermission } from '@/types/user'
-import {
-  StoreScope,
-  type CustomerMembershipInput,
-  type CustomerMembershipRecord,
-  type OpsCustomerScopeInput,
-  type OpsMembershipInput,
-  type OpsMembershipRecord,
-  type TechnicianRole,
-} from '@/types/membership'
+import { StoreScope, type CustomerMembershipInput, type CustomerMembershipRecord } from '@/types/membership'
 
 export type OrganizationPermissionNode = Organization & {
   hasChildren?: boolean
   /** More pages available past what's currently in `children` — show a "Load more" row. */
   hasMore?: boolean
-  /**
-   * Real backend id, when `id` is a tree-path-scoped composite instead of the entity's own id.
-   * Needed for the Partner tree: the same customer (and its stores) can legitimately appear
-   * under more than one partner, so `id` there is namespaced per-partner to stay unique across
-   * the whole tree (expand/select state is a plain Set<string> keyed by `id` — a real, shared
-   * customer id colliding across two partner branches would make expanding one expand both).
-   * Falls back to `id` wherever this is unset (every node outside the Partner tree).
-   */
-  entityId?: string
   children: OrganizationPermissionNode[]
 }
 
@@ -41,6 +24,18 @@ export function createOrganizationPermission(
   // `role` is widened to plain string here on purpose — this same helper builds permission
   // entries for the Customer-invite tree too, where role values are CustomerRole, not UserRole.
   return { organizationId, role } as UserOrganizationPermission
+}
+
+export function replaceDefaultPermissionRoles(
+  permissions: UserOrganizationPermission[],
+  previousRole: string,
+  nextRole: string,
+): UserOrganizationPermission[] {
+  if (previousRole === nextRole) return permissions
+
+  return permissions.map((permission) =>
+    permission.role === previousRole ? ({ ...permission, role: nextRole } as UserOrganizationPermission) : permission,
+  )
 }
 
 export function buildOrganizationPermissionTree(
@@ -290,7 +285,10 @@ export function getPermissionsWithParentFilled(
   return permissions.map((permission) =>
     permission.role
       ? permission
-      : ({ ...permission, role: getParentRole(permission.organizationId, permissions, root) } as UserOrganizationPermission),
+      : ({
+          ...permission,
+          role: getParentRole(permission.organizationId, permissions, root),
+        } as UserOrganizationPermission),
   )
 }
 
@@ -337,52 +335,11 @@ export function treeSelectionToCustomerMemberships(
     .filter((membership): membership is CustomerMembershipInput => membership !== null)
 }
 
-// Same ALL-vs-SPECIFIC rule as treeSelectionToCustomerMemberships, one level deeper
-// (Partner -> Customer -> Store). `selectedIds` here is the tree's already-compacted
-// selection (OrganizationsPermissionTree.emitChange's `parents`, via compactSelectedOrganizationIds)
-// — a fully-selected branch is represented by its top id alone, descendants omitted.
-export function treeSelectionToOpsMemberships(
-  selectedIds: string[],
-  tree: OrganizationPermissionNode | null,
-  defaultRole: TechnicianRole,
-): OpsMembershipInput[] {
-  if (!tree) return []
-
-  const selectedSet = new Set(selectedIds)
-  const partnerNodes = tree.type === OrganizationType.MASTER ? tree.children : [tree]
-
-  return partnerNodes
-    .map((partnerNode): OpsMembershipInput | null => {
-      const isPartnerSelected = selectedSet.has(partnerNode.id)
-      const selectedCustomerNodes = partnerNode.children.filter(
-        (customerNode) =>
-          selectedSet.has(customerNode.id) || customerNode.children.some((store) => selectedSet.has(store.id)),
-      )
-
-      if (!isPartnerSelected && selectedCustomerNodes.length === 0) return null
-
-      if (isPartnerSelected) {
-        return { partnerId: partnerNode.entityId ?? partnerNode.id, role: defaultRole, scopeType: StoreScope.ALL }
-      }
-
-      const customerScopes: OpsCustomerScopeInput[] = selectedCustomerNodes.map((customerNode) => {
-        const selectedStoreIds = customerNode.children
-          .filter((store) => selectedSet.has(store.id))
-          .map((store) => store.entityId ?? store.id)
-
-        return selectedStoreIds.length === 0
-          ? { customerId: customerNode.entityId ?? customerNode.id, storeScope: StoreScope.ALL }
-          : { customerId: customerNode.entityId ?? customerNode.id, storeScope: StoreScope.SPECIFIC, storeIds: selectedStoreIds }
-      })
-
-      return { partnerId: partnerNode.entityId ?? partnerNode.id, role: defaultRole, scopeType: StoreScope.SPECIFIC, customerScopes }
-    })
-    .filter((membership): membership is OpsMembershipInput => membership !== null)
-}
-
 // Inverse of treeSelectionToCustomerMemberships — seeds the edit-permissions tree's draft
 // selection from a user's EXISTING customer memberships (UserEntity.customerMemberships).
-export function customerMembershipsToPermissions(memberships: CustomerMembershipRecord[]): UserOrganizationPermission[] {
+export function customerMembershipsToPermissions(
+  memberships: CustomerMembershipRecord[],
+): UserOrganizationPermission[] {
   const permissions: UserOrganizationPermission[] = []
 
   for (const membership of memberships) {
@@ -401,54 +358,4 @@ export function customerMembershipsToPermissions(memberships: CustomerMembership
   }
 
   return permissions
-}
-
-// Inverse of treeSelectionToOpsMemberships — seeds the edit-permissions tree's selectedIds
-// from a user's EXISTING ops/technician memberships (UserEntity.technicianMemberships),
-// reconstructing the same partner-scoped composite ids the Partner tree assigns on load
-// (`${partnerId}::${customerId}`, `${partnerId}::${customerId}::${storeId}`) — deterministic,
-// so this works without fetching the tree first.
-export function opsMembershipsToSelectedIds(memberships: OpsMembershipRecord[]): string[] {
-  const ids: string[] = []
-
-  for (const membership of memberships) {
-    if (membership.scopeType === StoreScope.ALL || !membership.customerScopes?.length) {
-      ids.push(membership.partnerId)
-      continue
-    }
-
-    for (const scope of membership.customerScopes) {
-      const customerKey = `${membership.partnerId}::${scope.customerId}`
-
-      if (scope.storeScope === StoreScope.ALL || !scope.storeIds?.length) {
-        ids.push(customerKey)
-        continue
-      }
-
-      scope.storeIds.forEach((storeId) => ids.push(`${customerKey}::${storeId}`))
-    }
-  }
-
-  return ids
-}
-
-// The Partner tree's selectedIds are composite (`partnerId::customerId::storeId`) and its
-// branches load lazily — a prefilled SPECIFIC selection deep in an unexpanded branch has no
-// loaded children for isSomeSelected to find, so without this the partner/customer rows above
-// it render fully unchecked instead of indeterminate. Derives every ancestor prefix of each
-// selected id (that isn't itself selected, i.e. not a compacted-to-ALL branch) so those rows
-// can show indeterminate before the user ever expands them.
-export function getPartiallySelectedAncestorIds(selectedIds: string[]): Set<string> {
-  const selectedSet = new Set(selectedIds)
-  const partial = new Set<string>()
-
-  for (const id of selectedIds) {
-    const parts = id.split('::')
-    for (let i = 1; i < parts.length; i++) {
-      const ancestorId = parts.slice(0, i).join('::')
-      if (!selectedSet.has(ancestorId)) partial.add(ancestorId)
-    }
-  }
-
-  return partial
 }

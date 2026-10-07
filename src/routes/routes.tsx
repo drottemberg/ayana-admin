@@ -2,6 +2,7 @@ import { lazy } from 'react'
 import { CreatePasswordPage } from '@/pages/auth/CreatePasswordPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { SignupPage } from '@/pages/auth/SignupPage'
 import { PublicOnlyRoute } from '@/routes/route-guards'
 import { ProtectedRoute } from '@/routes/route-guards'
 import { RootLayout } from '@/components/layout/RootLayout'
@@ -16,8 +17,8 @@ const DevicesPage = lazy(() => import('@/pages/app/DevicesPage'))
 const DevicePage = lazy(() => import('@/pages/app/DevicePage'))
 const ContractsPage = lazy(() => import('@/pages/app/ContractsPage'))
 const ContractPage = lazy(() => import('@/pages/app/ContractPage'))
-const StoresPage = lazy(() => import('@/pages/app/StoresPage'))
-const StorePage = lazy(() => import('@/pages/app/StorePage'))
+const LocationsPage = lazy(() => import('@/pages/app/LocationsPage'))
+const LocationPage = lazy(() => import('@/pages/app/LocationPage'))
 const MediasPage = lazy(() => import('@/pages/app/MediasPage'))
 const MediaPage = lazy(() => import('@/pages/app/MediaPage'))
 const MediaCampaignsPage = lazy(() => import('@/pages/app/MediaCampaignsPage'))
@@ -26,11 +27,20 @@ const ProductsPage = lazy(() => import('@/pages/app/ProductsPage'))
 const ProductPage = lazy(() => import('@/pages/app/ProductPage'))
 const DataReportsPage = lazy(() => import('@/pages/app/DataReportsPage'))
 const IssuesPage = lazy(() => import('@/pages/app/IssuesPage'))
+const AiSupportIssuesPage = lazy(() => import('@/pages/app/AiSupportIssuesPage'))
 const CustomersPage = lazy(() => import('@/pages/app/CustomersPage'))
 const CustomerPage = lazy(() => import('@/pages/app/CustomerPage'))
-const PartnersPage = lazy(() => import('@/pages/app/PartnersPage'))
-const PartnerPage = lazy(() => import('@/pages/app/PartnerPage'))
 const UsersPage = lazy(() => import('@/pages/app/UsersPage'))
+const PricingOptionsPage = lazy(() => import('@/pages/app/PricingOptionsPage'))
+const ClassesPage = lazy(() => import('@/pages/app/ClassesPage'))
+const ClassTypePage = lazy(() => import('@/pages/app/ClassTypePage'))
+const ClassSessionsPage = lazy(() => import('@/pages/app/ClassSessionsPage'))
+const ClassSessionPage = lazy(() => import('@/pages/app/ClassSessionPage'))
+const ClientContractsPage = lazy(() => import('@/pages/app/ClientContractsPage'))
+const OrdersPage = lazy(() => import('@/pages/app/OrdersPage'))
+const MessagesPage = lazy(() => import('@/pages/app/MessagesPage'))
+const KitchenBoardPage = lazy(() => import('@/pages/app/KitchenBoardPage'))
+const OrderPage = lazy(() => import('@/pages/app/OrderPage'))
 const UserPage = lazy(() => import('@/pages/app/UserPage'))
 const AccountPage = lazy(() => import('@/pages/app/AccountPage'))
 const EmailPreviewPage = lazy(() => import('@/pages/EmailPreviewPage'))
@@ -60,8 +70,10 @@ export const router = createBrowserRouter([
           { path: 'devices/:deviceId', element: <DevicePage /> },
           { path: 'contracts', element: <ContractsPage /> },
           { path: 'contracts/:contractId', element: <ContractPage /> },
-          { path: 'stores', element: <StoresPage /> },
-          { path: 'stores/:storeId', element: <StorePage /> },
+          { path: 'locations', element: <LocationsPage /> },
+          { path: 'locations/:locationId', element: <LocationPage /> },
+          { path: 'stores', element: <Navigate to="/locations" replace /> },
+          { path: 'stores/:storeId', element: <Navigate to="/locations" replace /> },
           { path: 'media', element: <MediasPage /> },
           { path: 'media-campaigns', element: <MediaCampaignsPage /> },
           { path: 'media-campaigns/:campaignId', element: <MediaCampaignPage /> },
@@ -69,12 +81,21 @@ export const router = createBrowserRouter([
           { path: 'products', element: <ProductsPage /> },
           { path: 'products/:productId', element: <ProductPage /> },
           { path: 'issues', element: <IssuesPage /> },
+          { path: 'agent-support-issues', element: <AiSupportIssuesPage /> },
           { path: 'data', element: <DataReportsPage /> },
           { path: 'customers', element: <CustomersPage /> },
           { path: 'customers/:customerId', element: <CustomerPage /> },
-          { path: 'partners', element: <PartnersPage /> },
-          { path: 'partners/:partnerId', element: <PartnerPage /> },
           { path: 'users', element: <UsersPage /> },
+          { path: 'pricing-options', element: <PricingOptionsPage /> },
+          { path: 'classes', element: <ClassesPage /> },
+          { path: 'classes/:classTypeId', element: <ClassTypePage /> },
+          { path: 'class-sessions', element: <ClassSessionsPage /> },
+          { path: 'class-sessions/:sessionId', element: <ClassSessionPage /> },
+          { path: 'client-contracts', element: <ClientContractsPage /> },
+          { path: 'orders', element: <OrdersPage /> },
+          { path: 'messages', element: <MessagesPage /> },
+          { path: 'orders/kitchen', element: <KitchenBoardPage /> },
+          { path: 'orders/:orderId', element: <OrderPage /> },
           { path: 'users/:userId', element: <UserPage /> },
           { path: 'account', element: <AccountPage /> },
           { path: 'device-types', element: <DeviceTypesPage /> },
@@ -96,6 +117,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { path: '/login', element: <LoginPage /> },
+          { path: '/signup', element: <SignupPage /> },
           { path: '/forgot-password', element: <ForgotPasswordPage /> },
           { path: '/create-password', element: <CreatePasswordPage /> },
           { path: '/reset-password', element: <CreatePasswordPage /> },

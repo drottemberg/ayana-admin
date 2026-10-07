@@ -32,11 +32,7 @@ import { getStoreGroupsRequest } from '@/features/groups/api'
 import { storeGroupColumns } from '@/features/groups/store-group-columns'
 import { StoreGroupService } from '@/features/groups/store-group-service'
 import { storeGroupsQueryKeys } from '@/features/groups/query-keys'
-import { OrganizationService } from '@/features/organizations/organization-service'
 import { OrganizationStatusBadge } from '@/features/organizations/OrganizationStatusBadge'
-import { getPartnersRequest, partnersListConfig } from '@/features/partners/api'
-import { partnerColumns } from '@/features/partners/partner-columns'
-import { partnersQueryKeys } from '@/features/partners/query-keys'
 import { getStoreRequest } from '@/features/stores/api'
 import { storesQueryKeys } from '@/features/stores/query-keys'
 import { StoreService } from '@/features/stores/store-service'
@@ -57,7 +53,6 @@ import { Drawer, DrawerId } from '@/providers/drawer'
 import { ModalId, Modals } from '@/providers/modal'
 import type { Device, DeviceData } from '@/types/device'
 import type { Issue } from '@/types/issue'
-import type { MaintenancePartner } from '@/types/partner'
 import type { StoreGroup } from '@/types/group'
 import type { Store } from '@/types/store'
 import type { User } from '@/types/user'
@@ -270,19 +265,6 @@ export default function StorePage() {
         payload: (tableState) => storeGroupsListConfig.toPayload(tableState, { storeId }),
         map: (result) => storeGroupsListConfig.toResult(result as ApiListResult<StoreGroup>),
       }),
-      ...(canManageStoreDetails
-        ? [
-            createTableBatchCacheEntry<MaintenancePartner>({
-              key: 'partners',
-              queryKey: [...partnersQueryKeys.all, 'store-module', storeId],
-              tableKey: 'stores.detail.modules.partners',
-              pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
-              url: partnersListConfig.url,
-              payload: (tableState) => partnersListConfig.toPayload(tableState, { storeId }),
-              map: partnersListConfig.toResult,
-            }),
-          ]
-        : []),
       createTableBatchCacheEntry<Issue>({
         key: 'issues',
         queryKey: [...issuesQueryKeys.all, 'store-module', storeId],
@@ -439,33 +421,6 @@ export default function StorePage() {
               refetchOnMount={false}
             />
           )}
-          {canManageStoreDetails ? (
-            failedModuleKeys.has('partners') ? (
-              <StoreModuleError module={{ key: 'partners', label: 'Maintenance partners' }} />
-            ) : (
-              <RelatedEntityModule
-                id={`${MODULE_ANCHOR_PREFIX}-partners`}
-                title="Maintenance partners"
-                icon={EntityIcon.partners}
-                queryKey={[...partnersQueryKeys.all, 'store-module', store.id]}
-                loadData={(tableState) => getPartnersRequest(tableState, { storeId: store.id })}
-                tableKey="stores.detail.modules.partners"
-                columns={partnerColumns}
-                getRowCommands={(partner: MaintenancePartner) =>
-                  OrganizationService.getActions({
-                    kind: 'partner',
-                    organization: partner,
-                  })
-                }
-                action={StoreService.getModuleAction(store, 'partners')}
-                initialTotal={getInitialTotal('partners')}
-                viewAllTo={makeViewAllTo('/partners', store.id)}
-                loadingMessage="Loading maintenance partners..."
-                emptyMessage="No maintenance partners found."
-                refetchOnMount={false}
-              />
-            )
-          ) : null}
           {failedModuleKeys.has('issues') ? (
             <StoreModuleError module={{ key: 'issues', label: 'Last issues' }} />
           ) : (

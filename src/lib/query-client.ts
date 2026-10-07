@@ -17,4 +17,5 @@ export const queryClient = new QueryClient({
 
 queryClient.setQueryDefaults(appQueryKeys.connect, {
   gcTime: Infinity,
+  staleTime: Infinity,
 })

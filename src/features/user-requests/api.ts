@@ -5,7 +5,7 @@ import type {
   SendOrgInvitePayload,
   UserRequest,
 } from '@/types/user-request'
-import type { InviteCustomerPayload, InviteOpsPayload, InviteStaffPayload } from '@/types/membership'
+import type { InviteCustomerPayload, InviteStaffPayload } from '@/types/membership'
 
 export type InviteStaffResult =
   | { created: true; user: { id: string; email: string; firstName: string; lastName: string } }
@@ -56,11 +56,6 @@ export async function inviteStaffRequest(payload: InviteStaffPayload): Promise<I
 
 export async function inviteCustomerRequest(payload: InviteCustomerPayload): Promise<UserRequest[]> {
   const result = await apiClient.post<{ requests: UserRequest[] }>('/user-requests/invite/customer', payload)
-  return result.requests
-}
-
-export async function inviteOpsRequest(payload: InviteOpsPayload): Promise<UserRequest[]> {
-  const result = await apiClient.post<{ requests: UserRequest[] }>('/user-requests/invite/ops', payload)
   return result.requests
 }
 

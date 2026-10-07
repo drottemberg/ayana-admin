@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 import { BaseCard } from '@/components/app/BaseCard'
@@ -37,6 +37,7 @@ export default function AccountPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -119,12 +120,22 @@ export default function AccountPage() {
                 error={errors.email?.message}
                 {...register('email')}
               />
-              <PhoneInput
-                label="Phone number"
-                placeholder="988-710-9998"
-                disabled={!user || isSubmitting}
-                error={errors.phone?.message}
-                {...register('phone')}
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field, fieldState }) => (
+                  <PhoneInput
+                    label="Phone number"
+                    placeholder="6 12 34 56 78"
+                    disabled={!user || isSubmitting}
+                    error={fieldState.error?.message}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                )}
               />
             </FieldGroup>
 

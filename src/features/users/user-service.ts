@@ -1,5 +1,5 @@
 import { UserRole, UserRoleValues, UserStatus, UserStatusValues } from '@/types/user'
-import { CustomerRole, CustomerRoleValues, StaffRole, StaffRoleValues, TechnicianRole, TechnicianRoleValues } from '@/types/membership'
+import { CustomerRole, CustomerRoleValues, StaffRole, StaffRoleValues } from '@/types/membership'
 import type { DataTableCommand } from '@/components/data-table'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import type { PageHeaderProps } from '@/components/ui/page-header'
@@ -20,25 +20,6 @@ import { Drawer, DrawerId } from '@/providers/drawer'
 import { Modals } from '@/providers/modal'
 import type { User } from '@/types/user'
 
-export type UserDetailModule = 'customers' | 'stores' | 'partners'
-type UserDetailActionEntity = 'store'
-type UserDetailAction = DropdownActionItem & {
-  entity?: UserDetailActionEntity
-}
-type UserModuleAction = {
-  label: string
-  onClick?: () => void
-}
-
-const moduleActionEntity: Partial<Record<UserDetailModule, UserDetailActionEntity>> = {
-  stores: 'store',
-}
-
-function toDropdownAction({ entity, ...action }: UserDetailAction): DropdownActionItem {
-  void entity
-  return action
-}
-
 export const UserRoleLabel: Record<UserRole, string> = {
   [UserRole.OWNER]: 'Owner',
   [UserRole.ADMIN]: 'Admin',
@@ -54,14 +35,12 @@ export const StaffRoleLabel: Record<StaffRole, string> = {
 }
 
 export const CustomerRoleLabel: Record<CustomerRole, string> = {
+  [CustomerRole.OWNER]: 'Owner',
   [CustomerRole.ADMIN]: 'Admin',
+  [CustomerRole.MANAGER]: 'Manager',
+  [CustomerRole.FRONT_DESK]: 'Front Desk',
+  [CustomerRole.INSTRUCTOR]: 'Instructor',
   [CustomerRole.MEMBER]: 'Member',
-  [CustomerRole.OPERATOR]: 'Operator',
-}
-
-export const TechnicianRoleLabel: Record<TechnicianRole, string> = {
-  [TechnicianRole.ADMIN]: 'Admin',
-  [TechnicianRole.TECHNICIAN]: 'Technician',
 }
 
 export const UserStatusLabel: Record<UserStatus, string> = {
@@ -94,14 +73,6 @@ export const UserService = {
 
   customerRoleToString(role: CustomerRole): string {
     return CustomerRoleLabel[role] ?? role
-  },
-
-  technicianRoleKeys(): TechnicianRole[] {
-    return [...TechnicianRoleValues]
-  },
-
-  technicianRoleToString(role: TechnicianRole): string {
-    return TechnicianRoleLabel[role] ?? role
   },
 
   userStatusKeys(): UserStatus[] {
@@ -201,15 +172,8 @@ export const UserService = {
     return actions
   },
 
-  getDetailActions(
-    user: User,
-    permissions?: EntityPermissions,
-    handlers: { onAddStore?: () => void } = {},
-  ): UserDetailAction[] {
+  getDetailActions(user: User, permissions?: EntityPermissions): DropdownActionItem[] {
     return [
-      { type: 'label', label: 'Related' },
-      { entity: 'store', label: 'Add store', onClick: handlers.onAddStore },
-      { type: 'separator', key: 'user-separator' },
       { type: 'label', label: 'User' },
       ...this.getActions(user, permissions),
     ]
@@ -218,26 +182,10 @@ export const UserService = {
   getDetailHeaderActions(
     user: User,
     permissions?: EntityPermissions,
-    handlers: { onAddStore?: () => void } = {},
   ): Pick<PageHeaderProps, 'options'> {
     return {
-      options: this.getDetailActions(user, permissions, handlers).map(toDropdownAction),
+      options: this.getDetailActions(user, permissions),
     }
-  },
-
-  getModuleAction(
-    user: User,
-    module: UserDetailModule,
-    permissions?: EntityPermissions,
-    handlers: { onAddStore?: () => void } = {},
-  ): UserModuleAction | undefined {
-    const actionEntity = moduleActionEntity[module]
-    if (!actionEntity) return undefined
-
-    const action = this.getDetailActions(user, permissions, handlers).find((item) => item.entity === actionEntity)
-    return action && 'label' in action && action.type !== 'label'
-      ? { label: action.label, onClick: 'onClick' in action ? action.onClick : undefined }
-      : undefined
   },
 
   getTableActions(users: User[], permissions?: EntityPermissions): DataTableCommand<User>[] {

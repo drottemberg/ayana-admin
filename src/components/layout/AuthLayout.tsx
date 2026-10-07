@@ -13,7 +13,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
     <main className="flex min-h-svh w-full flex-col items-center justify-center bg-[var(--color-gray-50)] p-6 md:p-10">
       <div className="flex w-full flex-1 flex-col items-center justify-center">
         <div className="mb-10 flex items-start justify-center gap-1.5">
-          <img src={logoImg} alt="Logo" className="h-auto w-28 max-w-full object-contain" />
+          <img src={logoImg} alt="Logo" className="h-auto w-50 max-w-full object-contain" />
           <AppModeBadge />
         </div>
 

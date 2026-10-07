@@ -8,6 +8,7 @@ import type {
   ProductBrand,
   ProductDeviceHistory,
   ProductDeviceHistoryPeriod,
+  UpdateProductManagementPayload,
   UpdateProductPayload,
 } from '@/types/product'
 
@@ -15,7 +16,21 @@ type ProductRecord = {
   id: string
   name: string
   customerId: string
+  organizationId?: string
+  customerName?: string | null
   customer?: Customer
+  scope?: Product['scope']
+  productType?: Product['productType']
+  locations?: Product['locations']
+  variants?: Product['variants']
+  modifierGroups?: Product['modifierGroups']
+  productTypes?: Product['productTypes']
+  vatRate?: Product['vatRate']
+  description?: string | null
+  isOnline?: boolean
+  isInStore?: boolean
+  isActive?: boolean
+  isSellable?: boolean
   brandId?: string | null
   brand?: ProductBrand | null
   status?: Product['status']
@@ -51,6 +66,22 @@ export function toProduct(record: ProductRecord): Product {
     id: record.id,
     name: record.name,
     customer: record.customer ?? { id: record.customerId, name: '', type: 'CUSTOMER' as Customer['type'] },
+    customerId: record.customerId,
+    organizationId: record.organizationId ?? record.customerId,
+    customerName: record.customerName ?? record.customer?.name ?? null,
+    scope: record.scope ?? 'ALL',
+    productType: record.productType ?? null,
+    productTypes: record.productTypes ?? [],
+    vatRate: record.vatRate ?? null,
+    description: record.description ?? null,
+    isOnline: record.isOnline ?? false,
+    isInStore: record.isInStore ?? true,
+    isActive: record.isActive ?? record.status === 'ACTIVE',
+    isSellable: record.isSellable ?? true,
+    currency: record.customer?.currency ?? null,
+    locations: record.locations ?? [],
+    variants: record.variants ?? [],
+    modifierGroups: record.modifierGroups ?? [],
     brand: record.brand ?? null,
     status: record.isDeleted ? 'DELETED' : record.isArchived ? 'ARCHIVED' : record.status,
     isArchived: record.isArchived,
@@ -167,8 +198,34 @@ export async function getDeviceProductHistoryRequest(
 }
 
 export async function getProductRequest(productId: string): Promise<Product> {
-  const product = await apiClient.get<ProductRecord>(`/products/${productId}`)
+  const product = await apiClient.get<ProductRecord>(`/products/${productId}/management`)
   return toProduct(product)
+}
+
+export async function getProductManagementRequest(productId: string, customerId: string): Promise<Product> {
+  const product = await apiClient.get<ProductRecord>(`/products/${productId}/management?customerId=${encodeURIComponent(customerId)}`)
+  return toProduct(product)
+}
+
+export async function updateProductManagementRequest(product: Product, payload: UpdateProductManagementPayload): Promise<Product> {
+  const customerId = product.customerId ?? product.organizationId ?? product.customer.id
+  const result = await apiClient.patch<ProductRecord>(
+    `/products/${product.id}/management?customerId=${encodeURIComponent(customerId)}`,
+    payload,
+  )
+  return toProduct(result)
+}
+
+export async function updateProductScopeRequest(product: Product, scope: 'ALL' | 'SPECIFIC', locationIds: string[]) {
+  const customerId = product.customerId ?? product.organizationId ?? product.customer.id
+  const result = await apiClient.patch<ProductRecord>(`/products/${product.id}/scope?customerId=${encodeURIComponent(customerId)}`, { scope, locationIds })
+  return toProduct(result)
+}
+
+export async function setAyanaProductStatusRequest(product: Product, isActive: boolean) {
+  const customerId = product.customerId ?? product.organizationId ?? product.customer.id
+  const result = await apiClient.patch<ProductRecord>(`/products/${product.id}/status?customerId=${encodeURIComponent(customerId)}`, { isActive })
+  return toProduct(result)
 }
 
 export async function createProductRequest(payload: CreateProductPayload): Promise<Product> {

@@ -23,12 +23,6 @@ export function UserActionStep({ onSelect }: UserActionStepProps) {
           description="Send an invitation to a customer contact."
           onClick={() => onSelect('invite')}
         />
-        <ActionButton
-          icon={<HugeiconsIcon icon={MailSend02Icon} strokeWidth={2} />}
-          title="Invite Partner User"
-          description="Send an invitation to a maintenance partner contact."
-          onClick={() => onSelect('invite-ops')}
-        />
       </div>
     </div>
   )

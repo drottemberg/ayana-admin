@@ -1,3 +1,5 @@
+import { isValidPhoneNumber, parsePhoneNumberFromString } from 'libphonenumber-js'
+
 export function normalizePhone(value: string) {
   const trimmed = value.trim()
   const hasLeadingPlus = trimmed.startsWith('+')
@@ -8,11 +10,15 @@ export function normalizePhone(value: string) {
 
 export function validatePhone(value: string) {
   const normalized = normalizePhone(value)
-  const digitCount = normalized.replace(/\D/g, '').length
+  if (!normalized) return 'Phone number is required.'
 
-  if (!digitCount) return 'Phone number is required.'
-  if (digitCount < 7 || digitCount > 15) return 'Enter a valid phone number.'
-  if (normalized.includes('+') && !normalized.startsWith('+')) return 'Enter a valid phone number.'
+  return isValidPhoneNumber(normalized) ? undefined : 'Enter a valid phone number.'
+}
 
-  return undefined
+export function formatPhoneNumber(value?: string | null) {
+  const normalized = value?.trim()
+  if (!normalized) return ''
+
+  const parsed = normalized.startsWith('+') ? parsePhoneNumberFromString(normalized) : undefined
+  return parsed?.formatInternational() ?? normalized
 }

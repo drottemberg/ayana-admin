@@ -8,13 +8,7 @@ import {
   type User,
   type UserStatus,
 } from '@/types/user'
-import type {
-  CustomerMembershipInput,
-  CustomerMembershipRecord,
-  OpsMembershipInput,
-  OpsMembershipRecord,
-  StaffRole,
-} from '@/types/membership'
+import type { CustomerMembershipInput, CustomerMembershipRecord, StaffRole, StoreScope } from '@/types/membership'
 import { apiClient } from '@/lib/api-client'
 import type { Customer } from '@/types/customer'
 
@@ -50,10 +44,21 @@ type UserRecord = {
   isStaff?: boolean
   staffRole?: StaffRole | null
   customerMemberships?: CustomerMembershipRecord[] | null
-  technicianMemberships?: OpsMembershipRecord[] | null
+  memberships?: UserMembershipRecord[] | null
   createdAt?: string | null
   updatedAt?: string | null
   members?: Record<string, MemberRecord>
+}
+
+type UserMembershipRecord = {
+  customerId: string
+  customerName?: string
+  role: CustomerMembershipRecord['role']
+  position?: string | null
+  locationScope?: StoreScope
+  locations?: Array<{ locationId: string; locationName?: string; role?: CustomerMembershipRecord['role'] }>
+  storeScope?: StoreScope
+  stores?: Array<{ storeId: string; storeName?: string; role?: CustomerMembershipRecord['role'] }>
 }
 
 const USERS_LIST_URL = '/users/list'
@@ -74,6 +79,32 @@ function toUser(user: UserRecord): User {
   }
 
   const memberOrganizations = memberList.map((m) => m.orgName).filter(Boolean) as string[]
+  const customerMemberships = (user.customerMemberships ?? user.memberships)?.map((membership) => {
+    const locationScope = membership.locationScope ?? membership.storeScope ?? 'ALL'
+    const locations =
+      membership.locations ??
+      membership.stores?.map((store) => ({
+        locationId: store.storeId,
+        locationName: store.storeName,
+        role: store.role,
+      })) ??
+      []
+    const stores =
+      membership.stores ??
+      locations.map((location) => ({
+        storeId: location.locationId,
+        storeName: location.locationName,
+        role: location.role,
+      }))
+
+    return {
+      ...membership,
+      locationScope,
+      locations,
+      storeScope: membership.storeScope ?? locationScope,
+      stores,
+    }
+  })
 
   return {
     id: user.id,
@@ -90,8 +121,7 @@ function toUser(user: UserRecord): User {
     isDeleted: user.isDeleted ?? undefined,
     isStaff: user.isStaff ?? undefined,
     staffRole: user.staffRole ?? undefined,
-    customerMemberships: user.customerMemberships ?? undefined,
-    technicianMemberships: user.technicianMemberships ?? undefined,
+    customerMemberships,
     role: ((firstMember?.role ?? user.role) as UserRole | null) ?? UserRole.MEMBER,
     permissions: permissions.length > 0 ? permissions : Array.isArray(user.permissions) ? user.permissions : [],
     memberOrganizations: memberOrganizations.length > 0 ? memberOrganizations : undefined,
@@ -213,7 +243,7 @@ export async function updateUserRequest(userId: string, payload: CreateUserPaylo
 // UpdateUserDto (backend) only accepts firstName/lastName/phone/isActive — email/position/
 // role/permissions sent via updateUserRequest above are silently ignored server-side. This is
 // the real "edit details" call; role/permissions now go through the dedicated
-// updateStaff/updateCustomerMembership/updateOpsMembership calls.
+// updateStaff/updateCustomerMembership calls.
 export async function updateUserDetailsRequest(userId: string, payload: UpdateUserDetailsPayload): Promise<User> {
   const user = await apiClient.patch<UserRecord>(`/users/${userId}`, payload)
 
@@ -226,10 +256,6 @@ export async function updateStaff(userId: string, payload: { staffRole: StaffRol
 
 export async function updateCustomerMembership(userId: string, payload: CustomerMembershipInput): Promise<void> {
   await apiClient.patch<void>(`/users/${userId}/customer`, payload)
-}
-
-export async function updateOpsMembership(userId: string, payload: OpsMembershipInput): Promise<void> {
-  await apiClient.patch<void>(`/users/${userId}/ops`, payload)
 }
 
 export async function deleteUserRequest(userId: string): Promise<void> {

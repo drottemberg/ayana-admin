@@ -1,4 +1,8 @@
 import { UserRole, type User, type UserOrganizationPermission, type UserRole as UserRoleType } from '@/types/user'
+import type { CustomerMembershipRecord } from '@/types/membership'
+
+type CustomerMembershipDto = Pick<CustomerMembershipRecord, 'customerId' | 'role'>
+  & Partial<Omit<CustomerMembershipRecord, 'customerId' | 'role'>>
 
 export type UserDto = {
   id?: string | number | null
@@ -10,6 +14,7 @@ export type UserDto = {
   customerId?: string | null
   role?: UserRoleType | null
   permissions?: UserOrganizationPermission[] | null
+  customerMemberships?: CustomerMembershipDto[] | null
   isActive?: boolean | null
   hasPassword?: boolean | null
   mfaEnabled?: boolean | null
@@ -29,6 +34,7 @@ export class UserEntity {
   readonly customerId?: string
   readonly role: UserRoleType
   readonly permissions: UserOrganizationPermission[]
+  readonly customerMemberships: CustomerMembershipRecord[]
   readonly isActive: boolean
   readonly hasPassword: boolean
   readonly mfaEnabled: boolean
@@ -47,6 +53,10 @@ export class UserEntity {
     this.customerId = dto.customerId ?? undefined
     this.role = dto.role ?? UserRole.MEMBER
     this.permissions = dto.permissions ?? []
+    this.customerMemberships = (dto.customerMemberships ?? []).map((membership) => ({
+      ...membership,
+      storeScope: membership.storeScope ?? membership.locationScope ?? 'ALL',
+    }))
     this.isActive = dto.isActive ?? false
     this.hasPassword = dto.hasPassword ?? false
     this.mfaEnabled = dto.mfaEnabled ?? false
@@ -70,6 +80,7 @@ export class UserEntity {
       role: this.role,
       hasPassword: this.hasPassword,
       permissions: this.permissions,
+      customerMemberships: this.customerMemberships,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     }

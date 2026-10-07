@@ -5,6 +5,7 @@ import { NO_VALUE_STR } from '@/constants'
 import { OrganizationStatusBadge } from '@/features/organizations/OrganizationStatusBadge'
 import type { Customer } from '@/types/customer'
 import { formatDateTime } from '@/utils/date-utils'
+import { formatPhoneNumber } from '@/lib/phone'
 
 export const customerColumns: ColumnDef<Customer>[] = [
   {
@@ -28,6 +29,16 @@ export const customerColumns: ColumnDef<Customer>[] = [
     ),
   },
   {
+    accessorKey: 'email',
+    header: 'Email',
+    cell: ({ row }) => row.original.email ?? NO_VALUE_STR,
+  },
+  {
+    accessorKey: 'phone',
+    header: 'Phone',
+    cell: ({ row }) => formatPhoneNumber(row.original.phone) || NO_VALUE_STR,
+  },
+  {
     accessorKey: 'contactName',
     header: 'Contact name',
     cell: ({ row }) => row.original.contactName ?? NO_VALUE_STR,
@@ -40,7 +51,7 @@ export const customerColumns: ColumnDef<Customer>[] = [
   {
     accessorKey: 'contactPhone',
     header: 'Contact phone',
-    cell: ({ row }) => row.original.contactPhone ?? NO_VALUE_STR,
+    cell: ({ row }) => formatPhoneNumber(row.original.contactPhone) || NO_VALUE_STR,
   },
   {
     accessorKey: 'createdAt',

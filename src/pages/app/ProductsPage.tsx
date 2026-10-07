@@ -1,18 +1,22 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
-import { getProductFilterOptionsRequest, getProductsRequest } from '@/features/products/api'
+import { getProductsRequest } from '@/features/products/api'
 import { getProductColumns } from '@/features/products/product-columns'
 import { ProductService } from '@/features/products/product-service'
+import { ProductManagementService } from '@/features/products/product-management-service'
+import { ProductScopeDrawer } from '@/features/products/ProductScopeDrawer'
+import { ProductEditDrawer } from '@/features/products/ProductEditDrawer'
 import { productsQueryKeys } from '@/features/products/query-keys'
+import { getCustomersListRequest } from '@/features/customers/api'
 import { useConnect } from '@/features/app/use-connect'
-import { Drawer, DrawerId } from '@/providers/drawer'
 import type { Product } from '@/types/product'
-import { ProductStatusValues } from '@/types/product'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 export default function ProductsPage() {
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [editingScopeProduct, setEditingScopeProduct] = useState<Product | null>(null)
   const { session } = useConnect()
   const portal = getPortalSafe()
   const isAdminContext = portal === Portal.ADMIN
@@ -26,22 +30,17 @@ export default function ProductsPage() {
     (tableState: DataTableState<Product>) => getProductsRequest(tableState, hiddenFilters),
     [hiddenFilters],
   )
-  const handleGetCommands = useCallback((products: Product[]) => {
-    return ProductService.getTableActions(products)
-  }, [])
   const handleGetRowCommands = useCallback((product: Product) => {
-    return ProductService.getActions(product)
-  }, [])
+    return ProductManagementService.getRowActions(product, {
+      canEdit: Boolean(session?.permissions.customers?.edit),
+      onEdit: setEditingProduct,
+      onEditScope: setEditingScopeProduct,
+    })
+  }, [session?.permissions.customers?.edit])
 
   return (
     <>
-      <PageHeader
-        title="Product"
-        primaryAction={{
-          children: 'Add new product',
-          onClick: () => Drawer.show(DrawerId.CreateProduct, {}),
-        }}
-      />
+      <PageHeader title="Products" subtitle="Customer catalog and location visibility." />
 
       <section className="space-y-5 p-4 md:p-6">
         <DataTableAsync
@@ -49,14 +48,14 @@ export default function ProductsPage() {
           loadData={loadProducts}
           tableKey="products.root"
           columns={columns}
-          searchPlaceholder="Search by ID, name, customer name, brand"
+          searchPlaceholder="Search by ID or name"
           searchColumns={['id', 'name']}
           filters={[
             {
               id: 'status',
               label: 'Status',
               column: 'status',
-              options: [...ProductStatusValues],
+              options: ['ACTIVE', 'DISABLED'],
               getValue: ProductService.getStatus,
             },
             ...(isAdminContext
@@ -66,26 +65,23 @@ export default function ProductsPage() {
                     label: 'Customer',
                     column: 'customer' as const,
                     selectionMode: 'single' as const,
-                    queryFn: (search: string, page: number) =>
-                      getProductFilterOptionsRequest('customer', search, page, hiddenFilters),
+                    queryFn: (search: string, _page: number) =>
+                      getCustomersListRequest(undefined, search).then((items) => ({
+                        items: items.map((customer) => ({ id: customer.id, label: customer.name })),
+                        total: items.length,
+                      })),
                   },
                 ]
               : []),
-            {
-              id: 'brandId',
-              label: 'Brand',
-              column: 'brand',
-              selectionMode: 'single',
-              queryFn: (search, page) => getProductFilterOptionsRequest('brand', search, page, hiddenFilters),
-            },
           ]}
-          getCommands={handleGetCommands}
           getRowCommands={handleGetRowCommands}
           loadingMessage="Loading products..."
           emptyMessage="No products found."
           errorMessage="Failed to load products."
         />
       </section>
+      <ProductEditDrawer product={editingProduct} open={Boolean(editingProduct)} onOpenChange={(open) => { if (!open) setEditingProduct(null) }} />
+      <ProductScopeDrawer product={editingScopeProduct} open={Boolean(editingScopeProduct)} onOpenChange={(open) => { if (!open) setEditingScopeProduct(null) }} />
     </>
   )
 }

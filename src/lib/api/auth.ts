@@ -9,6 +9,16 @@ export function loginRequest(email: string, password: string): Promise<AuthRespo
   return apiClient.login<AuthResponse>('/auth/login', { email, password })
 }
 
+export function signupRequest(
+  requestId: string | undefined,
+  payload: { email: string; name: string; password: string },
+): Promise<AuthResponse> {
+  const path = requestId
+    ? `/user-requests/${encodeURIComponent(requestId)}/signup`
+    : '/user-requests/signup'
+  return apiClient.login<AuthResponse>(path, payload)
+}
+
 export async function logoutRequest(): Promise<void> {
   await apiClient.logout('/auth/logout')
 }

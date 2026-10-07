@@ -7,8 +7,6 @@ import {
   unarchiveCustomerRequest,
 } from '@/features/customers/api'
 import { customersQueryKeys } from '@/features/customers/query-keys'
-import { deletePartnerRequest, setPartnerStatusRequest } from '@/features/partners/api'
-import { partnersQueryKeys } from '@/features/partners/query-keys'
 import {
   archiveStoreRequest,
   deleteStoreRequest,
@@ -23,12 +21,12 @@ import { Modals } from '@/providers/modal'
 import type { Store } from '@/types/customer'
 import { OrganizationStatus, OrganizationType, type Organization } from '@/types/organization'
 
-type OrganizationListKind = 'customer' | 'store' | 'partner'
+type OrganizationListKind = 'customer' | 'store'
 
 type OrganizationListConfig<TOrganization extends Organization> = {
   kind: OrganizationListKind
   organizations: TOrganization[]
-  /** Omit to keep showing every action (existing Store/Partner pages) — pass to gate by app/connect permissions (Customers page, per spec §6.2). */
+  /** Omit to keep showing every action — pass to gate by app/connect permissions. */
   permissions?: EntityPermissions
 }
 
@@ -41,33 +39,24 @@ type OrganizationActionsConfig<TOrganization extends Organization> = {
 const organizationQueryKeyByKind: Record<OrganizationListKind, readonly unknown[]> = {
   customer: customersQueryKeys.all,
   store: storesQueryKeys.all,
-  partner: partnersQueryKeys.all,
 }
 
 const organizationLabelByKind: Record<OrganizationListKind, string> = {
   customer: 'customer',
   store: 'store',
-  partner: 'partner',
 }
 
-// Real, guarded per-entity routes (/customers/*, /stores/*, /maintenance-partners/*) — the
-// generic /organizations/:id this service used to call was removed from the backend (see
-// gkManager-backend/src/organizations/organizations.module.ts's comment).
 const deleteRequestByKind: Record<OrganizationListKind, (id: string) => Promise<void>> = {
   customer: deleteCustomerRequest,
   store: deleteStoreRequest,
-  partner: deletePartnerRequest,
 }
 
 const setStatusRequestByKind: Record<OrganizationListKind, (id: string, status: OrganizationStatus) => Promise<void>> =
   {
     customer: setCustomerStatusRequest,
     store: setStoreStatusRequest,
-    partner: setPartnerStatusRequest,
   }
 
-// No archive endpoint exists for partners yet (checked maintenance-partners.controller.ts) —
-// archive/unarchive is simply unavailable for that kind until backend adds it.
 const archiveRequestByKind: Partial<Record<OrganizationListKind, (id: string) => Promise<void>>> = {
   customer: archiveCustomerRequest,
   store: archiveStoreRequest,
@@ -109,10 +98,7 @@ export const OrganizationService = {
     await queryClient.invalidateQueries({ queryKey: organizationQueryKeyByKind[kind] })
   },
 
-  // §6.2/§6.3: Edit, Archive, Destroy, Disable/Enable — gated by app/connect permissions when
-  // supplied (Ops on Customers is view-only: create/edit/delete/archive all false, per
-  // PermissionResolver.opsResolve). Omitting `permissions` keeps every action visible, so
-  // existing Store/Partner callers (which don't yet pass permissions) are unaffected.
+  // Edit, Archive, Destroy, Disable/Enable are gated by app/connect permissions when supplied.
   getActions<TOrganization extends Organization>(
     config: OrganizationActionsConfig<TOrganization>,
   ): DropdownActionItem[] {
@@ -124,15 +110,11 @@ export const OrganizationService = {
     const openEdit = () => {
       const type = organization.type
       if (type === OrganizationType.CUSTOMER) Drawer.show(DrawerId.CreateCustomer, { customer: organization })
-      else if (type === OrganizationType.MAINTENANCE) Drawer.show(DrawerId.CreatePartner, { partner: organization })
       else if (type === OrganizationType.STORE)
         Drawer.show(DrawerId.CreateStore, { store: organization as unknown as Store })
     }
 
-    // NOT YET AVAILABLE ON BACKEND: no restore/undelete endpoint exists for organizations
-    // (checked customers/stores/maintenance-partners controllers — only DELETE :id, no
-    // reverse; PATCH :id/status only ever writes the `status` column, never isDeleted). Flagged
-    // for backend; a deleted row has no actions here until a real undelete route exists.
+    // Deleted organizations have no actions until the backend provides an undelete route.
     if (isDeleted) return []
 
     const actions: DropdownActionItem[] = []

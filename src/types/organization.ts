@@ -19,9 +19,9 @@ export const OrganizationStatusValues = [
 
 export const OrganizationType = {
   MASTER: 'MASTER',
+  LOCATION: 'LOCATION',
   STORE: 'STORE',
   CUSTOMER: 'CUSTOMER',
-  MAINTENANCE: 'MAINTENANCE',
 }
 
 export type OrganizationType = (typeof OrganizationType)[keyof typeof OrganizationType]
@@ -43,7 +43,9 @@ export type Organization = {
   parentId?: string
   parent?: Organization
   address?: Address
+  description?: string
   timezone?: string
+  currency?: string
   phone?: string
   email?: string
   contactName?: string
@@ -52,5 +54,6 @@ export type Organization = {
   counters?: OrganizationCounters
   users?: number
   stores?: number
+  locations?: number
   createdAt?: string
 }

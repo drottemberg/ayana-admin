@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -80,6 +80,7 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
   const isSelf = currentUser ? String(currentUser.id) === String(user.id) : false
   const queryClient = useQueryClient()
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors, isDirty, isSubmitting },
@@ -129,11 +130,21 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
           </div>
           {/* Email can't be changed here — UpdateUserDto (backend) doesn't accept it. */}
           <TextInput label="Email" type="email" value={user.email} disabled />
-          <PhoneInput
-            label="Phone number"
-            placeholder="988-710-9998"
-            error={errors.phone?.message}
-            {...register('phone')}
+          <Controller
+            control={control}
+            name="phone"
+            render={({ field, fieldState }) => (
+              <PhoneInput
+                label="Phone number"
+                placeholder="6 12 34 56 78"
+                error={fieldState.error?.message}
+                value={field.value}
+                onValueChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                ref={field.ref}
+              />
+            )}
           />
         </FieldGroup>
 

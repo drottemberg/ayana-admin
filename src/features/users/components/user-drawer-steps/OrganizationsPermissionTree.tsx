@@ -226,14 +226,12 @@ function TreeNode({
   const isExpanded = expandedIds.has(node.id)
   const isLoading = loadingIds.has(node.id)
   const isSelected = selectedIds.has(node.id) || parentSelected || (isBranch && isEverySelected(node, selectedIds))
-  // partiallySelectedIds covers any not-yet-expanded branch (its children aren't loaded, so
-  // isSomeSelected can't see the descendant that's actually selected) — applies at every
-  // branch level (Customer in the 2-level tree, Partner AND Customer in the 3-level one), not
-  // just Customer.
+  // partiallySelectedIds covers branches whose children are not loaded, so isSomeSelected
+  // cannot see the selected descendant yet.
   const isHalfSelected =
     !isSelected &&
     (isSomeSelected(node, selectedIds) ||
-      (node.type !== OrganizationType.STORE && (partiallySelectedIds?.has(node.id) ?? false)))
+      (node.type !== OrganizationType.LOCATION && (partiallySelectedIds?.has(node.id) ?? false)))
 
   return (
     <div className="max-w-full overflow-hidden">
@@ -265,7 +263,10 @@ function TreeNode({
           onCheckedChange={() => onToggleSelected(node)}
         />
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <HugeiconsIcon icon={node.type === OrganizationType.STORE ? Store01Icon : Building01Icon} strokeWidth={2} />
+          <HugeiconsIcon
+            icon={node.type === OrganizationType.LOCATION ? Store01Icon : Building01Icon}
+            strokeWidth={2}
+          />
         </span>
         <span className="min-w-0 flex-1 truncate overflow-hidden whitespace-nowrap">{node.name}</span>
         <div className="max-w-32 min-w-0 shrink-0 overflow-hidden">{renderActions?.(node, isSelected)}</div>

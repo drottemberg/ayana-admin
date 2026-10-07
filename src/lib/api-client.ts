@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type Method } from 'axios'
-import { readSelectedOrgId } from '@/features/organizations/storage'
+import { ALL_LOCATIONS_SCOPE, clearSelectedOrgId, readSelectedLocationScope, readSelectedOrgId } from '@/features/organizations/storage'
+import { getAppMode } from '@/features/app/app-mode'
 import {
   deleteCookie,
   getCookie,
@@ -16,6 +17,7 @@ const CLIENT_SETTINGS_KEY = 'api_client_settings'
 const DEFAULT_CULTURE = 'en'
 
 export const API_STATUS_EVENT_NAME = 'gkmanager:api-status'
+export const AUTH_TOKEN_REFRESHED_EVENT_NAME = 'ayana:auth-token-refreshed'
 
 export class ApiError extends Error {
   status: number | null
@@ -36,10 +38,6 @@ type TokenResponse = {
 
 type ClientSettings = {
   culture?: string
-}
-
-type RetryableAxiosRequestConfig = AxiosRequestConfig & {
-  _retry?: boolean
 }
 
 function notifyApiStatus(error: ApiError | null) {
@@ -72,7 +70,8 @@ function toApiError(error: unknown): ApiError {
 
 export class ApiClient {
   private readonly axios: AxiosInstance
-  private refreshTokenRequest: Promise<boolean> | null = null
+  private logoutRedirectPending = false
+  private refreshInFlight: Promise<TokenResponse> | null = null
   culture: string
 
   constructor() {
@@ -132,6 +131,7 @@ export class ApiClient {
     if (refreshToken) {
       setCookie(AUTH_REFRESH_TOKEN_KEY, refreshToken)
     }
+    window.dispatchEvent(new CustomEvent(AUTH_TOKEN_REFRESHED_EVENT_NAME))
   }
 
   clearTokens(): void {
@@ -186,39 +186,58 @@ export class ApiClient {
     }
   }
 
-  async refreshToken(): Promise<boolean> {
-    if (this.refreshTokenRequest) return this.refreshTokenRequest
+  async refreshSession(): Promise<boolean> {
+    if (!this.getRefreshToken()) {
+      this.logoutAfterUnauthorized()
+      return false
+    }
 
+    try {
+      await this.refreshTokens()
+      return true
+    } catch (error) {
+      if (toApiError(error).status === 401) {
+        this.logoutAfterUnauthorized()
+      }
+      return false
+    }
+  }
+
+  private refreshTokens(): Promise<TokenResponse> {
     const refreshToken = this.getRefreshToken()
-    if (!refreshToken) return false
+    if (!refreshToken) return Promise.reject(new ApiError('Refresh token is missing.', 401))
+    if (this.refreshInFlight) return this.refreshInFlight
 
-    this.refreshTokenRequest = this.axios
+    this.refreshInFlight = this.axios
       .post<TokenResponse>('/auth/refresh', { refreshToken })
-      .then((tokens) => {
-        this.setTokens(tokens.data.token, tokens.data.refreshToken)
-        return true
-      })
-      .catch(() => {
-        this.clearTokens()
-        return false
+      .then(({ data }) => {
+        this.setTokens(data.token, data.refreshToken)
+        return data
       })
       .finally(() => {
-        this.refreshTokenRequest = null
+        this.refreshInFlight = null
       })
 
-    return this.refreshTokenRequest
+    return this.refreshInFlight
   }
 
   private configureInterceptors() {
     this.axios.interceptors.request.use((config) => {
       const token = this.getAuthToken()
-      const orgId = token ? readSelectedOrgId() : null
+      const selectedCustomerId = token ? readSelectedOrgId() : null
+      const requestedOrgId = config.headers.get('x-org-id')
+      const locationScope = token && selectedCustomerId && getAppMode() === 'customer'
+        ? readSelectedLocationScope(selectedCustomerId)
+        : null
+      const selectedLocationId = locationScope && locationScope !== ALL_LOCATIONS_SCOPE ? locationScope : null
+      const orgId = requestedOrgId ?? selectedLocationId ?? selectedCustomerId
       const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData
 
       if (!isFormData) {
         config.headers.set('Content-Type', 'application/json')
       }
       config.headers.set('x-culture', this.getCulture())
+      config.headers.set('x-app-context', getAppMode() === 'admin' ? 'ADMIN' : 'CUSTOMER')
 
       const timezoneHeaders = getTimezoneHeaders()
       config.headers.set('x-timezone', timezoneHeaders['x-timezone'])
@@ -227,9 +246,7 @@ export class ApiClient {
       if (token) {
         config.headers.set('Authorization', `Bearer ${token}`)
       }
-      if (orgId) {
-        config.headers.set('x-org-id', orgId)
-      }
+      if (orgId) config.headers.set('x-org-id', String(orgId))
 
       return config
     })
@@ -240,17 +257,37 @@ export class ApiClient {
         return response
       },
       async (error: AxiosError) => {
-        const originalRequest = error.config as RetryableAxiosRequestConfig | undefined
         const status = error.response?.status ?? null
-        const isRefreshRequest = originalRequest?.url === '/auth/refresh'
 
-        if (status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest) {
-          originalRequest._retry = true
-          const refreshed = await this.refreshToken()
+        const request = error.config as (AxiosRequestConfig & { _authRetry?: boolean }) | undefined
+        const requestUrl = request?.url ?? ''
+        const isAuthEndpoint =
+          requestUrl.includes('/auth/login') ||
+          requestUrl.includes('/auth/refresh') ||
+          requestUrl.includes('/auth/logout')
 
-          if (refreshed) {
-            return this.axios.request(originalRequest)
+        if (status === 401 && !isAuthEndpoint && request && !request._authRetry) {
+          request._authRetry = true
+          if (this.getRefreshToken()) {
+            try {
+              const tokens = await this.refreshTokens()
+              request.headers = request.headers ?? {}
+              if ('set' in request.headers && typeof request.headers.set === 'function') {
+                request.headers.set('Authorization', `Bearer ${tokens.token}`)
+              } else {
+                ;(request.headers as Record<string, string>).Authorization = `Bearer ${tokens.token}`
+              }
+              return this.axios.request(request)
+            } catch (refreshError) {
+              if (toApiError(refreshError).status === 401) {
+                this.logoutAfterUnauthorized()
+              }
+              throw toApiError(error)
+            }
           }
+          this.logoutAfterUnauthorized()
+        } else if (status === 401 && !isAuthEndpoint && request?._authRetry) {
+          this.logoutAfterUnauthorized()
         }
 
         const apiError = toApiError(error)
@@ -260,6 +297,20 @@ export class ApiClient {
         throw apiError
       },
     )
+  }
+
+  private logoutAfterUnauthorized(): void {
+    const hasSession = Boolean(this.getAuthToken() || this.getRefreshToken())
+    if (!hasSession) return
+
+    this.clearTokens()
+    this.clearSettings()
+    clearSelectedOrgId()
+
+    if (this.logoutRedirectPending || window.location.pathname === '/login') return
+
+    this.logoutRedirectPending = true
+    window.location.replace('/login')
   }
 }
 

@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/providers/use-auth'
+import { getAppMode } from '@/features/app/app-mode'
 
 const loginFormSchema = z.object({
   email: z.email('Please enter a valid email address.'),
@@ -78,6 +79,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
             <Button type="submit" size="lg" disabled={isSubmitting}>
               Login
             </Button>
+            {getAppMode() === 'customer' && (
+              <Button type="button" variant="outline" size="lg" to="/signup">
+                Sign up
+              </Button>
+            )}
           </div>
         </div>
       </form>

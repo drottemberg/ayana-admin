@@ -10,6 +10,7 @@ import {
   type ProductStatus as ProductStatusType,
 } from '@/types/product'
 import { formatDateTime } from '@/utils/date-utils'
+import { ProductScopeCell } from '@/features/products/ProductScopeCell'
 
 const statusBadgeClassName: Record<ProductStatusType, string> = {
   [ProductStatus.ACTIVE]: 'bg-green-100 text-green-800 border-green-200',
@@ -35,7 +36,7 @@ export function renderProductStatusBadge(product: Pick<Product, 'status'>) {
   )
 }
 
-export function getProductColumns({ showCustomer = true }: { showCustomer?: boolean } = {}): ColumnDef<Product>[] {
+export function getProductColumns({ showCustomer = true, showScope = true }: { showCustomer?: boolean; showScope?: boolean } = {}): ColumnDef<Product>[] {
   return [
     {
       accessorKey: 'status',
@@ -51,22 +52,29 @@ export function getProductColumns({ showCustomer = true }: { showCustomer?: bool
         </Link>
       ),
     },
+    ...(showScope ? [{
+      id: 'scope',
+      header: 'Scope',
+      cell: ({ row }) => <ProductScopeCell product={row.original} />,
+    } as ColumnDef<Product>] : []),
+    {
+      accessorKey: 'productType',
+      header: 'Category',
+      cell: ({ row }) => row.original.productType?.name || NO_VALUE_STR,
+      enableSorting: false,
+    },
     ...(showCustomer
       ? [
           {
             accessorKey: 'customer',
             header: 'Customer',
-            cell: ({ row }) => row.original.customer.name || NO_VALUE_STR,
+            cell: ({ row }) => row.original.customer.name && row.original.customer.id
+              ? <Link to={`/customers/${row.original.customer.id}`} className="underline-offset-2 hover:underline">{row.original.customer.name}</Link>
+              : NO_VALUE_STR,
             enableSorting: false,
           } satisfies ColumnDef<Product>,
         ]
       : []),
-    {
-      accessorKey: 'brand',
-      header: 'Brand',
-      cell: ({ row }) => row.original.brand?.name || NO_VALUE_STR,
-      enableSorting: false,
-    },
     {
       accessorKey: 'createdAt',
       header: 'Created at',

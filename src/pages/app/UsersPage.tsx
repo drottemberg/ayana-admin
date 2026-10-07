@@ -5,6 +5,7 @@ import { DataTableAsync } from '@/components/data-table'
 import type { DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
+import { getAppMode } from '@/features/app/app-mode'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getUsersRequest } from '@/features/users/api'
 import { getUserListColumns } from '@/features/users/user-columns'
@@ -16,8 +17,14 @@ import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 export default function UsersPage() {
   const [searchParams] = useSearchParams()
+  const { session } = useConnect()
   const storeId = searchParams.get('storeId') || undefined
-  const hiddenFilters = useMemo(() => (storeId ? { storeId } : undefined), [storeId])
+  const isCustomerContext = getAppMode() === 'customer'
+  const currentCustomerId = session?.currentOrganization?.id
+  const hiddenFilters = useMemo(() => ({
+    ...(storeId ? { storeId } : {}),
+    ...(isCustomerContext && currentCustomerId ? { organizationId: currentCustomerId } : {}),
+  }), [currentCustomerId, isCustomerContext, storeId])
 
   return (
     <>
@@ -47,6 +54,7 @@ export function UsersTable({
   const { session } = useConnect()
   const permissions = session?.permissions.users
   const portal = getPortalSafe()
+  const isCustomerContext = getAppMode() === 'customer'
   const currentOrganizationId = session?.currentOrganization?.id ?? undefined
   const loadUsers = (tableState: DataTableState<User>) => getUsersRequest(tableState, hiddenFilters)
   const tableColumns = getUserListColumns({
@@ -60,25 +68,26 @@ export function UsersTable({
     <DataTableAsync
       queryKey={[...usersQueryKeys.all, 'table', hiddenFilters]}
       loadData={loadUsers}
+      refetchOnMount="always"
       tableKey={tableKey}
       initialFilters={initialFilters}
       columns={tableColumns}
       searchPlaceholder="Search by ID, name, email, phone"
       searchColumns={['id', 'firstName', 'lastName', 'email', 'phone']}
       filters={[
-        {
+        ...(isCustomerContext ? [] : [{
           id: 'customerId',
           label: 'Customer',
-          column: 'customer',
-          selectionMode: 'single',
-          queryFn: async (search) => {
+          column: 'customer' as const,
+          selectionMode: 'single' as const,
+          queryFn: async (search: string) => {
             const customers = await getCustomersListRequest(undefined, search)
             return {
               items: customers.map((customer) => ({ id: customer.id, label: customer.name })),
               total: customers.length,
             }
           },
-        },
+        }]),
         {
           id: 'status',
           label: 'Status',

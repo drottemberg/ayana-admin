@@ -23,7 +23,7 @@ function buildColumns(tab: UserRequestTab): ColumnDef<UserRequest>[] {
     {
       id: 'contact',
       header: tab === UserRequestTab.SENT ? 'Recipient' : 'Sender',
-      cell: ({ row }) => UserRequestService.getContactText(row.original),
+      cell: ({ row }) => UserRequestService.getContactText(row.original, tab === UserRequestTab.RECEIVED),
     },
     {
       accessorKey: 'metadata',
@@ -71,7 +71,7 @@ export default function HomePage() {
           {
             key: UserRequestTab.RECEIVED,
             label: 'Received',
-            count: allRequests.filter((r) => !r.isSent).length,
+            count: allRequests.filter((r) => r.isReceived ?? !r.isSent).length,
             active: activeTab === UserRequestTab.RECEIVED,
             onClick: () => setActiveTab(UserRequestTab.RECEIVED),
           },

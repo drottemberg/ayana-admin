@@ -8,7 +8,6 @@ import {
   CreateCustomerDrawer,
   type CreateCustomerDrawerProps,
 } from '@/features/customers/components/CreateCustomerDrawer'
-import { CreatePartnerDrawer, type CreatePartnerDrawerProps } from '@/features/partners/components/CreatePartnerDrawer'
 import { CreateProductDrawer, type CreateProductDrawerProps } from '@/features/products/components/CreateProductDrawer'
 import { CreateDeviceDrawer, type CreateDeviceDrawerProps } from '@/features/devices/components/CreateDeviceDrawer'
 import {
@@ -16,12 +15,12 @@ import {
   type AddDevicesToSetDrawerProps,
 } from '@/features/devices/components/AddDevicesToSetDrawer'
 import { CreateStoreDrawer, type CreateStoreDrawerProps } from '@/features/stores/components/CreateStoreDrawer'
-import { CreateUserDrawer, type CreateUserDrawerProps } from '@/features/users/components/CreateUserDrawer'
 import {
-  CreateMediaDrawer,
-  EditMediaDrawer,
-  type MediaDrawerProps,
-} from '@/features/media/components/MediaDrawers'
+  CreateLocationDrawer,
+  type CreateLocationDrawerProps,
+} from '@/features/locations/components/CreateLocationDrawer'
+import { CreateUserDrawer, type CreateUserDrawerProps } from '@/features/users/components/CreateUserDrawer'
+import { CreateMediaDrawer, EditMediaDrawer, type MediaDrawerProps } from '@/features/media/components/MediaDrawers'
 import {
   MediaCampaignDrawer,
   type MediaCampaignDrawerProps,
@@ -46,8 +45,8 @@ type DrawerPropsById = {
   [DrawerId.CreateDevice]: CreateDeviceDrawerProps
   [DrawerId.CreateContract]: CreateContractDrawerProps
   [DrawerId.CreateStore]: CreateStoreDrawerProps
+  [DrawerId.CreateLocation]: CreateLocationDrawerProps
   [DrawerId.CreateCustomer]: CreateCustomerDrawerProps
-  [DrawerId.CreatePartner]: CreatePartnerDrawerProps
   [DrawerId.CreateProduct]: CreateProductDrawerProps
   [DrawerId.CreateUser]: CreateUserDrawerProps
   [DrawerId.CreateMedia]: MediaDrawerProps
@@ -69,8 +68,8 @@ export function registerDrawerRegistry() {
   NiceModal.register(DrawerId.CreateDevice, CreateDeviceDrawer)
   NiceModal.register(DrawerId.CreateContract, CreateContractDrawer)
   NiceModal.register(DrawerId.CreateStore, CreateStoreDrawer)
+  NiceModal.register(DrawerId.CreateLocation, CreateLocationDrawer)
   NiceModal.register(DrawerId.CreateCustomer, CreateCustomerDrawer)
-  NiceModal.register(DrawerId.CreatePartner, CreatePartnerDrawer)
   NiceModal.register(DrawerId.CreateProduct, CreateProductDrawer)
   NiceModal.register(DrawerId.CreateUser, CreateUserDrawer)
   NiceModal.register(DrawerId.CreateMedia, CreateMediaDrawer)

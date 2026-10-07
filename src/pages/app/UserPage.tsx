@@ -1,6 +1,5 @@
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
-import type { ColumnDef } from '@tanstack/react-table'
 import { useParams } from 'react-router-dom'
 
 import {
@@ -17,26 +16,32 @@ import { getCustomersRequest } from '@/features/customers/api'
 import { customerColumns } from '@/features/customers/customer-columns'
 import { customersQueryKeys } from '@/features/customers/query-keys'
 import { OrganizationService } from '@/features/organizations/organization-service'
-import { getPartnersRequest } from '@/features/partners/api'
-import { partnerColumns } from '@/features/partners/partner-columns'
-import { partnersQueryKeys } from '@/features/partners/query-keys'
-import { getStoresRequest } from '@/features/stores/api'
-import { storeColumns } from '@/features/stores/store-columns'
-import { storesQueryKeys } from '@/features/stores/query-keys'
+import { getAllLocationsForCustomerRequest, getLocationRequest } from '@/features/locations/api'
+import { locationColumns } from '@/features/locations/location-columns'
+import { locationsQueryKeys } from '@/features/locations/query-keys'
 import { getUserRequest } from '@/features/users/api'
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
 import { Drawer, DrawerId } from '@/providers/drawer'
-import { ModalId, Modals } from '@/providers/modal'
-import type { SelectTableRow } from '@/providers/modal-types'
-import type { Store } from '@/types/store'
+import { LocationScope } from '@/types/membership'
+import type { Location } from '@/types/location'
 import type { User } from '@/types/user'
 import { NO_VALUE_STR } from '@/constants'
-import { StringUtils, TimezoneUtils } from '@/utils'
-import * as GeoUtils from '@/utils/geo-utils'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { formatDateTime } from '@/utils/date-utils'
+import { formatPhoneNumber } from '@/lib/phone'
+import { getClientContractsRequest } from '@/features/client-contracts/api'
+import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
+import { ClientContractService } from '@/features/client-contracts/client-contract-service'
+import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
+import type { ClientContract } from '@/types/client-contract'
+import { getOrdersRequest } from '@/features/orders/api'
+import { getOrderColumns } from '@/features/orders/order-columns'
+import { OrderService } from '@/features/orders/order-service'
+import { ordersQueryKeys } from '@/features/orders/query-keys'
+import type { Order } from '@/types/order'
+import { EntityIcon } from '@/components/app/entity-icons'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 
@@ -50,57 +55,41 @@ function getUserCustomersCount(user?: User) {
   return user?.customerMemberships?.length ?? user?.memberOrganizations?.length ?? 0
 }
 
-function getUserStoresCount(user?: User) {
-  const storeIds = new Set<string>()
+async function getUserLocations(user: User): Promise<Location[]> {
+  const memberships = user.customerMemberships ?? []
+  const locationSets = await Promise.all(
+    memberships.map(async (membership) => {
+      const scope = membership.locationScope ?? membership.storeScope
+      if (scope === LocationScope.NONE) return []
+      if (scope === LocationScope.SPECIFIC) {
+        return Promise.all((membership.locations ?? []).map((location) => getLocationRequest(location.locationId)))
+      }
 
-  for (const membership of user?.customerMemberships ?? []) {
-    for (const store of membership.stores ?? []) {
-      storeIds.add(store.storeId)
-    }
-  }
+      return getAllLocationsForCustomerRequest(membership.customerId)
+    }),
+  )
 
-  return storeIds.size
+  return [...new Map(locationSets.flat().map((location) => [location.id, location])).values()]
 }
 
-function getUserPartnersCount(user?: User) {
-  return user?.technicianMemberships?.length ?? 0
-}
-
-const storeSelectColumns: ColumnDef<SelectTableRow>[] = [
-  {
-    accessorKey: 'name',
-    header: 'Store name',
-    cell: ({ row }) => (row.original as Store).name,
-  },
-  {
-    accessorKey: 'address',
-    header: 'Address',
-    cell: ({ row }) => {
-      const store = row.original as Store
-
-      return store.address ? StringUtils.displayAddress(store.address, { hideCountry: true }) : NO_VALUE_STR
-    },
-  },
-  {
-    accessorKey: 'country',
-    header: 'Country',
-    cell: ({ row }) => GeoUtils.getCountryName((row.original as Store).address?.countryId) ?? NO_VALUE_STR,
-  },
-  {
-    accessorKey: 'timezone',
-    header: 'Timezone',
-    cell: ({ row }) => TimezoneUtils.getTimezoneLabel((row.original as Store).timezone) || NO_VALUE_STR,
-  },
-]
-
-async function loadStoreSelectData(
-  tableState: DataTableState<SelectTableRow>,
-): Promise<DataTableAsyncResult<SelectTableRow>> {
-  const result = await getStoresRequest(tableState as unknown as DataTableState<Store>)
+async function loadUserLocations(
+  user: User | undefined,
+  tableState: DataTableState<Location>,
+): Promise<DataTableAsyncResult<Location>> {
+  const locations = user ? await getUserLocations(user) : []
+  const search = tableState.search.trim().toLocaleLowerCase()
+  const filtered = locations
+    .filter((location) =>
+      [location.name, location.email, location.phone].some((value) => value?.toLocaleLowerCase().includes(search)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const { pageIndex, pageSize } = tableState.pagination
+  const start = pageIndex * pageSize
 
   return {
-    ...result,
-    items: result.items as unknown as SelectTableRow[],
+    items: filtered.slice(start, start + pageSize),
+    count: filtered.length,
+    pageCount: Math.max(1, Math.ceil(filtered.length / pageSize)),
   }
 }
 
@@ -124,7 +113,7 @@ function getUserDetailSections(user?: User): DetailPanelSection[] {
         { label: 'First name', value: user?.firstName ?? NO_VALUE_STR },
         { label: 'Last name', value: user?.lastName ?? NO_VALUE_STR },
         { label: 'Email', value: user?.email ?? NO_VALUE_STR },
-        { label: 'Phone number', value: user?.phone ?? NO_VALUE_STR },
+        { label: 'Phone number', value: formatPhoneNumber(user?.phone) || NO_VALUE_STR },
         {
           label: 'Created at',
           value: user?.createdAt ? formatDateTime(user.createdAt, NO_VALUE_STR) : NO_VALUE_STR,
@@ -138,6 +127,7 @@ export default function UserPage() {
   const { userId = '' } = useParams()
   const { session } = useConnect()
   const permissions = session?.permissions.users
+  const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
   const {
     data: user,
     isError,
@@ -147,28 +137,18 @@ export default function UserPage() {
     queryFn: () => getUserRequest(userId),
     enabled: Boolean(userId),
   })
-  const openAddStoreModal = () => {
-    if (!user) return
-
-    Modals.show(ModalId.SelectTableData, {
-      title: 'Add store',
-      queryKey: [...storesQueryKeys.all, 'select-for-user', user.id],
-      loadData: loadStoreSelectData,
-      columns: storeSelectColumns,
-      searchPlaceholder: 'Search by ID, name...',
-      searchColumns: ['id', 'name'],
-      selectionMode: 'multiple',
-      tableKey: 'users.detail.add-store',
-      loadingMessage: 'Loading stores...',
-      emptyMessage: 'No stores found.',
-      submitLabel: 'Add',
-      onSelect: (stores) => console.log('Add stores for user:', { user, stores }),
-    })
-  }
+  const locationMembershipKey = (user?.customerMemberships ?? [])
+    .map((membership) =>
+      [membership.customerId, membership.locationScope ?? membership.storeScope, ...(membership.locations ?? []).map((location) => location.locationId)].join(':'),
+    )
+    .sort()
+    .join('|')
   const modules = [
     { key: 'customers', label: 'Customers' },
-    { key: 'stores', label: 'Stores' },
-    { key: 'partners', label: 'Maintenance partners' },
+    { key: 'locations', label: 'Locations' },
+    ...(canManageOrdersAndContracts
+      ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }]
+      : []),
   ]
 
   if (isError && !user) {
@@ -190,7 +170,7 @@ export default function UserPage() {
         title: user ? `${user.firstName} ${user.lastName}` : 'User',
         subtitle: user ? UserService.roleToString(user.role) : userId,
         backTo: '/users',
-        options: user ? UserService.getDetailHeaderActions(user, permissions, { onAddStore: openAddStoreModal }).options : [],
+        options: user ? UserService.getDetailHeaderActions(user, permissions).options : [],
       }}
       modules={modules}
       aside={<DetailSidePanel sections={getUserDetailSections(user)} isLoading={isLoading} />}
@@ -215,44 +195,43 @@ export default function UserPage() {
         errorMessage="Failed to load customers."
       />
       <RelatedEntityModule
-        id={`${MODULE_ANCHOR_PREFIX}-stores`}
-        title="Stores"
-        initialTotal={getUserStoresCount(user)}
-        viewAllTo={makeViewAllTo('/stores', userId)}
-        queryKey={[...storesQueryKeys.all, 'user', userId, 'module']}
-        loadData={(tableState) => getStoresRequest(tableState, { userId })}
-        tableKey={`stores.user.${userId}`}
-        columns={storeColumns}
-        getRowCommands={(store) =>
-          OrganizationService.getActions({
-            kind: 'store',
-            organization: store,
-          })
-        }
-        action={user ? UserService.getModuleAction(user, 'stores', permissions, { onAddStore: openAddStoreModal }) : undefined}
-        loadingMessage="Loading stores..."
-        emptyMessage="No stores assigned"
-        errorMessage="Failed to load stores."
+        id={`${MODULE_ANCHOR_PREFIX}-locations`}
+        title="Locations"
+        viewAllTo="/locations"
+        queryKey={[...locationsQueryKeys.user(userId), 'module', locationMembershipKey]}
+        loadData={(tableState: DataTableState<Location>) => loadUserLocations(user, tableState)}
+        tableKey={`locations.user.${userId}`}
+        columns={locationColumns}
+        loadingMessage="Loading locations..."
+        emptyMessage="No locations assigned"
+        errorMessage="Failed to load locations."
       />
-      <RelatedEntityModule
-        id={`${MODULE_ANCHOR_PREFIX}-partners`}
-        title="Maintenance partners"
-        initialTotal={getUserPartnersCount(user)}
-        viewAllTo={makeViewAllTo('/partners', userId)}
-        queryKey={[...partnersQueryKeys.all, 'user', userId, 'module']}
-        loadData={(tableState) => getPartnersRequest(tableState, { userId })}
-        tableKey={`partners.user.${userId}`}
-        columns={partnerColumns}
-        getRowCommands={(partner) =>
-          OrganizationService.getActions({
-            kind: 'partner',
-            organization: partner,
-          })
-        }
-        loadingMessage="Loading maintenance partners..."
-        emptyMessage="No maintenance partners assigned"
-        errorMessage="Failed to load maintenance partners."
-      />
+      {canManageOrdersAndContracts ? <RelatedEntityModule
+        id={`${MODULE_ANCHOR_PREFIX}-client-contracts`}
+        title="Client contracts"
+        icon={EntityIcon.clientContracts}
+        viewAllTo={makeViewAllTo('/client-contracts', userId)}
+        queryKey={clientContractsQueryKeys.user(userId)}
+        loadData={(state: DataTableState<ClientContract>) => getClientContractsRequest(state, { userId })}
+        tableKey={`client-contracts.user.${userId}`}
+        columns={getClientContractColumns({ showUser: false })}
+        getRowCommands={(contract) => ClientContractService.getRowActions(contract, Boolean(session?.permissions.customers?.edit))}
+        loadingMessage="Loading client contracts..."
+        emptyMessage="No client contracts found."
+      /> : null}
+      {canManageOrdersAndContracts ? <RelatedEntityModule
+        id={`${MODULE_ANCHOR_PREFIX}-orders`}
+        title="Orders"
+        icon={EntityIcon.orders}
+        viewAllTo={makeViewAllTo('/orders', userId)}
+        queryKey={ordersQueryKeys.user(userId)}
+        loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { userId })}
+        tableKey={`orders.user.${userId}`}
+        columns={getOrderColumns({ showUser: false })}
+        getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit))}
+        loadingMessage="Loading orders..."
+        emptyMessage="No orders found."
+      /> : null}
     </DetailPageLayout>
   )
 }

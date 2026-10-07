@@ -1,6 +1,7 @@
 export const Feature = {
   DEVICES: 'DEVICES',
   CONTRACTS: 'CONTRACTS',
+  LOCATIONS: 'STORES',
   STORES: 'STORES',
   PRODUCTS: 'PRODUCTS',
   ISSUES: 'ISSUES',
@@ -11,8 +12,8 @@ export const Feature = {
   INVITATIONS: 'INVITATIONS',
   CUSTOMERS: 'CUSTOMERS',
   USERS: 'USERS',
-  MAINTENANCE: 'MAINTENANCE',
   DEVICE_TYPE: 'DEVICE_TYPE',
+  ORDERS: 'ORDERS',
 } as const
 
 export type Feature = (typeof Feature)[keyof typeof Feature]

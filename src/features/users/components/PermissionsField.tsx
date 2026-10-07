@@ -40,19 +40,19 @@ function getPermissionSummary(permissions?: UserOrganizationPermission[], tree?:
       const node = getOrganizationNodeById(permission.organizationId, tree)
 
       if (node?.type === OrganizationType.CUSTOMER) result.customers += 1
-      if (node?.type === OrganizationType.STORE) result.stores += 1
-      if (!node || (node.type !== OrganizationType.CUSTOMER && node.type !== OrganizationType.STORE)) {
+      if (node?.type === OrganizationType.LOCATION) result.locations += 1
+      if (!node || (node.type !== OrganizationType.CUSTOMER && node.type !== OrganizationType.LOCATION)) {
         result.organizations += 1
       }
 
       return result
     },
-    { customers: 0, stores: 0, organizations: 0 },
+    { customers: 0, locations: 0, organizations: 0 },
   )
 
   return [
     formatCount(counts.customers, 'customer'),
-    formatCount(counts.stores, 'store'),
+    formatCount(counts.locations, 'location'),
     formatCount(counts.organizations, 'organization'),
   ]
     .filter(Boolean)

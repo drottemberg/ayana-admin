@@ -29,7 +29,12 @@ const typeLabel: Record<UserRequestType, string> = {
   [UserRequestType.ORG_INVITE]: 'Organization invite',
 }
 
-async function runRequestAction(operation: string, action: () => Promise<UserRequest>, destructive = false) {
+async function runRequestAction(
+  operation: string,
+  action: () => Promise<UserRequest>,
+  destructive = false,
+  reloadAfterSuccess = false,
+) {
   const confirmed = await Modals.confirm({
     operation,
     okButtonProps: { variant: destructive ? 'destructive' : 'default' },
@@ -38,11 +43,12 @@ async function runRequestAction(operation: string, action: () => Promise<UserReq
 
   await action()
   await queryClient.invalidateQueries({ queryKey: userRequestsQueryKeys.all })
+  if (reloadAfterSuccess) window.location.reload()
 }
 
 export const UserRequestService = {
   filterByTab(requests: UserRequest[], tab: UserRequestTab): UserRequest[] {
-    if (tab === UserRequestTab.RECEIVED) return requests.filter((request) => !request.isSent)
+    if (tab === UserRequestTab.RECEIVED) return requests.filter((request) => request.isReceived ?? !request.isSent)
     if (tab === UserRequestTab.SENT) return requests.filter((request) => request.isSent)
 
     return requests
@@ -56,7 +62,8 @@ export const UserRequestService = {
     return typeLabel[type] ?? type
   },
 
-  getContactText(request: UserRequest): string {
+  getContactText(request: UserRequest, receivedView = false): string {
+    if (receivedView) return request.senderName ?? '-'
     if (request.isSent) {
       return request.recipients.map((r) => r.displayName ?? r.value).join(', ') || '-'
     }
@@ -74,12 +81,13 @@ export const UserRequestService = {
     const role = 'role' in metadata ? metadata.role : null
     const position = 'position' in metadata ? metadata.position : null
     const orgName = 'orgName' in metadata ? metadata.orgName : null
+    const customerName = metadata.kind === 'CUSTOMER' && 'name' in metadata ? metadata.name : null
 
-    return [orgName,role, position].filter(Boolean).join(' / ') || '-'
+    return [customerName ?? orgName, role, position].filter(Boolean).join(' / ') || '-'
   },
 
   async accept(request: UserRequest) {
-    await runRequestAction('accept this request', () => acceptUserRequestRequest(request.id))
+    await runRequestAction('accept this request', () => acceptUserRequestRequest(request.id), false, true)
   },
 
   async reject(request: UserRequest) {
@@ -92,6 +100,25 @@ export const UserRequestService = {
 
   getActions(request: UserRequest): DropdownActionItem[] {
     if (request.status !== UserRequestStatus.PENDING) return []
+
+    if (request.isSent && request.isReceived) {
+      return [
+        {
+          label: 'Accept',
+          onClick: () => void this.accept(request),
+        },
+        {
+          label: 'Reject',
+          variant: 'destructive',
+          onClick: () => void this.reject(request),
+        },
+        {
+          label: 'Cancel',
+          variant: 'destructive',
+          onClick: () => void this.cancel(request),
+        },
+      ]
+    }
 
     if (request.isSent) {
       return [
