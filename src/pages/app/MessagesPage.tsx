@@ -33,7 +33,6 @@ import {
   type BroadcastHistoryDetail,
   type BroadcastHistoryItem,
   type BroadcastRecipient,
-  type WhatsappLibraryTemplate,
 } from '@/features/customer-messaging/api'
 
 const MAX_IMAGE_COUNT = 5
