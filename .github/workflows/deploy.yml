@@ -1,0 +1,55 @@
+name: Deploy to production
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ayana-admin-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      VITE_API_URL: https://api.ayana.club/api
+      VITE_SOCKET_URL: https://api.ayana.club
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 104.156.53.38 >> ~/.ssh/known_hosts
+
+      - name: Create remote directory
+        run: ssh -i ~/.ssh/deploy_key root@104.156.53.38 "mkdir -p /data/project/ayana-admin"
+
+      - name: Deploy static application
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            dist/ \
+            root@104.156.53.38:/data/project/ayana-admin/
