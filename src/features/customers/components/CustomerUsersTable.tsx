@@ -73,7 +73,7 @@ export function CustomerUsersTable({ customer }: { customer: Customer }) {
       searchColumns={['id', 'firstName', 'lastName', 'email']}
       filters={[{ id: 'role', label: 'Role', column: 'role', getValue: (u) => u.role }]}
       toolbarExtra={
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground select-none">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={showDeleted} onCheckedChange={(v) => setShowDeleted(Boolean(v))} />
           Show inactive
         </label>

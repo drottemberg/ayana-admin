@@ -75,7 +75,7 @@ export function CustomerStoresTable({ customer }: { customer: Customer }) {
       searchPlaceholder="Search by name..."
       searchColumns={['name', 'address']}
       toolbarExtra={
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground select-none">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={showDeleted} onCheckedChange={(v) => setShowDeleted(Boolean(v))} />
           Show deleted
         </label>
