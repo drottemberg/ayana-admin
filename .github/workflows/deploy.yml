@@ -73,9 +73,18 @@ jobs:
       - name: Create remote directory
         run: ssh -i ~/.ssh/deploy_key root@104.156.53.38 "mkdir -p /data/project/ayana-admin"
 
-      - name: Deploy static application
+      - name: Upload static files without removing previous bundles
         run: |
-          rsync -avz --delete \
+          rsync -avz --exclude='index.html' \
             -e "ssh -i ~/.ssh/deploy_key" \
             dist/ \
             root@104.156.53.38:/data/project/ayana-admin/
+
+      - name: Publish the new application entry point
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            dist/index.html \
+            root@104.156.53.38:/data/project/ayana-admin/index.html.new
+          ssh -i ~/.ssh/deploy_key root@104.156.53.38 \
+            "mv -f /data/project/ayana-admin/index.html.new /data/project/ayana-admin/index.html"
