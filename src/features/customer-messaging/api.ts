@@ -2,7 +2,7 @@ import { apiClient } from '@/lib/api-client'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 import { toApiListDto, toDataTableResult, type ApiListResult } from '@/lib/api-types'
 
-export type BroadcastActivity = 'ALL' | 'CLASS_BOOKING' | 'PRODUCT_PURCHASE' | 'BOTH'
+export type BroadcastActivity = 'ALL' | 'CLASS_BOOKING' | 'CLASS_PURCHASE' | 'CLASS_BOOKING_OR_PURCHASE' | 'PRODUCT_PURCHASE' | 'BOTH'
 
 export type BroadcastAudienceFilters = {
   locationIds: string[]

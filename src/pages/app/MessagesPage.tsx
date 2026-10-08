@@ -447,6 +447,8 @@ export default function MessagesPage() {
                 <SelectContent>
                   <SelectItem value="ALL">Everyone who contacted this customer</SelectItem>
                   <SelectItem value="CLASS_BOOKING">Booked a class</SelectItem>
+                  <SelectItem value="CLASS_PURCHASE">Purchased a class pack or membership</SelectItem>
+                  <SelectItem value="CLASS_BOOKING_OR_PURCHASE">Booked or purchased a class pack</SelectItem>
                   <SelectItem value="PRODUCT_PURCHASE">Purchased a product</SelectItem>
                   <SelectItem value="BOTH">Booked a class and purchased a product</SelectItem>
                 </SelectContent>
@@ -890,7 +892,7 @@ const campaignDeliveryColumns = [
 ]
 
 function activityLabel(activity: BroadcastActivity) {
-  return ({ ALL: 'Everyone who contacted this customer', CLASS_BOOKING: 'Booked a class', PRODUCT_PURCHASE: 'Purchased a product', BOTH: 'Booked a class and purchased a product' } as const)[activity]
+  return ({ ALL: 'Everyone who contacted this customer', CLASS_BOOKING: 'Booked a class', CLASS_PURCHASE: 'Purchased a class pack or membership', CLASS_BOOKING_OR_PURCHASE: 'Booked or purchased a class pack', PRODUCT_PURCHASE: 'Purchased a product', BOTH: 'Booked a class and purchased a product' } as const)[activity]
 }
 
 function channelLabel(channel: BroadcastChannel) {

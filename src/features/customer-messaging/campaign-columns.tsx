@@ -60,5 +60,5 @@ function CampaignStatus({ status }: { status: BroadcastHistoryItem['status'] }) 
 }
 
 function activityLabel(activity: string) {
-  return ({ ALL: 'Everyone', CLASS_BOOKING: 'Class bookings', PRODUCT_PURCHASE: 'Product purchases', BOTH: 'Classes and products' } as Record<string, string>)[activity] ?? activity
+  return ({ ALL: 'Everyone', CLASS_BOOKING: 'Class bookings', CLASS_PURCHASE: 'Class pack or membership purchases', CLASS_BOOKING_OR_PURCHASE: 'Class bookings or purchases', PRODUCT_PURCHASE: 'Product purchases', BOTH: 'Classes and products' } as Record<string, string>)[activity] ?? activity
 }
