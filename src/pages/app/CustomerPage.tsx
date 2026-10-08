@@ -87,6 +87,22 @@ import { getOrderColumns } from '@/features/orders/order-columns'
 import { OrderService } from '@/features/orders/order-service'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { Order } from '@/types/order'
+import {
+  customerLocationPolicyColumns,
+  customerMessagingConfigColumns,
+  customerPromptProfileColumns,
+} from '@/features/customers/customer-settings-columns'
+import {
+  customerSettingsQueryKeys,
+  loadCustomerLocationPolicies,
+  loadCustomerMessagingConfigRow,
+  loadCustomerPromptProfileRow,
+  type CustomerLocationPolicyRow,
+  type CustomerMessagingConfigRow,
+  type CustomerPromptProfileRow,
+  type CustomerSettingKind,
+} from '@/features/customers/customer-settings-api'
+import { CustomerSettingsEditDrawer } from '@/features/customers/CustomerSettingsEditDrawer'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const CUSTOMER_BATCH_QUERY_KEY = 'customer-detail-batch'
@@ -201,6 +217,10 @@ export default function CustomerPage() {
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [editingProductScope, setEditingProductScope] = useState<Product | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [editingCustomerSetting, setEditingCustomerSetting] = useState<{
+    kind: CustomerSettingKind
+    location?: CustomerLocationPolicyRow
+  } | null>(null)
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const permissions = session?.permissions.customers
@@ -319,6 +339,9 @@ export default function CustomerPage() {
       { key: 'locations', label: 'Locations' },
       ...(canShowUsers ? [{ key: 'users', label: 'Users' }] : []),
       ...(canManageCustomer ? [{ key: 'pricing-options', label: 'Pricing options' }] : []),
+      ...(canManageCustomer ? [{ key: 'messaging-config', label: 'Messaging configuration' }] : []),
+      ...(canManageCustomer ? [{ key: 'location-policies', label: 'Location policies' }] : []),
+      ...(canManageCustomer ? [{ key: 'customer-prompt-profile', label: 'Customer prompt profile' }] : []),
       ...(canManageCustomer ? [{ key: 'classes', label: 'Classes' }] : []),
       ...(canManageCustomer ? [{ key: 'class-sessions', label: 'Class sessions' }] : []),
       ...(canManageCustomer ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }] : []),
@@ -464,6 +487,56 @@ export default function CustomerPage() {
               />
             ) : null}
             {canManageCustomer ? (
+              <RelatedEntityModule
+                id={`${MODULE_ANCHOR_PREFIX}-messaging-config`}
+                title="Messaging configuration"
+                icon={EntityIcon.mediaCampaigns}
+                action={{ label: 'Edit configuration', onClick: () => setEditingCustomerSetting({ kind: 'messaging-config' }) }}
+                queryKey={[...customerSettingsQueryKeys.customer(customer.id), 'messaging-config']}
+                loadData={(state: DataTableState<CustomerMessagingConfigRow>) => loadCustomerMessagingConfigRow(customer.id, state)}
+                tableKey="customers.detail.modules.messaging-config"
+                columns={customerMessagingConfigColumns}
+                getRowCommands={() => [{ label: 'Edit', onClick: () => setEditingCustomerSetting({ kind: 'messaging-config' }) }]}
+                loadingMessage="Loading messaging configuration..."
+                emptyMessage="No messaging configuration found."
+                refetchOnMount="always"
+              />
+            ) : null}
+            {canManageCustomer ? (
+              <RelatedEntityModule
+                id={`${MODULE_ANCHOR_PREFIX}-location-policies`}
+                title="Location policies"
+                icon={EntityIcon.locations}
+                queryKey={[...customerSettingsQueryKeys.customer(customer.id), 'location-policies']}
+                loadData={(state: DataTableState<CustomerLocationPolicyRow>) => loadCustomerLocationPolicies(customer.id, state)}
+                tableKey="customers.detail.modules.location-policies"
+                columns={customerLocationPolicyColumns}
+                getRowCommands={(location) => [{
+                  label: 'Edit policy',
+                  onClick: () => setEditingCustomerSetting({ kind: 'location-policy', location }),
+                }]}
+                loadingMessage="Loading location policies..."
+                emptyMessage="No locations found for this customer."
+                refetchOnMount="always"
+              />
+            ) : null}
+            {canManageCustomer ? (
+              <RelatedEntityModule
+                id={`${MODULE_ANCHOR_PREFIX}-customer-prompt-profile`}
+                title="Customer prompt profile"
+                icon={EntityIcon.issues}
+                action={{ label: 'Edit profile', onClick: () => setEditingCustomerSetting({ kind: 'prompt-profile' }) }}
+                queryKey={[...customerSettingsQueryKeys.customer(customer.id), 'prompt-profile']}
+                loadData={(state: DataTableState<CustomerPromptProfileRow>) => loadCustomerPromptProfileRow(customer.id, state)}
+                tableKey="customers.detail.modules.customer-prompt-profile"
+                columns={customerPromptProfileColumns}
+                getRowCommands={() => [{ label: 'Edit', onClick: () => setEditingCustomerSetting({ kind: 'prompt-profile' }) }]}
+                loadingMessage="Loading customer prompt profile..."
+                emptyMessage="No customer prompt profile found."
+                refetchOnMount="always"
+              />
+            ) : null}
+            {canManageCustomer ? (
               failedModuleKeys.has('classes') ? (
                 <CustomerModuleError module={{ key: 'classes', label: 'Classes' }} />
               ) : (
@@ -604,6 +677,13 @@ export default function CustomerPage() {
           </>
         ) : null}
       </DetailPageLayout>
+      <CustomerSettingsEditDrawer
+        open={Boolean(editingCustomerSetting)}
+        onOpenChange={(open) => { if (!open) setEditingCustomerSetting(null) }}
+        customerId={customer.id}
+        customerName={customer.name}
+        target={editingCustomerSetting}
+      />
       <CreatePricingOptionDialog
         customerId={editingPricingOption?.organizationId ?? customer.id}
         currency={customer.currency ?? 'EUR'}
