@@ -9,10 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
-import { adjustClientContractCreditsRequest, adjustClientWalletCreditsRequest, getClientContractCreditMovementsRequest, grantClientContractCreditsRequest } from '@/features/client-contracts/api'
+import { adjustClientContractCreditsRequest, adjustClientWalletCreditsRequest, getClientContractCreditMovementsRequest, grantClientContractCreditsRequest, searchClientWalletRecipientsRequest } from '@/features/client-contracts/api'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { locationsQueryKeys } from '@/features/locations/query-keys'
-import { searchUsersForCreditGift } from '@/features/users/api'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { customersQueryKeys } from '@/features/customers/query-keys'
 import { getAppMode } from '@/features/app/app-mode'
@@ -107,7 +106,7 @@ export function GrantCreditsDrawer({
           </div>
           <label className="grid gap-1.5 text-sm font-medium">
             <span>Credits to add to each contract</span>
-            <Input required type="number" min="0.01" max="1000" step="0.5" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            <Input required type="number" min="0.01" max="1000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
           </label>
           <label className="grid gap-1.5 text-sm font-medium">
             <span>Expiration date (optional)</span>
@@ -181,8 +180,8 @@ export function GiftCreditsDrawer({
   }, [open, fixedUser?.id, customerId, isAdminContext])
 
   const userQuery = async (search: string) => {
-    if (scope === 'SPECIFIC' && !locationIds.length) return []
-    return searchUsersForCreditGift(effectiveCustomerId, scope === 'SPECIFIC' ? locationIds : [], search)
+    if (!effectiveCustomerId) return []
+    return searchClientWalletRecipientsRequest(effectiveCustomerId, search)
   }
   const userOption = (user: User) => ({
     value: String(user.id),
@@ -231,7 +230,7 @@ export function GiftCreditsDrawer({
       open={open}
       onOpenChange={onOpenChange}
       title="Adjust credit balance"
-      description="Add credits to or remove credits from the selected members' shared customer wallets."
+      description="Add credits to or remove credits from the selected clients' shared customer wallets."
       contentClassName="sm:max-w-xl"
     >
       {({ containerRef }) => (
@@ -272,15 +271,15 @@ export function GiftCreditsDrawer({
             ) : (
               <MultiselectInputAsync<User>
                 label="Recipients"
-                placeholder={!effectiveCustomerId ? 'Select a customer first' : scope === 'SPECIFIC' && !locationIds.length ? 'Select locations first' : 'Search users by name, email or phone'}
-                queryKey={['users', 'credit-gift', effectiveCustomerId, scope, ...locationIds]}
+                placeholder={!effectiveCustomerId ? 'Select a customer first' : 'Search clients by name, email or phone'}
+                queryKey={['client-credit-wallet-recipients', effectiveCustomerId]}
                 queryFn={userQuery}
                 getOption={userOption}
                 selectedItems={users}
                 onSelectedItemsChange={setUsers}
                 value={userIds}
                 onValueChange={setUserIds}
-                disabled={!effectiveCustomerId || (scope === 'SPECIFIC' && !locationIds.length)}
+                disabled={!effectiveCustomerId}
                 loadingMessage="Searching users..."
                 errorMessage="Failed to search users."
                 emptyMessage="No customer members found."
@@ -324,7 +323,7 @@ export function GiftCreditsDrawer({
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
               <span>Credits per person</span>
-              <Input required type="number" min="0.01" max="1000" step="0.5" value={amount} onChange={(event) => setAmount(event.target.value)} />
+              <Input required type="number" min="0.01" max="1000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
             </label>
             {operation === 'ADD' ? <label className="grid gap-1.5 text-sm font-medium">
               <span>Expiration date (optional)</span>
@@ -335,7 +334,7 @@ export function GiftCreditsDrawer({
               <span>Reason</span>
               <Textarea required minLength={3} maxLength={500} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Goodwill gesture, service recovery…" />
             </label>
-            {userIds.length ? <p className="text-sm text-muted-foreground">{operation === 'ADD' ? 'Each selected member will receive' : 'Credits will be removed from each selected member’s shared balance:'} {amount || 0} credits. Availability: {scope === 'ALL' ? 'all customer locations' : `${locationIds.length} selected location(s)`}.</p> : null}
+            {userIds.length ? <p className="text-sm text-muted-foreground">{operation === 'ADD' ? 'Each selected client will receive' : 'Credits will be removed from each selected client’s shared balance:'} {amount || 0} credits. Availability: {scope === 'ALL' ? 'all customer locations' : `${locationIds.length} selected location(s)`}.</p> : null}
           </div>
           <div className="flex justify-end gap-2 border-t p-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

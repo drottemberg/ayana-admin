@@ -10,7 +10,6 @@ import {
 } from '@/types/user'
 import type { CustomerMembershipInput, CustomerMembershipRecord, StaffRole, StoreScope } from '@/types/membership'
 import { apiClient } from '@/lib/api-client'
-import { getAppMode } from '@/features/app/app-mode'
 import type { Customer } from '@/types/customer'
 
 type MemberPermissionRecord = {
@@ -167,18 +166,6 @@ export async function getUsersListRequest(): Promise<User[]> {
     order: SortOrder.desc,
   })
 
-  return result.items.map(toUser)
-}
-
-export async function searchUsersForCreditGift(customerId: string, locationIds: string[], search: string): Promise<User[]> {
-  const result = await apiClient.post<ApiListResult<UserRecord>>(USERS_LIST_URL, {
-    search: search.trim() || undefined,
-    filters: { organizationId: [customerId], ...(locationIds.length ? { storeId: locationIds } : {}) },
-    page: 1,
-    limit: 30,
-    orderBy: 'firstName',
-    order: SortOrder.asc,
-  }, getAppMode() === 'customer' ? { headers: { 'x-org-id': customerId } } : undefined)
   return result.items.map(toUser)
 }
 

@@ -2,6 +2,8 @@ import type { DataTableAsyncResult, DataTableState } from '@/components/data-tab
 import { toApiListDto, toDataTableResult, type ApiListResult } from '@/lib/api-types'
 import { apiClient } from '@/lib/api-client'
 import type { ClientContract, ClientContractCreditMovement } from '@/types/client-contract'
+import type { User } from '@/types/user'
+import { getAppMode } from '@/features/app/app-mode'
 
 export const clientContractsListConfig = {
   url: '/client-contracts/list',
@@ -146,4 +148,12 @@ export async function adjustClientWalletCreditsRequest(payload: {
   }>('/client-contracts/credits/wallet/adjust', payload, payload.customerId
     ? { headers: { 'x-org-id': payload.customerId } }
     : undefined)
+}
+
+export async function searchClientWalletRecipientsRequest(customerId: string, search: string): Promise<User[]> {
+  return apiClient.post<User[]>(
+    '/client-contracts/credits/wallet/recipients',
+    { customerId, search: search.trim() || undefined },
+    getAppMode() === 'customer' ? { headers: { 'x-org-id': customerId } } : undefined,
+  )
 }
