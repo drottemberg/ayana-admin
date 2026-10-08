@@ -59,6 +59,7 @@ export const classScheduleColumns: ColumnDef<ClassSchedule>[] = [
           : 'Active'
     return <Badge variant="outline">{label}</Badge>
   } },
+  { accessorKey: 'autoGenerateSessions', header: 'Availability', cell: ({ row }) => <Badge variant="outline">{row.original.autoGenerateSessions === false ? 'Manual only' : 'Auto generation on'}</Badge> },
   { accessorKey: 'dayOfWeek', header: 'Day', cell: ({ row }) => row.original.dayOfWeek ?? NO_VALUE_STR },
   { id: 'time', header: 'Time', cell: ({ row }) => `${String(row.original.startHour).padStart(2, '0')}:${String(row.original.startMinute).padStart(2, '0')}` },
   { accessorKey: 'coachName', header: 'Default coach', cell: ({ row }) => row.original.coachName || NO_VALUE_STR },

@@ -120,6 +120,19 @@ export async function getClassSessionsRequest(
   return toDataTableResult(result)
 }
 
+export async function searchUpcomingBookableSessionsRequest(locationId: string, search: string) {
+  const result = await apiClient.post<ApiListResult<ClassSession>>('/class-sessions/list', {
+    page: 1,
+    limit: 50,
+    search: search.trim() || undefined,
+    filters: { locationId: [locationId], status: ['SCHEDULED'] },
+    from: new Date().toISOString(),
+    orderBy: 'startTime',
+    order: 'asc',
+  }, { headers: { 'x-org-id': locationId } })
+  return result.items
+}
+
 export const classSessionsListConfig = {
   url: '/class-sessions/list',
   toPayload: (tableState: DataTableState<ClassSession>, filters?: Record<string, unknown>) =>
@@ -140,6 +153,7 @@ export type CreateClassSchedulePayload = {
   capacity?: number
   validFrom?: string
   validUntil?: string
+  autoGenerateSessions?: boolean
 }
 
 export async function createClassScheduleRequest(locationId: string, payload: CreateClassSchedulePayload) {
@@ -154,6 +168,7 @@ export type UpdateClassSchedulePayload = {
   capacity: number | null
   validFrom: string | null
   validUntil: string | null
+  autoGenerateSessions: boolean
   isActive: boolean
   pauseFrom: string | null
   pauseUntil: string | null

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { getLocationCoachesRequest, updateClassScheduleRequest } from '@/features/classes/api'
@@ -43,6 +44,7 @@ export function ClassScheduleEditDrawer({
   const [validFrom, setValidFrom] = useState('')
   const [validUntil, setValidUntil] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId],
@@ -58,6 +60,7 @@ export function ClassScheduleEditDrawer({
     setValidFrom(dateInput(schedule.validFrom))
     setValidUntil(dateInput(schedule.validUntil))
     setCoachId(schedule.coachId ?? '')
+    setAutoGenerateSessions(schedule.autoGenerateSessions !== false)
   }, [open, schedule])
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -85,6 +88,7 @@ export function ClassScheduleEditDrawer({
         validFrom: validFrom ? new Date(`${validFrom}T00:00:00.000Z`).toISOString() : null,
         validUntil: validUntil ? new Date(`${validUntil}T23:59:59.000Z`).toISOString() : null,
         coachId: coachId || null,
+        autoGenerateSessions,
       })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: classTypesQueryKeys.location(locationId) }),
@@ -119,6 +123,10 @@ export function ClassScheduleEditDrawer({
         </Field>
         <Field label="Valid from"><Input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
         <Field label="Valid until"><Input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></Field>
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox checked={autoGenerateSessions} onCheckedChange={(checked) => setAutoGenerateSessions(Boolean(checked))} className="mt-0.5" />
+          <span><span className="font-medium">Generate sessions automatically</span><span className="mt-0.5 block text-muted-foreground">When disabled, no bookable sessions are created automatically. You can generate them manually from the schedule actions.</span></span>
+        </label>
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>

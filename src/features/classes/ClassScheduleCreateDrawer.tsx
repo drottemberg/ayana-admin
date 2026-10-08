@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { createClassScheduleRequest, getLocationCoachesRequest } from '@/features/classes/api'
@@ -35,6 +36,7 @@ export function ClassScheduleCreateDrawer({
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const locationId = classType?.locationId || classType?.organizationId || ''
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
@@ -64,12 +66,15 @@ export function ClassScheduleCreateDrawer({
         capacity: capacityValue,
         validFrom: validFrom ? new Date(`${validFrom}T00:00:00.000Z`).toISOString() : undefined,
         validUntil: validUntil ? new Date(`${validUntil}T23:59:59.000Z`).toISOString() : undefined,
+        autoGenerateSessions,
       })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: classTypesQueryKeys.location(classType.locationId || classType.organizationId) }),
         queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
       ])
-      toast.success('Weekly schedule created and upcoming sessions generated.')
+      toast.success(autoGenerateSessions
+        ? 'Weekly schedule created and upcoming sessions generated.'
+        : 'Weekly schedule created without generating sessions. You can generate them later from the schedule actions.')
       onOpenChange(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create the schedule.')
@@ -100,7 +105,10 @@ export function ClassScheduleCreateDrawer({
         <Field label={`Capacity (default ${classType?.maxCapacity ?? 0})`}><Input type="number" min="1" step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} placeholder="Use class capacity" /></Field>
         <Field label="Valid from"><Input required type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
         <Field label="Valid until (optional)"><Input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></Field>
-        <p className="text-sm text-muted-foreground">Upcoming sessions are generated automatically from this weekly schedule.</p>
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox checked={autoGenerateSessions} onCheckedChange={(checked) => setAutoGenerateSessions(Boolean(checked))} className="mt-0.5" />
+          <span><span className="font-medium">Generate sessions automatically</span><span className="mt-0.5 block text-muted-foreground">When disabled, no bookable sessions are created now or by the automatic scheduler. You can generate them manually later.</span></span>
+        </label>
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>

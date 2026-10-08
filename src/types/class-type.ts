@@ -63,6 +63,7 @@ export type ClassSchedule = {
   startMinute: number
   capacity?: number | null
   isActive: boolean
+  autoGenerateSessions?: boolean
   validFrom: string
   validUntil?: string | null
   pauseFrom?: string | null
