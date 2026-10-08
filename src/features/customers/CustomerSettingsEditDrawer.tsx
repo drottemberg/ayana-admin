@@ -174,7 +174,7 @@ export function CustomerSettingsEditDrawer({
         const payload: Record<string, unknown> = {}
         for (const field of messagingFields) {
           const value = values[field.key]?.trim() ?? ''
-          if (field.secret) {
+          if ('secret' in field && field.secret) {
             if (value) payload[field.key] = value
           } else {
             payload[field.key] = value || null

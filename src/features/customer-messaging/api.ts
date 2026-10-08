@@ -17,6 +17,8 @@ export type ApprovedWhatsappTemplate = {
   category: string
   bodyText: string
   bodyParameterCount: number
+  bodyParameterNames: string[]
+  bodyParameterFormat: 'NAMED' | 'POSITIONAL' | 'NONE'
   headerImage: boolean
 }
 
@@ -31,6 +33,8 @@ export type WhatsappLibraryTemplate = {
   body: string
   buttons: Array<{ type: string; text?: string; [key: string]: unknown }>
   bodyParameterCount: number
+  bodyParameterNames: string[]
+  bodyParameterFormat: 'NAMED' | 'POSITIONAL' | 'NONE'
 }
 
 export type CreateWhatsappTemplateFromLibraryResult = {
@@ -96,7 +100,7 @@ export type BroadcastHistoryItem = Record<string, unknown> & {
     locationIds: string[]
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
-    whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; headerImage: boolean } | null
+    whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
   } | null
 }
 
@@ -124,7 +128,7 @@ export type BroadcastHistoryDetail = BroadcastHistoryItem & {
     locationIds: string[]
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
-    whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; headerImage: boolean } | null
+    whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
   } | null
   deliveries: BroadcastDelivery[]
 }
@@ -208,7 +212,7 @@ export async function sendCustomerBroadcastRequest(input: {
   channels: BroadcastChannel[]
   message: string
   files: File[]
-  whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; headerImage: boolean }
+  whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean }
 }): Promise<BroadcastSendResult> {
   const body = new FormData()
   body.append('idempotencyKey', input.idempotencyKey)
@@ -221,6 +225,7 @@ export async function sendCustomerBroadcastRequest(input: {
     body.append('whatsappTemplateName', input.whatsappTemplate.name)
     body.append('whatsappTemplateLanguage', input.whatsappTemplate.language)
     body.append('whatsappTemplateBodyParameters', JSON.stringify(input.whatsappTemplate.bodyParameters))
+    body.append('whatsappTemplateBodyParameterNames', JSON.stringify(input.whatsappTemplate.bodyParameterNames ?? []))
     body.append('whatsappTemplateHeaderImage', String(input.whatsappTemplate.headerImage))
   }
   input.files.forEach((file) => body.append('files', file, file.name))

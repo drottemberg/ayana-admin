@@ -68,6 +68,7 @@ export default function MessagesPage() {
   const [whatsappTemplateName, setWhatsappTemplateName] = useState('')
   const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState('')
   const [whatsappTemplateParameters, setWhatsappTemplateParameters] = useState('')
+  const [whatsappTemplateParameterNames, setWhatsappTemplateParameterNames] = useState('')
   const [whatsappTemplateHeaderImage, setWhatsappTemplateHeaderImage] = useState(false)
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false)
   const [libraryLanguage, setLibraryLanguage] = useState('fr')
@@ -121,6 +122,13 @@ export default function MessagesPage() {
   })
   const approvedWhatsappTemplates = whatsappTemplatesQuery.data ?? []
   const selectedWhatsappTemplate = approvedWhatsappTemplates.find((template) => template.name === whatsappTemplateName && template.language === whatsappTemplateLanguage)
+  const templateBodyParameterNames = selectedWhatsappTemplate?.bodyParameterNames?.length
+    ? selectedWhatsappTemplate.bodyParameterNames
+    : Array.from({ length: selectedWhatsappTemplate?.bodyParameterCount ?? 0 }, (_, index) => String(index + 1))
+  const enteredWhatsappTemplateValues = whatsappTemplateParameters.split('\n').map((value) => value.trim())
+  const whatsappTemplateBodyParameterValues = selectedWhatsappTemplate
+    ? enteredWhatsappTemplateValues.slice(0, selectedWhatsappTemplate.bodyParameterCount)
+    : enteredWhatsappTemplateValues.filter(Boolean)
   const libraryTemplates = whatsappTemplateLibraryQuery.data ?? []
   const selectedLibraryTemplate = libraryTemplates.find((template) => `${template.name}::${template.language}` === selectedLibraryTemplateKey)
   const recipients = audienceQuery.data?.items ?? EMPTY_RECIPIENTS
@@ -144,7 +152,10 @@ export default function MessagesPage() {
         ? {
             name: whatsappTemplateName.trim(),
             language: whatsappTemplateLanguage.trim(),
-            bodyParameters: whatsappTemplateParameters.split('\n').map((value) => value.trim()).filter(Boolean),
+            bodyParameters: whatsappTemplateBodyParameterValues,
+            bodyParameterNames: templateBodyParameterNames.some((name) => !/^\d+$/.test(name))
+              ? templateBodyParameterNames
+              : whatsappTemplateParameterNames.split(',').map((value) => value.trim()).filter(Boolean),
             headerImage: whatsappTemplateHeaderImage,
           }
         : undefined,
@@ -169,6 +180,7 @@ export default function MessagesPage() {
       setWhatsappTemplateName('')
       setWhatsappTemplateLanguage('')
       setWhatsappTemplateParameters('')
+      setWhatsappTemplateParameterNames('')
       setWhatsappTemplateHeaderImage(false)
       setSelectedBroadcastId(result.campaignId)
       setMode('DETAIL')
@@ -241,6 +253,7 @@ export default function MessagesPage() {
     setWhatsappTemplateName('')
     setWhatsappTemplateLanguage('')
     setWhatsappTemplateParameters('')
+    setWhatsappTemplateParameterNames('')
     setWhatsappTemplateHeaderImage(false)
     setShowTemplateLibrary(false)
     setSelectedLibraryTemplateKey('')
@@ -329,13 +342,18 @@ export default function MessagesPage() {
       return toast.error('Enter the approved WhatsApp template language.')
     }
     if (sendWhatsappTemplate && selectedWhatsappTemplate) {
-      const enteredCount = whatsappTemplateParameters.split('\n').map((value) => value.trim()).filter(Boolean).length
-      if (enteredCount !== selectedWhatsappTemplate.bodyParameterCount) {
+      const enteredValues = enteredWhatsappTemplateValues.slice(0, selectedWhatsappTemplate.bodyParameterCount)
+      if (enteredValues.length !== selectedWhatsappTemplate.bodyParameterCount || enteredValues.some((value) => !value)) {
         return toast.error(`This template needs exactly ${selectedWhatsappTemplate.bodyParameterCount} body variable value(s).`)
       }
       if (selectedWhatsappTemplate.headerImage && !files.length) {
         return toast.error('This template requires an image header. Attach an image first.')
       }
+    }
+    if (sendWhatsappTemplate && !selectedWhatsappTemplate && whatsappTemplateParameterNames.trim()) {
+      const names = whatsappTemplateParameterNames.split(',').map((value) => value.trim()).filter(Boolean)
+      const values = whatsappTemplateParameters.split('\n').map((value) => value.trim()).filter(Boolean)
+      if (names.length !== values.length) return toast.error('Enter one named variable for each body variable value.')
     }
     if (!message.trim() && !files.length && !(sendWhatsappTemplate && selectedChannels.includes('WHATSAPP'))) {
       return toast.error('Write a message, attach an image, or choose an approved WhatsApp template.')
@@ -617,6 +635,10 @@ export default function MessagesPage() {
                           <span>Body variables <span className="font-normal text-muted-foreground">(one value per placeholder, in order)</span></span>
                           <Textarea value={whatsappTemplateParameters} onChange={(event) => setWhatsappTemplateParameters(event.target.value)} rows={3} placeholder={'Value for {{1}}\nValue for {{2}}'} />
                         </label>
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          <span>Named body variables <span className="font-normal text-muted-foreground">(optional, comma-separated)</span></span>
+                          <Input value={whatsappTemplateParameterNames} onChange={(event) => setWhatsappTemplateParameterNames(event.target.value)} placeholder="body, first_name" />
+                        </label>
                       </div>
                     ) : (
                       <label className="grid gap-1.5 text-sm font-medium">
@@ -629,6 +651,7 @@ export default function MessagesPage() {
                             setWhatsappTemplateName(template.name)
                             setWhatsappTemplateLanguage(template.language)
                             setWhatsappTemplateParameters(Array.from({ length: template.bodyParameterCount }, () => '').join('\n'))
+                            setWhatsappTemplateParameterNames(template.bodyParameterNames?.join(', ') ?? '')
                             setWhatsappTemplateHeaderImage(template.headerImage)
                           }}
                           disabled={whatsappTemplatesQuery.isLoading || !approvedWhatsappTemplates.length}
@@ -645,11 +668,25 @@ export default function MessagesPage() {
                       <p className="font-medium">Approved template text</p>
                       <p className="whitespace-pre-wrap text-muted-foreground">{selectedWhatsappTemplate.bodyText || 'No text body.'}</p>
                     </div> : null}
-                    {selectedWhatsappTemplate?.bodyParameterCount ? <label className="grid gap-1.5 text-sm font-medium">
-                      <span>Body variables <span className="font-normal text-muted-foreground">({selectedWhatsappTemplate.bodyParameterCount} values, in template order)</span></span>
-                      <Textarea value={whatsappTemplateParameters} onChange={(event) => setWhatsappTemplateParameters(event.target.value)} rows={Math.min(8, Math.max(2, selectedWhatsappTemplate.bodyParameterCount))} placeholder={'Value for {{1}}\nValue for {{2}}'} />
-                      <span className="text-xs font-normal text-muted-foreground">Each line replaces the matching placeholder, for example line 1 replaces {'{{1}}'}.</span>
-                    </label> : null}
+                    {selectedWhatsappTemplate?.bodyParameterCount ? <div className="grid gap-3">
+                      <p className="text-sm font-medium">Body variables <span className="font-normal text-muted-foreground">({selectedWhatsappTemplate.bodyParameterCount} values)</span></p>
+                      {templateBodyParameterNames.map((name, index) => {
+                        const values = whatsappTemplateParameters.split('\n')
+                        return <label key={`${name}-${index}`} className="grid gap-1.5 text-sm font-medium">
+                          <span>{`{{${name}}}`}</span>
+                          <Input
+                            value={values[index] ?? ''}
+                            onChange={(event) => {
+                              while (values.length < templateBodyParameterNames.length) values.push('')
+                              values[index] = event.target.value
+                              setWhatsappTemplateParameters(values.join('\n'))
+                            }}
+                            placeholder={`Value for {{${name}}}`}
+                          />
+                        </label>
+                      })}
+                      <span className="text-xs font-normal text-muted-foreground">Each value replaces the matching placeholder in the approved template.</span>
+                    </div> : null}
                     {selectedWhatsappTemplate?.headerImage ? <>
                       <p className="text-sm">This template requires an image header; the first attached image will be used.</p>
                       {whatsappTemplateHeaderImage && !files.length ? <p className="text-xs text-destructive">Attach an image for the template header.</p> : null}
@@ -789,7 +826,10 @@ function CampaignDetailPage({
           {detail.filters?.whatsappTemplate ? (
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">WhatsApp template: {detail.filters.whatsappTemplate.name} · {detail.filters.whatsappTemplate.language}</p>
-              {detail.filters.whatsappTemplate.bodyParameters.length ? <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{detail.filters.whatsappTemplate.bodyParameters.join('\n')}</p> : null}
+              {detail.filters.whatsappTemplate.bodyParameters.length ? <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{detail.filters.whatsappTemplate.bodyParameters.map((value, index) => {
+                const name = detail.filters?.whatsappTemplate?.bodyParameterNames?.[index]
+                return name ? `{{${name}}}: ${value}` : value
+              }).join('\n')}</p> : null}
               {detail.filters.whatsappTemplate.headerImage ? <p className="mt-1 text-muted-foreground">First attached image used as header.</p> : null}
             </div>
           ) : null}
