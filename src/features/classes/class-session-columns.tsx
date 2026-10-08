@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { NO_VALUE_STR } from '@/constants'
 import type { ClassBooking, ClassSchedule, ClassSession } from '@/types/class-type'
+import { formatClassSessionTime } from '@/features/classes/time-zone'
 
 const sessionTypeLabels = { GROUP: 'Group', SEMI_PRIVATE: 'Semi-private', PRIVATE: 'Private' } as const
 
@@ -19,7 +20,7 @@ export function getClassSessionColumns(options: { showCustomer?: boolean; showLo
     { accessorKey: 'type', header: 'Format', cell: ({ row }) => sessionTypeLabels[row.original.type] ?? row.original.type },
     {
       accessorKey: 'startTime', header: 'Starts',
-      cell: ({ row }) => new Date(row.original.startTime).toLocaleString(),
+      cell: ({ row }) => formatClassSessionTime(row.original.startTime, row.original.timezone),
     },
     {
       id: 'capacity', header: 'Bookings',

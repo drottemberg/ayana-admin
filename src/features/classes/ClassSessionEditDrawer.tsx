@@ -9,11 +9,7 @@ import { SelectInput } from '@/components/ui/select-input'
 import { getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
-
-function toLocalInput(value: string) {
-  const date = new Date(value)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
-}
+import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>
@@ -22,11 +18,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function ClassSessionEditDrawer({
   session,
   locationId,
+  timeZone,
   open,
   onOpenChange,
 }: {
   session: ClassSession | null
   locationId: string
+  timeZone: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -44,21 +42,27 @@ export function ClassSessionEditDrawer({
 
   useEffect(() => {
     if (!session || !open) return
-    setStartTime(toLocalInput(session.startTime))
-    setEndTime(toLocalInput(session.endTime))
+    setStartTime(toClassSessionLocalInput(session.startTime, timeZone))
+    setEndTime(toClassSessionLocalInput(session.endTime, timeZone))
     setCapacity(String(session.capacity))
     setCoachId(session.coachId ?? '')
-  }, [open, session])
+  }, [open, session, timeZone])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!session) return
 
-    const start = new Date(startTime)
-    const end = new Date(endTime)
     const capacityValue = Number(capacity)
-    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start ||
-      !Number.isInteger(capacityValue) || capacityValue < session.bookedCount) {
+    let startIso: string
+    let endIso: string
+    try {
+      startIso = classSessionLocalInputToIso(startTime, timeZone)
+      endIso = classSessionLocalInputToIso(endTime, timeZone)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Check the session times.')
+      return
+    }
+    if (new Date(endIso) <= new Date(startIso) || !Number.isInteger(capacityValue) || capacityValue < session.bookedCount) {
       toast.error(`Check the session times and capacity. Capacity must be at least ${session.bookedCount}.`)
       return
     }
@@ -66,8 +70,8 @@ export function ClassSessionEditDrawer({
     setIsSaving(true)
     try {
       await updateClassSessionRequest(session.id, locationId, {
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
+        startTime: startIso,
+        endTime: endIso,
         capacity: capacityValue,
         coachId: coachId || null,
       })

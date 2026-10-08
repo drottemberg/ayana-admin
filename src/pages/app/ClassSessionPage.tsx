@@ -16,9 +16,10 @@ import { useDetailQuery } from '@/lib/query-hooks'
 import { useConnect } from '@/features/app/use-connect'
 import { Modals } from '@/providers/modal'
 import type { ClassSession } from '@/types/class-type'
+import { formatClassSessionTime } from '@/features/classes/time-zone'
 
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : NO_VALUE_STR
+function formatDate(value?: string | null, timeZone?: string | null) {
+  return value ? formatClassSessionTime(value, timeZone) : NO_VALUE_STR
 }
 
 export default function ClassSessionPage() {
@@ -67,8 +68,8 @@ export default function ClassSessionPage() {
       { label: 'Class', value: classSession?.classTypeId ? <Link to={`/classes/${classSession.classTypeId}?locationId=${encodeURIComponent(resolvedLocationId)}`} className="underline-offset-2 hover:underline">{classSession.className || classSession.classTypeId}</Link> : NO_VALUE_STR },
       { label: 'Category', value: classSession?.classCategory || NO_VALUE_STR },
       { label: 'Format', value: classSession?.type ?? NO_VALUE_STR },
-      { label: 'Starts', value: formatDate(classSession?.startTime) },
-      { label: 'Ends', value: formatDate(classSession?.endTime) },
+      { label: 'Starts', value: formatDate(classSession?.startTime, classSession?.timezone) },
+      { label: 'Ends', value: formatDate(classSession?.endTime, classSession?.timezone) },
       { label: 'Capacity', value: classSession ? `${classSession.bookedCount} / ${classSession.capacity}` : NO_VALUE_STR },
       { label: 'Coach', value: classSession?.coachName || classSession?.coachId || NO_VALUE_STR },
       { label: 'Schedule', value: classSession?.scheduleId ?? NO_VALUE_STR },
@@ -83,7 +84,7 @@ export default function ClassSessionPage() {
   return <DetailPageLayout
     header={{
       title: classSession?.className ?? 'Class session',
-      subtitle: formatDate(classSession?.startTime),
+      subtitle: formatDate(classSession?.startTime, classSession?.timezone),
       backTo: '/class-sessions',
       primaryAction: classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
         ? { children: 'Edit session', onClick: () => setIsEditOpen(true) }
@@ -116,6 +117,7 @@ export default function ClassSessionPage() {
     <ClassSessionEditDrawer
       session={classSession ?? null}
       locationId={resolvedLocationId}
+      timeZone={classSession?.timezone ?? 'Europe/Paris'}
       open={isEditOpen}
       onOpenChange={setIsEditOpen}
     />

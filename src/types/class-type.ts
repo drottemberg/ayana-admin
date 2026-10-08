@@ -45,6 +45,7 @@ export type ClassSession = {
   locationName?: string
   customerId?: string
   customerName?: string
+  timezone?: string
 }
 
 export type ClassSchedule = {
