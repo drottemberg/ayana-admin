@@ -34,6 +34,7 @@ export function ClassTypeEditDrawer({
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
+  const [conditions, setConditions] = useState('')
   const [type, setType] = useState<ClassType['type']>('GROUP')
   const [duration, setDuration] = useState('')
   const [maxCapacity, setMaxCapacity] = useState('')
@@ -45,6 +46,7 @@ export function ClassTypeEditDrawer({
     setName(classType.name)
     setCategory(classType.category ?? '')
     setDescription(classType.description ?? '')
+    setConditions(classType.conditions ?? '')
     setType(classType.type)
     setDuration(String(classType.duration))
     setMaxCapacity(String(classType.maxCapacity))
@@ -59,6 +61,7 @@ export function ClassTypeEditDrawer({
       name: name.trim(),
       category: category.trim() || undefined,
       description: description.trim() || undefined,
+      conditions: conditions.trim() || null,
       type,
       duration: Number(duration),
       maxCapacity: Number(maxCapacity),
@@ -97,6 +100,7 @@ export function ClassTypeEditDrawer({
           <Field label="Name"><Input required value={name} onChange={(event) => setName(event.target.value)} /></Field>
           <Field label="Category"><Input placeholder="Yoga, Pilates, strength…" value={category} onChange={(event) => setCategory(event.target.value)} /></Field>
           <Field label="Description"><Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} /></Field>
+          <Field label="Conditions and requirements"><Textarea placeholder="For example: Grip socks are mandatory. Please bring a towel." value={conditions} onChange={(event) => setConditions(event.target.value)} rows={4} /></Field>
           <Field label="Type">
             <SelectInput
               aria-label="Class type"

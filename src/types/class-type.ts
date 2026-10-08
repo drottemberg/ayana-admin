@@ -11,6 +11,7 @@ export type ClassType = {
   name: string
   category?: string | null
   description?: string | null
+  conditions?: string | null
   duration: number
   type: ClassSessionType
   maxCapacity: number

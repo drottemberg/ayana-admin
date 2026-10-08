@@ -55,6 +55,7 @@ export default function ClassTypePage() {
       { label: 'ID', value: classType?.id ?? classTypeId },
       { label: 'Name', value: classType?.name ?? NO_VALUE_STR },
       { label: 'Category', value: classType?.category || NO_VALUE_STR },
+      { label: 'Conditions and requirements', value: classType?.conditions ? <div className="whitespace-pre-wrap">{classType.conditions}</div> : NO_VALUE_STR },
       { label: 'Format', value: classType ? typeLabel(classType.type) : NO_VALUE_STR },
       { label: 'Duration', value: classType ? `${classType.duration} min` : NO_VALUE_STR },
       { label: 'Capacity', value: classType?.maxCapacity ?? NO_VALUE_STR },

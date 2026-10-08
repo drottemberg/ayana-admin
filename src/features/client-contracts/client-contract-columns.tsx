@@ -29,7 +29,7 @@ export function getClientContractColumns(options: { showCustomer?: boolean; show
     {
       id: 'pricingOptionName',
       header: 'Pricing option',
-      cell: ({ row }) => <span className="font-medium">{row.original.pricingOption?.name ?? NO_VALUE_STR}</span>,
+      cell: ({ row }) => <span className="font-medium">{row.original.pricingOption?.name ?? 'Complimentary credits'}</span>,
     },
     ...(options.showUser === false ? [] : [{
       id: 'userName',
@@ -54,6 +54,11 @@ export function getClientContractColumns(options: { showCustomer?: boolean; show
       accessorKey: 'creditsRemaining',
       header: 'Credits remaining',
       cell: ({ row }) => row.original.creditsRemaining === null ? 'Unlimited' : row.original.creditsRemaining,
+    },
+    {
+      accessorKey: 'creditsUsedThisPeriod',
+      header: 'Credits used',
+      cell: ({ row }) => row.original.creditsRemaining === null ? '—' : row.original.creditsUsedThisPeriod,
     },
     {
       accessorKey: 'validUntil',

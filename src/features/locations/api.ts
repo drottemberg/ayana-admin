@@ -67,7 +67,7 @@ export async function getAllLocationsForCustomerRequest(customerId: string): Pro
   const limit = 100
   const requestConfig = getAppMode() === 'customer' ? { headers: { 'x-org-id': customerId } } : undefined
   const firstPage = await apiClient.post<ApiListResult<Location>>(LOCATIONS_LIST_URL, {
-    filters: { customerId },
+    customerId,
     page: 1,
     limit,
   }, requestConfig)
@@ -77,7 +77,7 @@ export async function getAllLocationsForCustomerRequest(customerId: string): Pro
   const remainingPages = await Promise.all(
     Array.from({ length: pageCount - 1 }, (_, index) =>
       apiClient.post<ApiListResult<Location>>(LOCATIONS_LIST_URL, {
-        filters: { customerId },
+        customerId,
         page: index + 2,
         limit,
       }, requestConfig),

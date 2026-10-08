@@ -67,6 +67,10 @@ export const classScheduleColumns: ColumnDef<ClassSchedule>[] = [
 ]
 
 export const classBookingColumns: ColumnDef<ClassBooking>[] = [
+  {
+    id: 'booking', header: 'Booking',
+    cell: ({ row }) => <Link to={`/bookings/${row.original.id}`} className="font-medium underline-offset-2 hover:underline">{row.original.id}</Link>,
+  },
   { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.status}</Badge> },
   {
     id: 'member', header: 'Member',

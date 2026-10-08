@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useParams } from 'react-router-dom'
@@ -12,6 +14,7 @@ import { type DataTableAsyncResult, type DataTableState } from '@/components/dat
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
+import { getAppMode } from '@/features/app/app-mode'
 import { getCustomersRequest } from '@/features/customers/api'
 import { customerColumns } from '@/features/customers/customer-columns'
 import { customersQueryKeys } from '@/features/customers/query-keys'
@@ -31,17 +34,19 @@ import { NO_VALUE_STR } from '@/constants'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { formatDateTime } from '@/utils/date-utils'
 import { formatPhoneNumber } from '@/lib/phone'
-import { getClientContractsRequest } from '@/features/client-contracts/api'
+import { getClientContractsRequest, getUserCreditMovementsRequest, getUserCreditWalletBalancesRequest } from '@/features/client-contracts/api'
 import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
+import { getCreditMovementColumns } from '@/features/client-contracts/credit-movement-columns'
 import { ClientContractService } from '@/features/client-contracts/client-contract-service'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
-import type { ClientContract } from '@/types/client-contract'
+import type { ClientContract, ClientContractCreditMovement } from '@/types/client-contract'
 import { getOrdersRequest } from '@/features/orders/api'
 import { getOrderColumns } from '@/features/orders/order-columns'
 import { OrderService } from '@/features/orders/order-service'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { Order } from '@/types/order'
 import { EntityIcon } from '@/components/app/entity-icons'
+import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 
@@ -93,7 +98,12 @@ async function loadUserLocations(
   }
 }
 
-function getUserDetailSections(user?: User): DetailPanelSection[] {
+function getUserDetailSections(
+  user: User | undefined,
+  creditWallets?: { customerId: string; customerName: string; balance: number; unlimited: boolean }[],
+  creditWalletsLoading = false,
+  canViewCreditWallets = false,
+): DetailPanelSection[] {
   return [
     {
       title: 'Details',
@@ -120,6 +130,17 @@ function getUserDetailSections(user?: User): DetailPanelSection[] {
         },
       ],
     },
+    ...(canViewCreditWallets ? [{
+      title: 'Credits',
+      fields: creditWalletsLoading
+        ? [{ label: 'Balance', value: 'Loading…' }]
+        : creditWallets?.length
+          ? creditWallets.map((wallet) => ({
+              label: wallet.customerName,
+              value: wallet.unlimited ? `${wallet.balance} · Unlimited access` : `${wallet.balance} credits`,
+            }))
+          : [{ label: 'Balance', value: '0 credits' }],
+    }] : []),
   ]
 }
 
@@ -128,6 +149,10 @@ export default function UserPage() {
   const { session } = useConnect()
   const permissions = session?.permissions.users
   const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
+  const [contractsToGrant, setContractsToGrant] = useState<ClientContract[]>([])
+  const [grantCreditsOpen, setGrantCreditsOpen] = useState(false)
+  const [walletAdjustmentOpen, setWalletAdjustmentOpen] = useState(false)
+  const [contractToRemoveCredits, setContractToRemoveCredits] = useState<ClientContract | null>(null)
   const {
     data: user,
     isError,
@@ -136,6 +161,11 @@ export default function UserPage() {
     queryKey: usersQueryKeys.detail(userId),
     queryFn: () => getUserRequest(userId),
     enabled: Boolean(userId),
+  })
+  const creditWallets = useQuery({
+    queryKey: [...clientContractsQueryKeys.all, 'wallet-balances', userId],
+    queryFn: () => getUserCreditWalletBalancesRequest(userId),
+    enabled: Boolean(userId && canManageOrdersAndContracts),
   })
   const locationMembershipKey = (user?.customerMemberships ?? [])
     .map((membership) =>
@@ -147,9 +177,16 @@ export default function UserPage() {
     { key: 'customers', label: 'Customers' },
     { key: 'locations', label: 'Locations' },
     ...(canManageOrdersAndContracts
-      ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }]
+      ? [
+          { key: 'client-contracts', label: 'Client contracts' },
+          { key: 'credit-transactions', label: 'Credit transactions' },
+          { key: 'orders', label: 'Orders' },
+        ]
       : []),
   ]
+  const currentCustomerId = session?.currentOrganization?.id
+  const currentCustomerName = session?.currentOrganization?.name
+  const isAdminContext = getAppMode() === 'admin'
 
   if (isError && !user) {
     return (
@@ -173,7 +210,7 @@ export default function UserPage() {
         options: user ? UserService.getDetailHeaderActions(user, permissions).options : [],
       }}
       modules={modules}
-      aside={<DetailSidePanel sections={getUserDetailSections(user)} isLoading={isLoading} />}
+      aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canManageOrdersAndContracts)} isLoading={isLoading} />}
     >
       <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-customers`}
@@ -215,9 +252,45 @@ export default function UserPage() {
         loadData={(state: DataTableState<ClientContract>) => getClientContractsRequest(state, { userId })}
         tableKey={`client-contracts.user.${userId}`}
         columns={getClientContractColumns({ showUser: false })}
-        getRowCommands={(contract) => ClientContractService.getRowActions(contract, Boolean(session?.permissions.customers?.edit))}
+        getRowCommands={(contract) => ClientContractService.getRowActions(contract, canManageOrdersAndContracts, canManageOrdersAndContracts ? {
+          onGrant: (selected) => { setContractsToGrant([selected]); setGrantCreditsOpen(true) },
+          onRemove: setContractToRemoveCredits,
+        } : undefined)}
         loadingMessage="Loading client contracts..."
         emptyMessage="No client contracts found."
+      /> : null}
+      <GrantCreditsDrawer contracts={contractsToGrant} open={grantCreditsOpen} onOpenChange={setGrantCreditsOpen} />
+      {(isAdminContext || currentCustomerId) && user ? (
+        <GiftCreditsDrawer
+          customerId={isAdminContext ? undefined : currentCustomerId}
+          customerName={currentCustomerName}
+          fixedUser={user}
+          open={walletAdjustmentOpen}
+          onOpenChange={setWalletAdjustmentOpen}
+        />
+      ) : null}
+      <RemoveCreditsDrawer
+        contract={contractToRemoveCredits}
+        open={Boolean(contractToRemoveCredits)}
+        onOpenChange={(open) => { if (!open) setContractToRemoveCredits(null) }}
+      />
+      {canManageOrdersAndContracts ? <RelatedEntityModule
+        id={`${MODULE_ANCHOR_PREFIX}-credit-transactions`}
+        title="Credit transactions"
+        icon={EntityIcon.clientContracts}
+        viewAllTo={makeViewAllTo('/credit-transactions', userId)}
+        viewAllMinCount={5}
+        queryKey={clientContractsQueryKeys.userCreditMovements(userId)}
+        loadData={(state: DataTableState<ClientContractCreditMovement>) => getUserCreditMovementsRequest(state, userId)}
+        tableKey={`credit-transactions.user.${userId}`}
+        columns={getCreditMovementColumns({ showUser: false, showCustomer: false })}
+        action={canManageOrdersAndContracts && (isAdminContext || currentCustomerId) && user ? {
+          label: 'Adjust credits',
+          onClick: () => setWalletAdjustmentOpen(true),
+        } : undefined}
+        loadingMessage="Loading credit transactions..."
+        emptyMessage="No credit transactions found."
+        errorMessage="Failed to load credit transactions."
       /> : null}
       {canManageOrdersAndContracts ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-orders`}

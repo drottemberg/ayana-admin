@@ -22,6 +22,21 @@ export const BillingInterval = {
 } as const
 export type BillingInterval = (typeof BillingInterval)[keyof typeof BillingInterval]
 
+export const CreditRefreshInterval = {
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  QUARTERLY: 'QUARTERLY',
+  YEARLY: 'YEARLY',
+} as const
+export type CreditRefreshInterval = (typeof CreditRefreshInterval)[keyof typeof CreditRefreshInterval]
+
+export const ApplicableTo = {
+  GROUP: 'GROUP',
+  PRIVATE: 'PRIVATE',
+  BOTH: 'BOTH',
+} as const
+export type ApplicableTo = (typeof ApplicableTo)[keyof typeof ApplicableTo]
+
 export type PricingOptionLocation = {
   locationId: string
   location?: { id: string; name: string } | null
@@ -44,11 +59,12 @@ export type PricingOption = {
   currency: string
   creditsTotal?: number | string | null
   creditsPerPeriod?: number | string | null
+  creditsRefreshInterval?: CreditRefreshInterval
   creditsRollover?: boolean
   validityDays?: number | null
   billingInterval: BillingInterval
   minimumCommitmentMonths?: number | null
-  applicableTo?: string
+  applicableTo?: ApplicableTo
   isActive: boolean
   isDeleted?: boolean
   status?: 'ACTIVE' | 'DISABLED' | 'DELETED'
@@ -67,7 +83,7 @@ export type PricingOption = {
 
 export type CreatePricingOptionPayload = {
   name: string
-  description?: string
+  description?: string | null
   type: PricingOptionType
   price: number
   /** Fraction stored by the API (0.20 = 20%). */
@@ -80,12 +96,13 @@ export type CreatePricingOptionPayload = {
     currencyOverride?: string
   }>
   billingInterval: BillingInterval
-  creditsTotal?: number
-  creditsPerPeriod?: number
+  creditsTotal?: number | null
+  creditsPerPeriod?: number | null
+  creditsRefreshInterval?: CreditRefreshInterval
   creditsRollover?: boolean
-  validityDays?: number
-  minimumCommitmentMonths?: number
-  applicableTo?: string
+  validityDays?: number | null
+  minimumCommitmentMonths?: number | null
+  applicableTo?: ApplicableTo
   isIntro?: boolean
   perks?: string[]
   isSellable: boolean

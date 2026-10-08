@@ -43,6 +43,7 @@ export type UpdateClassTypePayload = {
   name: string
   category?: string
   description?: string
+  conditions: string | null
   type: ClassType['type']
   duration: number
   maxCapacity: number

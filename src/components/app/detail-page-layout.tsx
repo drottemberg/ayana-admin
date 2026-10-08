@@ -216,6 +216,7 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
   icon?: IconSvgElement
   initialTotal?: number
   viewAllTo?: string
+  viewAllMinCount?: number
   action?: {
     label: string
     onClick?: () => void
@@ -240,6 +241,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
   icon,
   initialTotal,
   viewAllTo,
+  viewAllMinCount,
   action,
   columns,
   getCommands,
@@ -266,7 +268,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
       title={title}
       className="scroll-mt-36"
       subtitle={
-        resolvedTotalLabel && viewAllTo ? (
+        resolvedTotalLabel && viewAllTo && (viewAllMinCount == null || (resolvedTotal ?? 0) > viewAllMinCount) ? (
           <Link to={viewAllTo} title="View all" className="underline-offset-2 hover:text-foreground hover:underline">
             {resolvedTotalLabel}
           </Link>

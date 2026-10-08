@@ -14,6 +14,13 @@ const typeLabels: Record<PricingOption['type'], string> = {
   INTRO_OFFER: 'Intro offer',
 }
 
+const creditRefreshLabels: Record<string, string> = {
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  QUARTERLY: 'Quarterly',
+  YEARLY: 'Yearly',
+}
+
 export function formatPricingOptionPrice(price: number | string, currency: string) {
   const numericPrice = Number(price)
   if (!Number.isFinite(numericPrice)) return NO_VALUE_STR
@@ -36,6 +43,18 @@ export function getPricingOptionColumns(options: { showCustomer?: boolean; showS
           </Badge>
         )
       },
+    },
+    {
+      accessorKey: 'isSellable',
+      header: 'Sellable',
+      cell: ({ row }) => (
+        <Badge
+          variant="outline"
+          className={row.original.isSellable ? 'border-green-200 text-green-800' : 'text-muted-foreground'}
+        >
+          {row.original.isSellable ? 'Yes' : 'No'}
+        </Badge>
+      ),
     },
     {
       accessorKey: 'name',
@@ -69,6 +88,13 @@ export function getPricingOptionColumns(options: { showCustomer?: boolean; showS
       accessorKey: 'billingInterval',
       header: 'Billing interval',
       cell: ({ row }) => row.original.billingInterval,
+    },
+    {
+      accessorKey: 'creditsRefreshInterval',
+      header: 'Credit refresh',
+      cell: ({ row }) => row.original.type === 'CAPPED_MEMBERSHIP'
+        ? creditRefreshLabels[row.original.creditsRefreshInterval ?? 'MONTHLY'] ?? row.original.creditsRefreshInterval
+        : NO_VALUE_STR,
     },
     ...(options.showScope === false ? [] : [{
       accessorKey: 'scope',

@@ -14,6 +14,8 @@ import { createPricingOptionRequest, getPricingOptionRequest, updatePricingOptio
 import { pricingOptionsQueryKeys } from '@/features/pricing-options/query-keys'
 import {
   BillingInterval,
+  ApplicableTo,
+  CreditRefreshInterval,
   PricingOptionScope,
   PricingOptionType,
   type CreatePricingOptionPayload,
@@ -34,6 +36,19 @@ const intervals = [
   { value: BillingInterval.MONTHLY, label: 'Monthly' },
   { value: BillingInterval.QUARTERLY, label: 'Quarterly' },
   { value: BillingInterval.YEARLY, label: 'Yearly' },
+]
+
+const creditRefreshIntervals = [
+  { value: CreditRefreshInterval.WEEKLY, label: 'Weekly' },
+  { value: CreditRefreshInterval.MONTHLY, label: 'Monthly' },
+  { value: CreditRefreshInterval.QUARTERLY, label: 'Quarterly' },
+  { value: CreditRefreshInterval.YEARLY, label: 'Yearly' },
+]
+
+const applicableToOptions = [
+  { value: ApplicableTo.BOTH, label: 'Group and private classes' },
+  { value: ApplicableTo.GROUP, label: 'Group classes only' },
+  { value: ApplicableTo.PRIVATE, label: 'Private classes only' },
 ]
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -77,6 +92,15 @@ export function CreatePricingOptionDialog({
   const [overrides, setOverrides] = useState<Record<string, { enabled: boolean; price: string; currency: string }>>({})
   const [creditsTotal, setCreditsTotal] = useState('')
   const [creditsPerPeriod, setCreditsPerPeriod] = useState('')
+  const [creditsRefreshInterval, setCreditsRefreshInterval] = useState<CreditRefreshInterval>(CreditRefreshInterval.MONTHLY)
+  const [creditsRollover, setCreditsRollover] = useState(false)
+  const [validityDays, setValidityDays] = useState('')
+  const [minimumCommitmentMonths, setMinimumCommitmentMonths] = useState('')
+  const [applicableTo, setApplicableTo] = useState<ApplicableTo>(ApplicableTo.BOTH)
+  const [perksText, setPerksText] = useState('')
+  const [isIntro, setIsIntro] = useState(false)
+  const [isSellable, setIsSellable] = useState(true)
+  const [isActive, setIsActive] = useState(true)
 
   const customers = useQuery({
     queryKey: [...customersQueryKeys.all, 'pricing-option-form-customers'],
@@ -121,6 +145,15 @@ export function CreatePricingOptionDialog({
     }])))
     setCreditsTotal(source?.creditsTotal == null ? '' : String(source.creditsTotal))
     setCreditsPerPeriod(source?.creditsPerPeriod == null ? '' : String(source.creditsPerPeriod))
+    setCreditsRefreshInterval(source?.creditsRefreshInterval ?? CreditRefreshInterval.MONTHLY)
+    setCreditsRollover(source?.creditsRollover ?? false)
+    setValidityDays(source?.validityDays == null ? '' : String(source.validityDays))
+    setMinimumCommitmentMonths(source?.minimumCommitmentMonths == null ? '' : String(source.minimumCommitmentMonths))
+    setApplicableTo(source?.applicableTo ?? ApplicableTo.BOTH)
+    setPerksText((source?.perks ?? []).join('\n'))
+    setIsIntro(source?.isIntro ?? false)
+    setIsSellable(source?.isSellable ?? true)
+    setIsActive(source?.isActive ?? true)
   }, [formCurrency, open, option?.id, optionDetails.data, effectiveCustomerId])
 
   const createPricingOption = useMutation({
@@ -170,6 +203,25 @@ export function CreatePricingOptionDialog({
       toast.error('Enter a VAT rate between 0% and 100%.')
       return
     }
+    if (type === PricingOptionType.CAPPED_MEMBERSHIP) {
+      const numericCredits = Number(creditsPerPeriod)
+      if (!Number.isFinite(numericCredits) || numericCredits <= 0) {
+        toast.error('Enter the credit allowance granted at each refresh.')
+        return
+      }
+    }
+    const optionalIntegerFields = [
+      { label: 'Validity days', value: validityDays },
+      { label: 'Minimum commitment months', value: minimumCommitmentMonths },
+    ]
+    for (const field of optionalIntegerFields) {
+      if (!field.value) continue
+      const value = Number(field.value)
+      if (!Number.isInteger(value) || value < 1) {
+        toast.error(`${field.label} must be a positive whole number.`)
+        return
+      }
+    }
     if (scope === PricingOptionScope.SPECIFIC && selectedLocationIds.length === 0) {
       toast.error('Select at least one location for a specific scope.')
       return
@@ -201,7 +253,7 @@ export function CreatePricingOptionDialog({
 
     createPricingOption.mutate({
       name: name.trim(),
-      description: description.trim() || undefined,
+      description: description.trim() || null,
       type,
       price: numericPrice,
       vatRate: numericVatRate / 100,
@@ -209,16 +261,21 @@ export function CreatePricingOptionDialog({
       scope,
       locations: locationsPayload,
       billingInterval,
-      ...(creditsTotal ? { creditsTotal: Number(creditsTotal) } : {}),
-      ...(creditsPerPeriod ? { creditsPerPeriod: Number(creditsPerPeriod) } : {}),
-      isSellable: option?.isSellable ?? true,
-      isActive: option?.isActive ?? true,
-      ...(option?.minimumCommitmentMonths != null ? { minimumCommitmentMonths: option.minimumCommitmentMonths } : {}),
-      ...(option?.validityDays != null ? { validityDays: option.validityDays } : {}),
-      ...(option?.applicableTo ? { applicableTo: option.applicableTo } : {}),
-      ...(option?.isIntro != null ? { isIntro: option.isIntro } : {}),
-      ...(option?.perks ? { perks: option.perks } : {}),
-      ...(option?.creditsRollover != null ? { creditsRollover: option.creditsRollover } : {}),
+      creditsTotal: type === PricingOptionType.CLASS_PACK || type === PricingOptionType.DROP_IN || type === PricingOptionType.INTRO_OFFER
+        ? (creditsTotal ? Number(creditsTotal) : null)
+        : null,
+      creditsPerPeriod: type === PricingOptionType.CAPPED_MEMBERSHIP
+        ? Number(creditsPerPeriod)
+        : null,
+      creditsRefreshInterval,
+      creditsRollover: type === PricingOptionType.CAPPED_MEMBERSHIP ? creditsRollover : false,
+      validityDays: validityDays ? Number(validityDays) : null,
+      minimumCommitmentMonths: minimumCommitmentMonths ? Number(minimumCommitmentMonths) : null,
+      applicableTo,
+      isIntro,
+      isSellable,
+      isActive,
+      perks: perksText.split('\n').map((perk) => perk.trim()).filter(Boolean),
     })
   }
 
@@ -289,16 +346,88 @@ export function CreatePricingOptionDialog({
             </Field>
           </div>
 
-          {type === PricingOptionType.CLASS_PACK || type === PricingOptionType.DROP_IN ? (
+          {type === PricingOptionType.CLASS_PACK || type === PricingOptionType.DROP_IN || type === PricingOptionType.INTRO_OFFER ? (
             <Field label="Total credits">
-              <Input type="number" min="1" step="1" value={creditsTotal} onChange={(event) => setCreditsTotal(event.target.value)} />
+              <Input type="number" min="0.01" step="0.01" value={creditsTotal} onChange={(event) => setCreditsTotal(event.target.value)} />
             </Field>
           ) : null}
           {type === PricingOptionType.CAPPED_MEMBERSHIP ? (
-            <Field label="Credits per billing period">
-              <Input type="number" min="1" step="1" value={creditsPerPeriod} onChange={(event) => setCreditsPerPeriod(event.target.value)} />
-            </Field>
+            <div className="grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Credits granted per refresh">
+                  <Input type="number" min="0.01" step="0.01" value={creditsPerPeriod} onChange={(event) => setCreditsPerPeriod(event.target.value)} />
+                </Field>
+                <Field label="Credit refresh frequency">
+                  <SelectInput
+                    aria-label="Credit refresh frequency"
+                    items={creditRefreshIntervals}
+                    value={creditsRefreshInterval}
+                    onValueChange={(value) => setCreditsRefreshInterval(String(value) as CreditRefreshInterval)}
+                  />
+                </Field>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-normal">
+                <input type="checkbox" checked={creditsRollover} onChange={(event) => setCreditsRollover(event.target.checked)} />
+                Carry unused credits over (balance capped at twice the refresh allowance)
+              </label>
+            </div>
           ) : null}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Validity (days)">
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={validityDays}
+                onChange={(event) => setValidityDays(event.target.value)}
+                placeholder="No expiry"
+              />
+            </Field>
+            <Field label="Minimum commitment (months)">
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={minimumCommitmentMonths}
+                onChange={(event) => setMinimumCommitmentMonths(event.target.value)}
+                placeholder="No minimum"
+              />
+            </Field>
+          </div>
+
+          <Field label="Applicable to">
+            <SelectInput
+              aria-label="Applicable to"
+              items={applicableToOptions}
+              value={applicableTo}
+              onValueChange={(value) => setApplicableTo(String(value) as ApplicableTo)}
+            />
+          </Field>
+
+          <Field label="Included benefits (one per line)">
+            <Textarea
+              value={perksText}
+              onChange={(event) => setPerksText(event.target.value)}
+              rows={3}
+              placeholder={'One free drink\nLocker access'}
+            />
+          </Field>
+
+          <div className="grid gap-3 rounded-lg border p-3">
+            <label className="flex items-center gap-2 text-sm font-normal">
+              <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
+              Active in the catalog
+            </label>
+            <label className="flex items-center gap-2 text-sm font-normal">
+              <input type="checkbox" checked={isSellable} onChange={(event) => setIsSellable(event.target.checked)} />
+              Available for purchase
+            </label>
+            <label className="flex items-center gap-2 text-sm font-normal">
+              <input type="checkbox" checked={isIntro} onChange={(event) => setIsIntro(event.target.checked)} />
+              Introductory offer
+            </label>
+          </div>
 
           <Field label="Scope">
             <SelectInput

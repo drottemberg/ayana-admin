@@ -69,8 +69,20 @@ const data = {
       feature: Feature.CUSTOMERS,
     },
     {
+      title: 'Bookings',
+      url: '/bookings',
+      icon: <Icon icon={EntityIcon.classes} />,
+      feature: Feature.ORDERS,
+    },
+    {
       title: 'Client contracts',
       url: '/client-contracts',
+      icon: <Icon icon={EntityIcon.clientContracts} />,
+      feature: Feature.CUSTOMERS,
+    },
+    {
+      title: 'Credit transactions',
+      url: '/credit-transactions',
       icon: <Icon icon={EntityIcon.clientContracts} />,
       feature: Feature.CUSTOMERS,
     },

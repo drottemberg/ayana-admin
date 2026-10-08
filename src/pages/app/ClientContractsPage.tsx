@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
+import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
@@ -10,11 +11,19 @@ import { ClientContractService } from '@/features/client-contracts/client-contra
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import type { ClientContract } from '@/types/client-contract'
+import { GrantCreditsDrawer, GiftCreditsDrawer, CreditHistoryDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
 
 const statuses = ['PENDING', 'ACTIVE', 'PAUSED', 'EXPIRED', 'CANCELLED']
 
 export default function ClientContractsPage() {
   const [searchParams] = useSearchParams()
+  const [selectedContracts, setSelectedContracts] = useState<ClientContract[]>([])
+  const [contractsToGrant, setContractsToGrant] = useState<ClientContract[]>([])
+  const [grantOpen, setGrantOpen] = useState(false)
+  const [historyContract, setHistoryContract] = useState<ClientContract | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [contractToRemoveCredits, setContractToRemoveCredits] = useState<ClientContract | null>(null)
+  const [giftOpen, setGiftOpen] = useState(false)
   const { session } = useConnect()
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
@@ -36,7 +45,20 @@ export default function ClientContractsPage() {
         tableKey="client-contracts.root"
         initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
         columns={columns}
-        disabledSelection
+        getRowCanSelect={(contract) => canManage && contract.status === 'ACTIVE' && contract.creditsRemaining !== null}
+        onSelectedDataChange={setSelectedContracts}
+        primaryCommand={{
+          label: 'Add to selected contracts',
+          disabled: !canManage || selectedContracts.length === 0,
+          onClick: (contracts) => {
+            if (!contracts.length) return
+            setContractsToGrant(contracts)
+            setGrantOpen(true)
+          },
+        }}
+        toolbarExtra={canManage && (isAdminContext || currentCustomerId) ? (
+          <Button variant="outline" onClick={() => setGiftOpen(true)}>Adjust credits</Button>
+        ) : null}
         searchPlaceholder="Search by ID, pricing option, customer or user"
         searchColumns={['id']}
         filters={[
@@ -55,11 +77,26 @@ export default function ClientContractsPage() {
             getValue: (contract: ClientContract) => contract.location.id,
           },
         ]}
-        getRowCommands={(contract) => ClientContractService.getRowActions(contract, canManage)}
+        getRowCommands={(contract) => ClientContractService.getRowActions(contract, canManage, canManage ? {
+          onGrant: (selected) => { setContractsToGrant([selected]); setGrantOpen(true) },
+          onRemove: setContractToRemoveCredits,
+          onHistory: (selected) => { setHistoryContract(selected); setHistoryOpen(true) },
+        } : undefined)}
         loadingMessage="Loading client contracts..."
         emptyMessage="No client contracts found."
         errorMessage="Failed to load client contracts."
       />
     </section>
+    <GrantCreditsDrawer contracts={contractsToGrant} open={grantOpen} onOpenChange={setGrantOpen} />
+    <CreditHistoryDrawer contract={historyContract} open={historyOpen} onOpenChange={setHistoryOpen} />
+    <RemoveCreditsDrawer contract={contractToRemoveCredits} open={Boolean(contractToRemoveCredits)} onOpenChange={(open) => { if (!open) setContractToRemoveCredits(null) }} />
+    {canManage && (isAdminContext || currentCustomerId) ? (
+      <GiftCreditsDrawer
+        customerId={isAdminContext ? undefined : currentCustomerId}
+        customerName={session?.currentOrganization?.name}
+        open={giftOpen}
+        onOpenChange={setGiftOpen}
+      />
+    ) : null}
   </>
 }

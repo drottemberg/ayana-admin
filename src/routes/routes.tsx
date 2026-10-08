@@ -36,7 +36,10 @@ const ClassesPage = lazy(() => import('@/pages/app/ClassesPage'))
 const ClassTypePage = lazy(() => import('@/pages/app/ClassTypePage'))
 const ClassSessionsPage = lazy(() => import('@/pages/app/ClassSessionsPage'))
 const ClassSessionPage = lazy(() => import('@/pages/app/ClassSessionPage'))
+const BookingsPage = lazy(() => import('@/pages/app/BookingsPage'))
+const BookingPage = lazy(() => import('@/pages/app/BookingPage'))
 const ClientContractsPage = lazy(() => import('@/pages/app/ClientContractsPage'))
+const CreditTransactionsPage = lazy(() => import('@/pages/app/CreditTransactionsPage'))
 const OrdersPage = lazy(() => import('@/pages/app/OrdersPage'))
 const MessagesPage = lazy(() => import('@/pages/app/MessagesPage'))
 const KitchenBoardPage = lazy(() => import('@/pages/app/KitchenBoardPage'))
@@ -91,7 +94,10 @@ export const router = createBrowserRouter([
           { path: 'classes/:classTypeId', element: <ClassTypePage /> },
           { path: 'class-sessions', element: <ClassSessionsPage /> },
           { path: 'class-sessions/:sessionId', element: <ClassSessionPage /> },
+          { path: 'bookings', element: <BookingsPage /> },
+          { path: 'bookings/:bookingId', element: <BookingPage /> },
           { path: 'client-contracts', element: <ClientContractsPage /> },
+          { path: 'credit-transactions', element: <CreditTransactionsPage /> },
           { path: 'orders', element: <OrdersPage /> },
           { path: 'messages', element: <MessagesPage /> },
           { path: 'orders/kitchen', element: <KitchenBoardPage /> },
