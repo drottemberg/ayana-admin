@@ -106,7 +106,7 @@ export function ClassTypeProductDrawer({
             />
           </Field>
           <p className="text-sm text-muted-foreground">
-            “Required” tells the member what the class requires. The assistant can mention that they may bring their own; it will never add or sell the product without the member’s explicit request.
+            “Required” means members need to bring or use this item. If it is available at the active location, the assistant will tell them they can buy it there and offer to help place an order. It will only start the purchase if they choose to buy.
           </p>
         </div>
         <div className="flex justify-end gap-2 border-t border-border p-5">
