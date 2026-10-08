@@ -186,3 +186,48 @@ export async function getClassTypeRequest(id: string, locationId: string) {
     headers: { 'x-org-id': locationId },
   })
 }
+
+export type ClassTypeProductKind = 'REQUIRED' | 'RECOMMENDED'
+export type ClassTypeProduct = {
+  classTypeId: string
+  productId: string
+  kind: ClassTypeProductKind
+  productName: string
+  productTypeName: string | null
+  isActive: boolean
+  isSellable: boolean
+  createdAt: string
+  updatedAt: string
+}
+export type ClassTypeProductOption = { id: string; name: string; productTypeName: string | null }
+
+export async function getClassTypeProductsRequest(classTypeId: string, locationId: string) {
+  return apiClient.get<ClassTypeProduct[]>(`/class-types/${encodeURIComponent(classTypeId)}/products`, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
+export async function getClassTypeProductOptionsRequest(classTypeId: string, locationId: string, search: string) {
+  return apiClient.get<ClassTypeProductOption[]>(
+    `/class-types/${encodeURIComponent(classTypeId)}/product-options?${new URLSearchParams({ locationId, search })}`,
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
+export async function addClassTypeProductRequest(classTypeId: string, locationId: string, productId: string, kind: ClassTypeProductKind) {
+  return apiClient.post(`/class-types/${encodeURIComponent(classTypeId)}/products?locationId=${encodeURIComponent(locationId)}`, { productId, kind }, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
+export async function updateClassTypeProductRequest(classTypeId: string, locationId: string, productId: string, kind: ClassTypeProductKind) {
+  return apiClient.patch(`/class-types/${encodeURIComponent(classTypeId)}/products/${encodeURIComponent(productId)}?locationId=${encodeURIComponent(locationId)}`, { kind }, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
+export async function removeClassTypeProductRequest(classTypeId: string, locationId: string, productId: string) {
+  return apiClient.delete(`/class-types/${encodeURIComponent(classTypeId)}/products/${encodeURIComponent(productId)}?locationId=${encodeURIComponent(locationId)}`, undefined, {
+    headers: { 'x-org-id': locationId },
+  })
+}

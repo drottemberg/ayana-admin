@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { createColumnHelper } from '@tanstack/react-table'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
@@ -10,10 +11,11 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Input } from '@/components/ui/input'
 import { NO_VALUE_STR } from '@/constants'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { ClassTypeProductDrawer } from '@/features/classes/ClassTypeProductDrawer'
 import { ClassScheduleCreateDrawer } from '@/features/classes/ClassScheduleCreateDrawer'
 import { ClassScheduleEditDrawer } from '@/features/classes/ClassScheduleEditDrawer'
 import { classScheduleColumns, getClassSessionColumns } from '@/features/classes/class-session-columns'
-import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeProductsRequest, getClassTypeRequest, removeClassTypeProductRequest, type ClassTypeProduct } from '@/features/classes/api'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
@@ -31,6 +33,21 @@ function typeLabel(type: ClassType['type']) {
   return ({ GROUP: 'Group', SEMI_PRIVATE: 'Semi-private', PRIVATE: 'Private' } as const)[type]
 }
 
+const classTypeProductColumn = createColumnHelper<ClassTypeProduct & Record<string, unknown>>()
+const classTypeProductColumns = [
+  classTypeProductColumn.accessor((row) => row.isActive && row.isSellable ? 'ACTIVE' : 'DISABLED', {
+    id: 'status', header: 'Status', cell: (info) => <Badge variant="outline">{info.getValue()}</Badge>,
+  }),
+  classTypeProductColumn.accessor('productName', {
+    header: 'Product',
+    cell: (info) => <Link to={`/products/${info.row.original.productId}`} className="underline-offset-2 hover:underline">{info.getValue()}</Link>,
+  }),
+  classTypeProductColumn.accessor((row) => row.productTypeName ?? '—', { id: 'category', header: 'Category' }),
+  classTypeProductColumn.accessor('kind', {
+    header: 'Assistant use', cell: (info) => info.getValue() === 'REQUIRED' ? 'Required' : 'Recommended',
+  }),
+] as const
+
 export default function ClassTypePage() {
   const { classTypeId = '' } = useParams()
   const [searchParams] = useSearchParams()
@@ -38,6 +55,8 @@ export default function ClassTypePage() {
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<ClassSchedule | null>(null)
+  const [isClassProductDrawerOpen, setIsClassProductDrawerOpen] = useState(false)
+  const [editingClassProduct, setEditingClassProduct] = useState<ClassTypeProduct | null>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session } = useConnect()
@@ -78,6 +97,7 @@ export default function ClassTypePage() {
     queryClient.invalidateQueries({ queryKey: [...classTypesQueryKeys.location(locationId), classTypeId, 'schedules'] }),
     queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
   ])
+  const classProductsQueryKey = [...classTypesQueryKeys.all, classTypeId, 'products', locationId] as const
   const localToday = () => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -88,9 +108,46 @@ export default function ClassTypePage() {
         title: classType?.name ?? 'Class', subtitle: isLoading ? 'Loading...' : classTypeId, backTo: '/classes',
         primaryAction: editableClassType && canEditClass ? { children: 'Edit class', onClick: () => setEditingClassType(editableClassType) } : undefined,
       }}
-      modules={[{ key: 'schedules', label: 'Schedules' }, { key: 'sessions', label: 'Sessions' }]}
+      modules={[{ key: 'products', label: 'Products' }, { key: 'schedules', label: 'Schedules' }, { key: 'sessions', label: 'Sessions' }]}
       aside={<DetailSidePanel sections={sections} isLoading={isLoading} />}
     >
+      <RelatedEntityModule<ClassTypeProduct & Record<string, unknown>>
+        id="module-products"
+        title="Products"
+        queryKey={classProductsQueryKey}
+        loadData={async (state) => localPage(
+          (await getClassTypeProductsRequest(classTypeId, locationId)) as (ClassTypeProduct & Record<string, unknown>)[], state,
+        )}
+        tableKey={`classes.detail.products.${classTypeId}`}
+        columns={classTypeProductColumns as never}
+        action={canEditClass ? { label: 'Add product', onClick: () => { setEditingClassProduct(null); setIsClassProductDrawerOpen(true) } } : undefined}
+        getRowCommands={(product) => canEditClass ? [
+          { label: 'Edit', onClick: () => { setEditingClassProduct(product); setIsClassProductDrawerOpen(true) } },
+          {
+            label: 'Remove from class',
+            variant: 'destructive',
+            onClick: async () => {
+              const confirmed = await Modals.confirm({
+                title: 'Remove this product from the class?',
+                content: `${product.productName} will no longer be suggested for this class. The product itself will not be changed.`,
+                okText: 'Remove product', cancelText: 'Cancel', okButtonProps: { variant: 'destructive' },
+              })
+              if (!confirmed) return
+              try {
+                await removeClassTypeProductRequest(classTypeId, locationId, product.productId)
+                await queryClient.invalidateQueries({ queryKey: classProductsQueryKey })
+                toast.success('Product removed from this class.')
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Could not remove the product.')
+              }
+            },
+          },
+        ] : []}
+        loadingMessage="Loading class products..."
+        emptyMessage="No products are linked to this class. Link required items or gentle recommendations for the assistant."
+        errorMessage="Failed to load class products."
+        refetchOnMount="always"
+      />
       <RelatedEntityModule<ClassSchedule & Record<string, unknown>>
         id="module-schedules"
         title="Schedules"
@@ -244,5 +301,12 @@ export default function ClassTypePage() {
     <ClassTypeEditDrawer classType={editingClassType} open={Boolean(editingClassType)} onOpenChange={(open) => { if (!open) setEditingClassType(null) }} />
     <ClassScheduleCreateDrawer classType={editableClassType} open={isScheduleDrawerOpen} onOpenChange={setIsScheduleDrawerOpen} />
     <ClassScheduleEditDrawer schedule={editingSchedule} classType={editableClassType} locationId={locationId} open={Boolean(editingSchedule)} onOpenChange={(open) => { if (!open) setEditingSchedule(null) }} />
+    <ClassTypeProductDrawer
+      classTypeId={classTypeId}
+      locationId={locationId}
+      linkedProduct={editingClassProduct}
+      open={isClassProductDrawerOpen}
+      onOpenChange={(open) => { setIsClassProductDrawerOpen(open); if (!open) setEditingClassProduct(null) }}
+    />
   </>
 }
