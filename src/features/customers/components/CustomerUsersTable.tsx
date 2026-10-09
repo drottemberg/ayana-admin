@@ -18,11 +18,23 @@ const userColumns: ColumnDef<User>[] = [
   {
     id: 'fullName',
     header: 'Full name',
-    cell: ({ row }) => (
-      <Link to={`/users/${row.original.id}`} className="font-medium underline-offset-2 hover:underline">
-        {row.original.firstName} {row.original.lastName}
-      </Link>
-    ),
+    cell: ({ row }) => {
+      const name = [row.original.firstName, row.original.lastName]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(' ')
+      const label = name || String(row.original.id)
+
+      return (
+        <Link
+          to={`/users/${row.original.id}`}
+          title={label}
+          className={name ? 'font-medium underline-offset-2 hover:underline' : 'font-mono text-xs underline-offset-2 hover:underline'}
+        >
+          {label}
+        </Link>
+      )
+    },
   },
   {
     accessorKey: 'role',
