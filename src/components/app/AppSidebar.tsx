@@ -192,8 +192,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { pathname } = useLocation()
   const { session } = useConnect()
   const isAdminContext = getAppMode() === 'admin'
+  const staffRole = session?.user.staffRole
   const canManageLlmConfig = isAdminContext && session?.user.isStaff &&
-    [StaffRole.ADMIN, StaffRole.SUPER_ADMIN].includes(session.user.staffRole as StaffRole)
+    (staffRole === StaffRole.ADMIN || staffRole === StaffRole.SUPER_ADMIN)
   const hasFeature = React.useCallback((feature: Feature) => Boolean(session?.hasFeature(feature)), [session])
   const manageItems = React.useMemo(() => data.manage.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])

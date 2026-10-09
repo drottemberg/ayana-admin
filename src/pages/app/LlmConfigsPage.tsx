@@ -50,9 +50,10 @@ export default function LlmConfigsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingConfig, setEditingConfig] = useState<LlmConfig | null>(null)
   const [form, setForm] = useState<LlmConfigForm>(emptyForm)
+  const staffRole = session?.user.staffRole
 
   const canManage = getAppMode() === 'admin' && Boolean(session?.user.isStaff) &&
-    [StaffRole.ADMIN, StaffRole.SUPER_ADMIN].includes(session?.user.staffRole as StaffRole)
+    (staffRole === StaffRole.ADMIN || staffRole === StaffRole.SUPER_ADMIN)
 
   const saveMutation = useMutation({
     mutationFn: async (input: LlmConfigInput) => editingConfig
