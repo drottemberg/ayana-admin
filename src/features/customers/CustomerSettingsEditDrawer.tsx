@@ -182,6 +182,14 @@ export function CustomerSettingsEditDrawer({
           }
         }
         await updateCustomerMessagingConfigRequest(customerId, payload)
+        const savedConfig = await getCustomerMessagingConfigRequest(customerId)
+        const requestedPhone = typeof payload.whatsappBusinessPhoneNumber === 'string'
+          ? payload.whatsappBusinessPhoneNumber.trim()
+          : null
+        const savedPhone = savedConfig?.whatsappBusinessPhoneNumber?.trim() || null
+        if (savedPhone !== requestedPhone) {
+          throw new Error('The WhatsApp business phone number was not saved. Your form values are still here; please try again.')
+        }
       } else if (target.kind === 'prompt-profile') {
         const payload = Object.fromEntries(profileFields.map((field) => [field.key, values[field.key]?.trim() || null]))
         await updateCustomerPromptProfileRequest(customerId, payload)
