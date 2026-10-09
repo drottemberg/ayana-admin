@@ -21,6 +21,7 @@ type Target = { kind: CustomerSettingKind; location?: CustomerLocationPolicyRow 
 
 const messagingFields = [
   { key: 'whatsappPhoneNumberId', label: 'WhatsApp phone number ID' },
+  { key: 'whatsappBusinessPhoneNumber', label: 'WhatsApp business phone number (+33612345678)' },
   { key: 'whatsappBusinessAccountId', label: 'WhatsApp Business Account ID' },
   { key: 'whatsappAccessToken', label: 'WhatsApp access token', secret: true },
   { key: 'whatsappVerifyToken', label: 'WhatsApp verify token', secret: true },

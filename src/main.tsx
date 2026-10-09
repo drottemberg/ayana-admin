@@ -21,7 +21,7 @@ window.addEventListener('vite:preloadError', (event) => {
 
 const root = createRoot(document.getElementById('root')!)
 
-if (window.location.hostname.startsWith('order.')) {
+if (window.location.hostname.startsWith('order.') || window.location.hostname.startsWith('booking.')) {
   root.render(<App />)
 } else {
   root.render(

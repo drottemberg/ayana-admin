@@ -56,6 +56,7 @@ const DeviceGroupPage = lazy(() => import('@/pages/app/DeviceGroupPage'))
 const StoreGroupsPage = lazy(() => import('@/pages/app/StoreGroupsPage'))
 const StoreGroupPage = lazy(() => import('@/pages/app/StoreGroupPage'))
 const StorefrontPage = lazy(() => import('@/features/storefront/StorefrontPage').then((module) => ({ default: module.StorefrontPage })))
+const BookingPortalPage = lazy(() => import('@/features/booking-portal/BookingPortalPage').then((module) => ({ default: module.BookingPortalPage })))
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/store/:customerSlug/:locationSlug/success', element: <StorefrontPage /> },
       { path: '/store/:customerSlug/:locationSlug', element: <StorefrontPage /> },
+      { path: '/booking/:customerSlug/:locationSlug', element: <BookingPortalPage /> },
       {
         path: '/',
         element: (

@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client'
 
 export type CustomerMessagingConfig = {
   whatsappPhoneNumberId?: string | null
+  whatsappBusinessPhoneNumber?: string | null
   whatsappBusinessAccountId?: string | null
   telegramBotUsername?: string | null
   hasWhatsappAccessToken?: boolean
