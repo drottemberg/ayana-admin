@@ -113,6 +113,7 @@ export function CustomerSettingsEditDrawer({
   target: Target | null
 }) {
   const [values, setValues] = useState<Record<string, string>>({})
+  const [initialValues, setInitialValues] = useState<Record<string, string>>({})
   const [hasExistingSecret, setHasExistingSecret] = useState<Record<string, boolean>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -122,6 +123,7 @@ export function CustomerSettingsEditDrawer({
     let current = true
     setIsLoading(true)
     setValues({})
+    setInitialValues({})
     setHasExistingSecret({})
     const load = async () => {
       try {
@@ -134,6 +136,7 @@ export function CustomerSettingsEditDrawer({
           }
           if (current) {
             setValues(next)
+            setInitialValues(next)
             setHasExistingSecret({
               whatsappAccessToken: Boolean(config?.hasWhatsappAccessToken),
               whatsappVerifyToken: Boolean(config?.hasWhatsappVerifyToken),
@@ -150,11 +153,16 @@ export function CustomerSettingsEditDrawer({
               next[field.key] = typeof value === 'string' ? value : ''
             }
             setValues(next)
+            setInitialValues(next)
           }
         } else {
           const locations = await getCustomerLocationPoliciesRequest(customerId)
           const location = locations.find((item) => item.id === target.location?.id)
-          if (current) setValues(policyValues(location?.policy ?? target.location?.policy))
+          if (current) {
+            const next = policyValues(location?.policy ?? target.location?.policy)
+            setValues(next)
+            setInitialValues(next)
+          }
         }
       } catch (error) {
         if (current) toast.error(error instanceof Error ? error.message : 'Could not load customer settings.')
@@ -177,14 +185,14 @@ export function CustomerSettingsEditDrawer({
           const value = values[field.key]?.trim() ?? ''
           if ('secret' in field && field.secret) {
             if (value) payload[field.key] = value
-          } else {
+          } else if (value !== (initialValues[field.key]?.trim() ?? '')) {
             payload[field.key] = value || null
           }
         }
         await updateCustomerMessagingConfigRequest(customerId, payload)
         const savedConfig = await getCustomerMessagingConfigRequest(customerId)
         const canonicalPhone = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '')
-        const requestedPhone = typeof payload.whatsappBusinessPhoneNumber === 'string' ? payload.whatsappBusinessPhoneNumber.trim() : null
+        const requestedPhone = values.whatsappBusinessPhoneNumber?.trim() || null
         const savedPhone = savedConfig?.whatsappBusinessPhoneNumber?.trim() || null
         if (canonicalPhone(savedPhone) !== canonicalPhone(requestedPhone)) {
           throw new Error('The WhatsApp business phone number was not saved. Your form values are still here; please try again.')

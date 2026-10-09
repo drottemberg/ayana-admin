@@ -26,6 +26,17 @@ type ClassSession = {
   isWaitlist: boolean
 }
 
+type ClassProductOffer = {
+  id: string
+  name: string
+  description?: string | null
+  kind: 'REQUIRED' | 'RECOMMENDED'
+  category?: string | null
+  currency: string
+  variants: Array<{ id: string; label: string; price: number }>
+  orderUrl: string
+}
+
 type Schedule = {
   customer: { name: string; slug: string }
   location: { name: string; slug: string; timezone: string; whatsappNumber?: string | null }
@@ -41,7 +52,7 @@ type MemberState = {
   bookings: Array<{ bookingId: string; sessionId: string; status: 'CONFIRMED' | 'WAITLISTED' }>
 }
 
-type BookingResult = { bookingId: string; status: 'CONFIRMED' | 'WAITLISTED'; creditBalance: number; shortMessage: string }
+type BookingResult = { bookingId: string; status: 'CONFIRMED' | 'WAITLISTED'; creditBalance: number; shortMessage: string; relatedProducts?: ClassProductOffer[] }
 type PricingOffer = {
   id: string
   name: string
@@ -126,6 +137,7 @@ function BookingPortalRoute() {
   const [forcedOfferFlow, setForcedOfferFlow] = useState(false)
   const [checkoutUrls, setCheckoutUrls] = useState<Record<string, string>>({})
   const [purchasingOfferId, setPurchasingOfferId] = useState('')
+  const [bookingUpsell, setBookingUpsell] = useState<{ className: string; products: ClassProductOffer[] } | null>(null)
   const handledPaymentReturn = useRef('')
   const isFrench = language === 'fr'
 
@@ -316,6 +328,7 @@ function BookingPortalRoute() {
 
   const openBooking = (session: ClassSession) => {
     setBookingError('')
+    setBookingUpsell(null)
     setForcedOfferFlow(false)
     setSelectedAction('book')
     setCancellationQuote(null)
@@ -324,6 +337,7 @@ function BookingPortalRoute() {
 
   const openCancellation = async (session: ClassSession, bookingId: string) => {
     if (!member) return
+    setBookingUpsell(null)
     setSelected(session)
     setSelectedAction('cancel')
     setBookingError('')
@@ -388,10 +402,17 @@ function BookingPortalRoute() {
           isWaitlist: session.bookedCount + 1 >= session.capacity,
         } : session),
       } : current)
-      setNotice(payload.status === 'WAITLISTED'
-        ? (isFrench ? 'Tu es sur la liste d’attente. La confirmation a été envoyée sur tes canaux liés.' : 'You are on the waitlist. A confirmation was sent to your linked channels.')
-        : (isFrench ? 'Réservation confirmée. La confirmation a été envoyée sur tes canaux liés.' : 'Booking confirmed. A confirmation was sent to your linked channels.'))
-      setSelected(null)
+      const products = payload.status === 'CONFIRMED' ? payload.relatedProducts ?? [] : []
+      const hasBookingUpsell = products.length > 0
+      setNotice(hasBookingUpsell
+        ? ''
+        : payload.status === 'WAITLISTED'
+          ? (isFrench ? 'Tu es sur la liste d’attente. La confirmation a été envoyée sur tes canaux liés.' : 'You are on the waitlist. A confirmation was sent to your linked channels.')
+          : (isFrench ? 'Réservation confirmée. La confirmation a été envoyée sur tes canaux liés.' : 'Booking confirmed. A confirmation was sent to your linked channels.'))
+      setBookingUpsell(hasBookingUpsell
+        ? { className: selected.name, products }
+        : null)
+      if (!hasBookingUpsell) setSelected(null)
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : (isFrench ? 'La réservation a échoué. Réessaie.' : 'Booking failed. Please try again.')
       setBookingError(message)
@@ -492,10 +513,37 @@ function BookingPortalRoute() {
 
     {selected && <div className="booking-overlay" role="presentation" onClick={() => !submitting && setSelected(null)}><section className="booking-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title" onClick={(event) => event.stopPropagation()}>
       <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={submitting} onClick={() => setSelected(null)}>×</button>
-      <p className="booking-eyebrow">{selectedAction === 'cancel' ? (isFrench ? 'POLITIQUE D’ANNULATION' : 'CANCELLATION POLICY') : (isFrench ? 'RÉCAPITULATIF' : 'BOOKING SUMMARY')}</p>
-      <h2 id="booking-confirm-title">{selectedAction === 'cancel' ? (isFrench ? 'Annuler cette réservation ?' : 'Cancel this booking?') : (isFrench ? 'Confirmer ce cours ?' : 'Confirm this class?')}</h2>
+      <p className="booking-eyebrow">{bookingUpsell ? (isFrench ? 'RÉSERVATION CONFIRMÉE' : 'BOOKING CONFIRMED') : selectedAction === 'cancel' ? (isFrench ? 'POLITIQUE D’ANNULATION' : 'CANCELLATION POLICY') : (isFrench ? 'RÉCAPITULATIF' : 'BOOKING SUMMARY')}</p>
+      <h2 id="booking-confirm-title">{bookingUpsell ? (isFrench ? 'C’est réservé !' : 'You’re booked!') : selectedAction === 'cancel' ? (isFrench ? 'Annuler cette réservation ?' : 'Cancel this booking?') : (isFrench ? 'Confirmer ce cours ?' : 'Confirm this class?')}</h2>
       <div className="booking-recap"><strong>{selected.name}</strong><span>{formatDate(selected.localDate)} · {selected.localStartTime}–{selected.localEndTime}</span><span>{schedule?.location.name}</span>{selectedAction === 'book' && <span>{selected.creditCost} {isFrench ? 'crédit(s)' : 'credit(s)'}</span>}{selected.description && <p className="booking-recap-description">{selected.description}</p>}{selected.conditions && <p>{selected.conditions}</p>}</div>
-      {!member ? <div className="booking-auth-hint"><p>{isFrench ? 'Connecte-toi avec ton compte Ayana pour réserver ce cours.' : 'Sign in with your Ayana account to book this class.'}</p>{whatsappHref ? <a className="booking-whatsapp-cta" href={whatsappHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp' : 'Connect with WhatsApp'}<span>↗</span></a> : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>}</div>
+      {bookingUpsell ? <>
+        <p className="booking-upsell-confirmation">{isFrench ? 'La confirmation a été envoyée sur tes canaux liés. Pour ce cours, tu peux aussi apporter ces articles ou les acheter à la boutique du studio.' : 'Your confirmation was sent to your linked channels. You can bring these items for class or buy them from the studio shop.'}</p>
+        <section className="booking-class-products" aria-label={isFrench ? 'Produits associés au cours' : 'Products for this class'}>
+          <div className="booking-class-products-heading">
+            <p className="booking-eyebrow">{isFrench ? 'POUR TON COURS' : 'FOR YOUR CLASS'}</p>
+            <h2>{isFrench ? `À prévoir pour ${bookingUpsell.className}` : `For ${bookingUpsell.className}`}</h2>
+          </div>
+          <div className="booking-class-products-list">
+            {bookingUpsell.products.map((product) => {
+              const lowestPrice = Math.min(...product.variants.map((variant) => variant.price))
+              return <article className="booking-class-product" key={product.id}>
+                <div className="booking-class-product-copy">
+                  <span className={`booking-class-product-kind ${product.kind === 'REQUIRED' ? 'required' : ''}`}>
+                    {product.kind === 'REQUIRED' ? (isFrench ? 'Requis' : 'Required') : (isFrench ? 'Recommandé' : 'Recommended')}
+                  </span>
+                  <strong>{product.name}</strong>
+                  {product.description && <p>{product.description}</p>}
+                  {product.variants.length > 1 && <small>{isFrench ? 'Plusieurs formats disponibles' : 'Multiple options available'}</small>}
+                </div>
+                <div className="booking-class-product-action">
+                  <b>{isFrench ? 'À partir de ' : 'From '}{new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: product.currency || 'EUR' }).format(lowestPrice)}</b>
+                  <a href={product.orderUrl} target="_blank" rel="noreferrer">{isFrench ? 'Voir en boutique' : 'View in shop'}<span>↗</span></a>
+                </div>
+              </article>
+            })}
+          </div>
+        </section>
+      </> : !member ? <div className="booking-auth-hint"><p>{isFrench ? 'Connecte-toi avec ton compte Ayana pour réserver ce cours.' : 'Sign in with your Ayana account to book this class.'}</p>{whatsappHref ? <a className="booking-whatsapp-cta" href={whatsappHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp' : 'Connect with WhatsApp'}<span>↗</span></a> : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>}</div>
         : selectedAction === 'cancel' ? <div className="booking-cancellation-policy">
           {quoteLoading ? <p>{isFrench ? 'Vérification de la politique…' : 'Checking cancellation policy…'}</p> : cancellationQuote ? <>
             {cancellationQuote.isLate
@@ -525,7 +573,7 @@ function BookingPortalRoute() {
         </div>
         : <p className="booking-confirm-hint">{isFrench ? 'Ta réservation sera confirmée après validation.' : 'Your booking will be confirmed after you submit.'}</p>}
       {bookingError && <div className="booking-error" role="alert">{bookingError}</div>}
-      <div className="booking-sheet-actions"><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</div>
+      <div className={`booking-sheet-actions${bookingUpsell ? ' booking-sheet-actions-done' : ''}`}>{bookingUpsell ? <button type="button" className="booking-confirm" onClick={() => { setBookingUpsell(null); setSelected(null) }}>{isFrench ? 'Terminé' : 'Done'}</button> : <><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</>}</div>
     </section></div>}
   </main>
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import ayanaLogo from '@/assets/ayana-logo.png'
 import './storefront.css'
@@ -68,6 +68,7 @@ function StorefrontRoute() {
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
+  const handledProductLink = useRef('')
   const [submitting, setSubmitting] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
   const isFrench = language === 'fr'
@@ -177,6 +178,17 @@ function StorefrontRoute() {
     setSelectedOptions({})
     setOptionError('')
   }
+
+  useEffect(() => {
+    const productId = searchParams.get('productId')
+    if (!catalog || !productId || handledProductLink.current === productId) return
+    const product = catalog.products.find((item) => item.id === productId)
+    handledProductLink.current = productId
+    if (product) openProduct(product)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('productId')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [catalog, searchParams])
 
   const toggleOption = (group: ModifierGroup, option: ProductOption) => {
     setSelectedOptions((current) => {
