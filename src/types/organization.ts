@@ -35,6 +35,7 @@ export type OrganizationCounters = {
 export type Organization = {
   id: string
   name: string
+  slug?: string
   number?: string
   type: OrganizationType
   status?: OrganizationStatus

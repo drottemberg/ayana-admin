@@ -13,6 +13,7 @@ export type LocationFilterDimension = 'customer'
 
 export type CreateLocationPayload = {
   name: string
+  slug?: string
   customerId: string
   phone?: string
   email?: string

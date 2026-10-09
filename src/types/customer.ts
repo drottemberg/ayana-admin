@@ -4,6 +4,7 @@ export type Customer = Pick<
   Organization,
   | 'id'
   | 'name'
+  | 'slug'
   | 'email'
   | 'phone'
   | 'timezone'
@@ -26,7 +27,7 @@ export type Customer = Pick<
 
 export type CreateCustomerPayload = Pick<
   Customer,
-  'name' | 'email' | 'phone' | 'timezone' | 'currency' | 'description' | 'contactName' | 'contactEmail' | 'contactPhone'
+  'name' | 'slug' | 'email' | 'phone' | 'timezone' | 'currency' | 'description' | 'contactName' | 'contactEmail' | 'contactPhone'
 >
 
 export type { CreateStorePayload, Store } from '@/types/store'

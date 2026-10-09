@@ -19,15 +19,19 @@ window.addEventListener('vite:preloadError', (event) => {
   window.location.reload()
 })
 
-createRoot(document.getElementById('root')!).render(
-  // <StrictMode>
-  <QueryClientProvider client={queryClient}>
-    <AppSettingsProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </AppSettingsProvider>
-    <ReactQueryDevtools initialIsOpen={false} client={queryClient} buttonPosition='bottom-left' />
-  </QueryClientProvider>,
-  // </StrictMode>,
-)
+const root = createRoot(document.getElementById('root')!)
+
+if (window.location.hostname.startsWith('order.')) {
+  root.render(<App />)
+} else {
+  root.render(
+    <QueryClientProvider client={queryClient}>
+      <AppSettingsProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </AppSettingsProvider>
+      <ReactQueryDevtools initialIsOpen={false} client={queryClient} buttonPosition='bottom-left' />
+    </QueryClientProvider>,
+  )
+}

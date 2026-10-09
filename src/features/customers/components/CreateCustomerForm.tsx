@@ -20,6 +20,7 @@ import countries from 'world-countries'
 
 const customerFormSchema = z.object({
   name: z.string().trim().min(1, 'Customer name is required.'),
+  slug: z.string().optional(),
   email: z
     .string()
     .optional()
@@ -124,6 +125,7 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
     mode: 'onChange',
     defaultValues: {
       name: customer?.name ?? '',
+      slug: customer?.slug ?? '',
       email: customer?.email ?? '',
       phone: customer?.phone ?? '',
       timezone: customer?.timezone ?? '',
@@ -142,6 +144,7 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
   const submitForm = handleSubmit(async (values) => {
     const payload: CreateCustomerPayload = {
       name: values.name.trim(),
+      slug: values.slug?.trim() || undefined,
       email: values.email?.trim() || undefined,
       phone: values.phone ? normalizePhone(values.phone) : undefined,
       timezone: values.timezone?.trim() || undefined,
@@ -170,6 +173,12 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
           required
           error={errors.name?.message}
           {...register('name')}
+        />
+        <TextInput
+          label="Storefront URL slug"
+          placeholder="ayana-paris"
+          error={errors.slug?.message}
+          {...register('slug')}
         />
         <TextInput
           label="Email"

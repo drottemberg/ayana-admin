@@ -55,11 +55,14 @@ const DeviceGroupsPage = lazy(() => import('@/pages/app/DeviceGroupsPage'))
 const DeviceGroupPage = lazy(() => import('@/pages/app/DeviceGroupPage'))
 const StoreGroupsPage = lazy(() => import('@/pages/app/StoreGroupsPage'))
 const StoreGroupPage = lazy(() => import('@/pages/app/StoreGroupPage'))
+const StorefrontPage = lazy(() => import('@/features/storefront/StorefrontPage').then((module) => ({ default: module.StorefrontPage })))
 
 export const router = createBrowserRouter([
   {
     element: <RouterLayout />,
     children: [
+      { path: '/store/:customerSlug/:locationSlug/success', element: <StorefrontPage /> },
+      { path: '/store/:customerSlug/:locationSlug', element: <StorefrontPage /> },
       {
         path: '/',
         element: (

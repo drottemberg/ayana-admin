@@ -34,6 +34,7 @@ const optionalPhone = z
 
 const locationFormSchema = z.object({
   name: z.string().trim().min(1, 'Location name is required.'),
+  slug: z.string().optional(),
   customerId: z.string().trim().min(1, 'Customer is required.'),
   phone: optionalPhone,
   email: z
@@ -146,6 +147,7 @@ export function CreateLocationForm({
     mode: 'onChange',
     defaultValues: {
       name: location?.name ?? '',
+      slug: location?.slug ?? '',
       customerId: initialCustomerId ?? '',
       phone: location?.phone ?? '',
       email: location?.email ?? '',
@@ -164,6 +166,7 @@ export function CreateLocationForm({
     },
   })
   const countryId = useWatch({ control, name: 'countryId' })
+  const storefrontSlug = useWatch({ control, name: 'slug' })
   const stateItems = countryId
     ? State.getStatesOfCountry(countryId.toUpperCase())
         .map((state) => ({ value: state.isoCode, label: state.name }))
@@ -206,6 +209,7 @@ export function CreateLocationForm({
   const submitForm = handleSubmit(async (values) => {
     const payload: CreateLocationPayload = {
       name: values.name.trim(),
+      slug: values.slug?.trim() || undefined,
       customerId: values.customerId,
       phone: values.phone?.trim() || undefined,
       email: values.email?.trim() || undefined,
@@ -240,6 +244,12 @@ export function CreateLocationForm({
       <div className="min-h-0 flex-1 overflow-y-auto px-7 py-2">
         <FieldGroup className="gap-4">
           <TextInput label="Location name" required error={errors.name?.message} {...register('name')} />
+          <div>
+            <TextInput label="Storefront URL slug" placeholder="clichy" error={errors.slug?.message} {...register('slug')} />
+            <p className="mt-1 text-xs text-muted-foreground">
+              URL: order.ayana.club/{selectedCustomer?.slug || 'customer'}/{storefrontSlug || location?.slug || 'location'}
+            </p>
+          </div>
           <Controller
             control={control}
             name="customerId"
