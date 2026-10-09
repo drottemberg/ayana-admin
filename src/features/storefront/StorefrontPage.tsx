@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
-import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js'
 import ayanaLogo from '@/assets/ayana-logo.png'
 import './storefront.css'
 
@@ -14,6 +13,16 @@ type Product = { id: string; name: string; description?: string | null; category
 type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null }; currency: string; products: Product[] }
 type CartLine = { key: string; productId: string; name: string; variantId: string; variantLabel: string; unitPrice: number; quantity: number; modifierIds: string[]; modifierNames: string[]; modifierTotal: number }
 type Identity = { token?: string; firstName?: string; lastName?: string; email?: string; phone?: string }
+type StorefrontLanguage = 'fr' | 'en'
+const STORE_LANGUAGE_KEY = 'ayana-storefront-language'
+
+function readStorefrontLanguage(): StorefrontLanguage {
+  try {
+    const saved = localStorage.getItem(STORE_LANGUAGE_KEY)
+    if (saved === 'fr' || saved === 'en') return saved
+  } catch { /* use browser language when storage is unavailable */ }
+  return (navigator.languages?.[0] ?? navigator.language ?? 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr'
+}
 
 function sessionKey(customerSlug: string, locationSlug: string) {
   return `ayana-storefront-session:${customerSlug}:${locationSlug}`
@@ -37,8 +46,8 @@ function readCart(): CartLine[] {
   try { return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') as CartLine[] } catch { return [] }
 }
 
-function money(value: number, currency: string) {
-  return new Intl.NumberFormat(navigator.language || 'fr-FR', { style: 'currency', currency }).format(value)
+function money(value: number, currency: string, language: StorefrontLanguage) {
+  return new Intl.NumberFormat(language === 'fr' ? 'fr-FR' : 'en-GB', { style: 'currency', currency }).format(value)
 }
 
 function StorefrontRoute() {
@@ -46,6 +55,7 @@ function StorefrontRoute() {
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const [catalog, setCatalog] = useState<Catalog | null>(null)
+  const [language, setLanguage] = useState<StorefrontLanguage>(readStorefrontLanguage)
   const [whatsappReturnUrl, setWhatsappReturnUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -60,30 +70,21 @@ function StorefrontRoute() {
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
   const [submitting, setSubmitting] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
-  const [firstName, setFirstName] = useState(identity.firstName ?? '')
-  const [lastName, setLastName] = useState(identity.lastName ?? '')
-  const [email, setEmail] = useState(identity.email ?? '')
-  const [phone, setPhone] = useState('')
-  const [verificationId, setVerificationId] = useState('')
-  const [verificationCode, setVerificationCode] = useState('')
-  const [verificationEmail, setVerificationEmail] = useState('')
-  const [country, setCountry] = useState<CountryCode>(() => {
-    const region = navigator.language?.split('-')[1]?.toUpperCase()
-    return region && getCountries().includes(region as CountryCode) ? region as CountryCode : 'FR'
-  })
+  const isFrench = language === 'fr'
+  const tr = (fr: string, en: string) => isFrench ? fr : en
+  const changeLanguage = (nextLanguage: StorefrontLanguage) => {
+    setLanguage(nextLanguage)
+    try { localStorage.setItem(STORE_LANGUAGE_KEY, nextLanguage) } catch { /* language still changes for this visit */ }
+  }
   const storeBasePath = location.pathname.startsWith('/store/') ? `/store/${customerSlug}/${locationSlug}` : `/${customerSlug}/${locationSlug}`
-  const whatsappHref = whatsappLink(catalog?.location.whatsappNumber, `Connecte-moi à la boutique pour commander à emporter chez ${catalog?.location.name ?? 'Ayana'}.`)
+  const whatsappMessage = isFrench
+    ? `Connecte-moi à la boutique pour commander à emporter chez ${catalog?.location.name ?? 'Ayana'}.`
+    : `Connect me to the shop to order takeaway from ${catalog?.location.name ?? 'Ayana'}.`
+  const whatsappHref = whatsappLink(catalog?.location.whatsappNumber, whatsappMessage)
 
   const logout = () => {
     try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory identity even if storage is unavailable */ }
     setIdentity({})
-    setFirstName('')
-    setLastName('')
-    setEmail('')
-    setPhone('')
-    setVerificationId('')
-    setVerificationCode('')
-    setVerificationEmail('')
     setCheckoutError('')
   }
 
@@ -102,11 +103,11 @@ function StorefrontRoute() {
     setLoading(true)
     fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`)
       .then(async (response) => {
-        if (!response.ok) throw new Error(response.status === 404 ? 'Cette boutique est introuvable.' : 'Impossible de charger la boutique.')
+        if (!response.ok) throw new Error(response.status === 404 ? tr('Cette boutique est introuvable.', 'This shop could not be found.') : tr('Impossible de charger la boutique.', 'Could not load the shop.'))
         return await response.json() as Catalog
       })
       .then((result) => { if (active) { setCatalog(result); setError('') } })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'Une erreur est survenue.') })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : tr('Une erreur est survenue.', 'Something went wrong.')) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [customerSlug, locationSlug])
@@ -115,7 +116,9 @@ function StorefrontRoute() {
     if (!location.pathname.endsWith('/success')) return
     const key = whatsappReturnKey(customerSlug, locationSlug)
     const code = searchParams.get('code')
-    const message = `Bonjour, je viens de terminer le paiement de ma commande${code ? ` #${code}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
+    const message = isFrench
+      ? `Bonjour, je viens de terminer le paiement de ma commande${code ? ` #${code}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
+      : `Hello, I have just completed payment for my order${code ? ` #${code}` : ''} at ${catalog?.location.name ?? 'Ayana'}.`
     let storedUrl = ''
     try { storedUrl = sessionStorage.getItem(key) ?? '' } catch { /* build a fresh link from the catalog if available */ }
     const returnUrl = storedUrl || whatsappLink(catalog?.location.whatsappNumber, message)
@@ -126,7 +129,7 @@ function StorefrontRoute() {
       try { sessionStorage.removeItem(key) } catch { /* the return link can expire naturally with the tab */ }
     }, 900)
     return () => window.clearTimeout(redirect)
-  }, [catalog, customerSlug, location.pathname, locationSlug, searchParams])
+  }, [catalog, customerSlug, isFrench, location.pathname, locationSlug, searchParams])
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -140,26 +143,23 @@ function StorefrontRoute() {
     fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/session`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }),
     }).then(async (response) => {
-      if (!response.ok) throw new Error('Le lien personnalisé a expiré. Tu peux poursuivre avec tes coordonnées.')
+      if (!response.ok) throw new Error(tr('Le lien personnalisé a expiré. Tu peux poursuivre avec tes coordonnées.', 'Your personal link has expired. You can continue with your contact details.'))
       return await response.json() as { storeToken: string; identity: Omit<Identity, 'token'> }
     }).then((session) => {
       const next = { ...session.identity, token: session.storeToken }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(next))
       setIdentity(next)
-      setFirstName(next.firstName ?? '')
-      setLastName(next.lastName ?? '')
-      setEmail(next.email ?? '')
     }).catch((reason: unknown) => {
-      setCheckoutError(reason instanceof Error ? reason.message : 'Le lien personnalisé a expiré.')
+      setCheckoutError(reason instanceof Error ? reason.message : tr('Le lien personnalisé a expiré.', 'Your personal link has expired.'))
     })
-  }, [customerSlug, locationSlug])
+  }, [customerSlug, isFrench, locationSlug])
 
   useEffect(() => {
     if (searchParams.get('payment') === 'cancelled') {
-      setCheckoutError('Le paiement n’a pas été terminé. Votre panier est toujours là.')
+      setCheckoutError(tr('Le paiement n’a pas été terminé. Votre panier est toujours là.', 'Payment was not completed. Your cart is still here.'))
       setCheckoutOpen(true)
     }
-  }, [searchParams])
+  }, [isFrench, searchParams])
 
   const categories = useMemo(() => ['Tout', ...new Set(catalog?.products.map((product) => product.category) ?? [])], [catalog])
   const visibleProducts = useMemo(() => catalog?.products.filter((product) => category === 'Tout' || product.category === category) ?? [], [catalog, category])
@@ -217,7 +217,8 @@ function StorefrontRoute() {
 
   const startCheckout = () => {
     setCheckoutError('')
-    setIdentity(readIdentity(customerSlug, locationSlug))
+    const savedIdentity = readIdentity(customerSlug, locationSlug)
+    setIdentity(savedIdentity)
     setCheckoutOpen(true)
     setCartOpen(false)
   }
@@ -225,164 +226,130 @@ function StorefrontRoute() {
   const submitCheckout = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setCheckoutError('')
-    let e164 = identity.token ? identity.phone : ''
-    let checkoutIdentity = identity
     if (!identity.token) {
-      const parsed = parsePhoneNumberFromString(phone, country)
-      if (!parsed?.isValid()) { setCheckoutError('Vérifie le numéro de téléphone et son indicatif.'); return }
-      e164 = parsed.number
-      if (!firstName.trim() || !email.trim()) { setCheckoutError('Renseigne ton prénom et ton adresse e-mail.'); return }
+      setCheckoutError(tr('Connecte-toi avec WhatsApp pour commander avec ton compte Ayana.', 'Connect with WhatsApp to order using your Ayana account.'))
+      return
     }
     setSubmitting(true)
     try {
-      if (!checkoutIdentity.token) {
-        const identityUrl = `${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`
-        const identityResponse = verificationId
-          ? await fetch(`${identityUrl}/verify-identity`, {
-              method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ verificationId, code: verificationCode, phone: e164 }),
-            })
-          : await fetch(`${identityUrl}/identity`, {
-              method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: e164, language: navigator.language?.slice(0, 2) || 'fr' }),
-            })
-        const identityPayload = await identityResponse.json().catch(() => ({})) as {
-          requiresVerification?: boolean; verificationId?: string; maskedEmail?: string; storeToken?: string;
-          identity?: Omit<Identity, 'token'>; message?: string | string[]
-        }
-        if (!identityResponse.ok) {
-          const message = Array.isArray(identityPayload.message) ? identityPayload.message.join(' ') : identityPayload.message
-          throw new Error(message || 'Impossible de vérifier tes coordonnées.')
-        }
-        if (identityPayload.requiresVerification) {
-          setVerificationId(identityPayload.verificationId ?? '')
-          setVerificationEmail(identityPayload.maskedEmail ?? email)
-          setCheckoutError(`Un code de vérification vient d’être envoyé à ${identityPayload.maskedEmail ?? email}.`)
-          setSubmitting(false)
-          return
-        }
-        if (!identityPayload.storeToken) throw new Error('La vérification de ton identité n’a pas abouti. Réessaie.')
-        checkoutIdentity = { ...identityPayload.identity, token: identityPayload.storeToken }
-        localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(checkoutIdentity))
-        setIdentity(checkoutIdentity)
-      }
       const response = await fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/checkout`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          token: checkoutIdentity.token,
-          firstName: checkoutIdentity.firstName ?? firstName.trim(),
-          lastName: checkoutIdentity.lastName ?? lastName.trim(),
-          email: checkoutIdentity.email ?? email.trim(),
-          phone: e164,
-          language: navigator.language?.slice(0, 2) || 'fr',
+          token: identity.token,
+          language,
           items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity, modifierIds: line.modifierIds })),
         }),
       })
       const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; storeToken?: string; orderId?: string; shortCode?: string; message?: string | string[] }
       if (!response.ok || !payload.checkoutUrl) {
         const message = Array.isArray(payload.message) ? payload.message.join(' ') : payload.message
-        throw new Error(message || 'Impossible de préparer le paiement. Vérifie le panier et réessaie.')
+        throw new Error(message || tr('Impossible de préparer le paiement. Vérifie le panier et réessaie.', 'Could not prepare payment. Check your cart and try again.'))
       }
       const nextIdentity = {
-        token: payload.storeToken ?? checkoutIdentity.token,
-        firstName: checkoutIdentity.firstName || firstName.trim(),
-        lastName: checkoutIdentity.lastName || lastName.trim(),
-        email: checkoutIdentity.email || email.trim(),
-        phone: checkoutIdentity.phone || e164,
+        ...identity,
+        token: payload.storeToken ?? identity.token,
       }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
-      const returnMessage = `Bonjour, je viens de terminer le paiement de ma commande${payload.shortCode ? ` #${payload.shortCode}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
+      const returnMessage = isFrench
+        ? `Bonjour, je viens de terminer le paiement de ma commande${payload.shortCode ? ` #${payload.shortCode}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
+        : `Hello, I have just completed payment for my order${payload.shortCode ? ` #${payload.shortCode}` : ''} at ${catalog?.location.name ?? 'Ayana'}.`
       const returnUrl = whatsappLink(catalog?.location.whatsappNumber, returnMessage)
       if (returnUrl) {
         try { sessionStorage.setItem(whatsappReturnKey(customerSlug, locationSlug), returnUrl) } catch { /* the success page can rebuild this URL from the catalog */ }
       }
       window.location.assign(payload.checkoutUrl)
     } catch (reason) {
-      setCheckoutError(reason instanceof Error ? reason.message : 'Une erreur est survenue. Réessaie.')
+      setCheckoutError(reason instanceof Error ? reason.message : tr('Une erreur est survenue. Réessaie.', 'Something went wrong. Please try again.'))
       setSubmitting(false)
     }
   }
 
   if (location.pathname.endsWith('/success')) {
-    return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">Commande Ayana</p><h1>Merci pour ta commande&nbsp;!</h1><p>Ton paiement est en cours de confirmation. Tu vas retourner sur WhatsApp pour retrouver la conversation avec l’équipe Ayana.</p>{searchParams.get('code') && <strong className="success-code">{searchParams.get('code')}</strong>}{whatsappReturnUrl && <a className="store-primary" href={whatsappReturnUrl}>Retourner sur WhatsApp <span>↗</span></a>}<a className="store-secondary-link" href={storeBasePath}>Retour à la boutique</a></section></main>
+    return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">{tr('Commande Ayana', 'Ayana order')}</p><h1>{tr('Merci pour ta commande !', 'Thank you for your order!')}</h1><p>{tr('Ton paiement est en cours de confirmation. Tu vas retourner sur WhatsApp pour retrouver la conversation avec l’équipe Ayana.', 'Your payment is being confirmed. You will return to WhatsApp to continue your conversation with the Ayana team.')}</p>{searchParams.get('code') && <strong className="success-code">{searchParams.get('code')}</strong>}{whatsappReturnUrl && <a className="store-primary" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} <span>↗</span></a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a></section></main>
   }
 
-  if (loading) return <main className="ayana-store"><div className="store-loading"><span className="store-spinner" />Ouverture de la boutique…</div></main>
-  if (error || !catalog) return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></header><section className="store-empty"><h1>Boutique indisponible</h1><p>{error || 'Cette boutique ne peut pas être affichée pour le moment.'}</p></section></main>
+  if (loading) return <main className="ayana-store"><div className="store-loading"><span className="store-spinner" />{tr('Ouverture de la boutique…', 'Opening the shop…')}</div></main>
+  if (error || !catalog) return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-empty"><h1>{tr('Boutique indisponible', 'Shop unavailable')}</h1><p>{error || tr('Cette boutique ne peut pas être affichée pour le moment.', 'This shop is currently unavailable.')}</p></section></main>
 
   return (
     <main className="ayana-store">
-      <header className="store-topbar"><a className="ayana-logo-link" href={storeBasePath}><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></a><button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label="Ouvrir le panier">Panier <b>{totalCount}</b></button></header>
+      <header className="store-topbar"><a className="ayana-logo-link" href={storeBasePath}><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></a><LanguageSelector language={language} onChange={changeLanguage} /><button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label={tr('Ouvrir le panier', 'Open cart')}>{tr('Panier', 'Cart')} <b>{totalCount}</b></button></header>
       <section className="store-hero">
         <p className="store-eyebrow">{catalog.location.name}</p>
-        <h1>Un peu de douceur,<br /><em>à emporter.</em></h1>
-        <p>Café, matcha et essentiels Ayana. Choisis, personnalise, puis règle ta commande en toute simplicité.</p>
+        <h1>{isFrench ? <>Un peu de douceur,<br /><em>à emporter.</em></> : <>A little something<br /><em>to take away.</em></>}</h1>
+        <p>{tr('Café, matcha et essentiels Ayana. Choisis, personnalise, puis règle ta commande en toute simplicité.', 'Coffee, matcha and Ayana essentials. Choose your items, customise them, then check out with ease.')}</p>
         <span className="hero-sun" aria-hidden="true">✳</span>
       </section>
       {identity.token
-        ? <section className="store-account-card"><div><span>Connecté·e</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div><button type="button" className="store-account-logout" onClick={logout} aria-label="Se déconnecter" title="Se déconnecter">↪</button></section>
-        : whatsappHref && <section className="store-account-card store-account-login"><div><strong>Commande avec ton compte Ayana</strong></div><a className="store-login-cta" href={whatsappHref} target="_blank" rel="noreferrer">Se connecter avec WhatsApp <span>↗</span></a></section>}
+        ? <section className="store-account-card"><div><span>{tr('Connecté·e', 'Signed in')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div><button type="button" className="store-account-logout" onClick={logout} aria-label={tr('Se déconnecter', 'Log out')} title={tr('Se déconnecter', 'Log out')}>↪</button></section>
+        : whatsappHref && <section className="store-account-card store-account-login"><div><strong>{tr('Commande avec ton compte Ayana', 'Order with your Ayana account')}</strong></div><a className="store-login-cta" href={whatsappHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp', 'Connect with WhatsApp')} <span>↗</span></a></section>}
       {checkoutError && !checkoutOpen && <div className="store-notice">{checkoutError}</div>}
-      <nav className="store-categories" aria-label="Catégories">
-        {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}
+      <nav className="store-categories" aria-label={tr('Catégories', 'Categories')}>
+        {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item === 'Tout' ? tr('Tout', 'All') : item}</button>)}
       </nav>
       <section className="store-products">
         {visibleProducts.map((product, index) => {
-          const startPrice = Math.min(...product.variants.filter((variant) => variant.available).map((variant) => variant.price))
+          const availablePrices = product.variants.filter((variant) => variant.available).map((variant) => variant.price)
+          const startPrice = availablePrices.length ? Math.min(...availablePrices) : Number.POSITIVE_INFINITY
           return <button className="store-product" key={product.id} onClick={() => openProduct(product)}>
             <span className={`product-art art-${index % 4}`}>{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <span>{product.category.toLowerCase().includes('good') ? '✳' : '◌'}</span>}</span>
-            <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}<span className="product-buy">{Number.isFinite(startPrice) ? `À partir de ${money(startPrice, currency)}` : 'Indisponible'} <b aria-hidden="true">＋</b></span></span>
+            <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}<span className="product-buy">{Number.isFinite(startPrice) ? `${tr('À partir de', 'From')} ${money(startPrice, currency, language)}` : tr('Indisponible', 'Unavailable')} <b aria-hidden="true">＋</b></span></span>
           </button>
         })}
-        {!visibleProducts.length && <div className="store-empty"><h2>Aucun article disponible</h2><p>La sélection de cette catégorie arrive bientôt.</p></div>}
+        {!visibleProducts.length && <div className="store-empty"><h2>{tr('Aucun article disponible', 'No items available')}</h2><p>{tr('La sélection de cette catégorie arrive bientôt.', 'Items in this category will be available soon.')}</p></div>}
       </section>
       <footer className="store-footer"><span>AYANA FEELNESS CLUB</span><span>{catalog.location.name}</span></footer>
 
-      {totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>Voir mon panier <small>{totalCount} article{totalCount > 1 ? 's' : ''}</small></span><b>{money(total, currency)}　→</b></button>}
+      {totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>{tr('Voir mon panier', 'View my cart')} <small>{totalCount} {tr(totalCount > 1 ? 'articles' : 'article', totalCount > 1 ? 'items' : 'item')}</small></span><b>{money(total, currency, language)}　→</b></button>}
 
       {selectedProduct && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedProduct(null) }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
-        <button className="sheet-close" onClick={() => setSelectedProduct(null)} aria-label="Fermer">×</button><p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
-        {selectedProduct.variants.length > 1 && <fieldset className="option-section"><legend>Choisis ton format</legend>{selectedProduct.variants.map((variant) => <button type="button" key={variant.id} disabled={!variant.available} onClick={() => setVariantId(variant.id)} className={`option-choice ${variantId === variant.id ? 'chosen' : ''}`}><span>{variant.label}</span><b>{variant.available ? money(variant.price, currency) : 'Épuisé'}</b></button>)}</fieldset>}
-        {selectedProduct.modifierGroups.map((group) => <fieldset className="option-section" key={group.id}><legend>{group.name}{group.required || group.minSelect > 0 ? <small> · obligatoire</small> : <small> · au choix</small>}</legend>{group.options.map((option) => <button type="button" key={option.id} className={`option-choice ${(selectedOptions[group.id] ?? []).includes(option.id) ? 'chosen' : ''}`} onClick={() => toggleOption(group, option)}><span>{option.name}</span><b>{option.price ? `+ ${money(option.price, currency)}` : 'Inclus'}</b></button>)}</fieldset>)}
-        {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>Ajouter au panier</span><b>{money(selectedUnitPrice, currency)}</b></button>
+        <button className="sheet-close" onClick={() => setSelectedProduct(null)} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
+        {selectedProduct.variants.length > 1 && <fieldset className="option-section"><legend>{tr('Choisis ton format', 'Choose a size')}</legend>{selectedProduct.variants.map((variant) => <button type="button" key={variant.id} disabled={!variant.available} onClick={() => setVariantId(variant.id)} className={`option-choice ${variantId === variant.id ? 'chosen' : ''}`}><span>{variant.label}</span><b>{variant.available ? money(variant.price, currency, language) : tr('Épuisé', 'Sold out')}</b></button>)}</fieldset>}
+        {selectedProduct.modifierGroups.map((group) => <fieldset className="option-section" key={group.id}><legend>{group.name}{group.required || group.minSelect > 0 ? <small> · {tr('obligatoire', 'required')}</small> : <small> · {tr('au choix', 'optional')}</small>}</legend>{group.options.map((option) => <button type="button" key={option.id} className={`option-choice ${(selectedOptions[group.id] ?? []).includes(option.id) ? 'chosen' : ''}`} onClick={() => toggleOption(group, option)}><span>{option.name}</span><b>{option.price ? `+ ${money(option.price, currency, language)}` : tr('Inclus', 'Included')}</b></button>)}</fieldset>)}
+        {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>{tr('Ajouter au panier', 'Add to cart')}</span><b>{money(selectedUnitPrice, currency, language)}</b></button>
       </section></div>}
 
-      {cartOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label="Ton panier">
-        <button className="sheet-close" onClick={() => setCartOpen(false)} aria-label="Fermer">×</button><p className="store-eyebrow">Ta sélection</p><h2>Ton panier</h2>
-        {!cart.length ? <div className="store-empty"><p>Ton panier est vide.</p><button className="store-text-button" onClick={() => setCartOpen(false)}>Continuer mes achats</button></div> : <>
-          <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><div><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><b>{money(line.unitPrice * line.quantity, currency)}</b></div><div className="quantity-picker"><button onClick={() => updateQuantity(line.key, -1)} aria-label="Retirer un article">−</button><span>{line.quantity}</span><button onClick={() => updateQuantity(line.key, 1)} aria-label="Ajouter un article">＋</button></div></article>)}</div>
-          <div className="cart-total"><span>Total</span><b>{money(total, currency)}</b></div><p className="cart-note">Le retrait se fait au Feelness Bar de {catalog.location.name}.</p><button className="store-primary" onClick={startCheckout}>Continuer <span>→</span></button>
+      {cartOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={tr('Ton panier', 'Your cart')}>
+        <button className="sheet-close" onClick={() => setCartOpen(false)} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{tr('Ta sélection', 'Your selection')}</p><h2>{tr('Ton panier', 'Your cart')}</h2>
+        {!cart.length ? <div className="store-empty"><p>{tr('Ton panier est vide.', 'Your cart is empty.')}</p><button className="store-text-button" onClick={() => setCartOpen(false)}>{tr('Continuer mes achats', 'Continue shopping')}</button></div> : <>
+          <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><div><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><b>{money(line.unitPrice * line.quantity, currency, language)}</b></div><div className="quantity-picker"><button onClick={() => updateQuantity(line.key, -1)} aria-label={tr('Retirer un article', 'Remove one item')}>−</button><span>{line.quantity}</span><button onClick={() => updateQuantity(line.key, 1)} aria-label={tr('Ajouter un article', 'Add one item')}>＋</button></div></article>)}</div>
+          <div className="cart-total"><span>{tr('Total', 'Total')}</span><b>{money(total, currency, language)}</b></div><p className="cart-note">{tr(`Le retrait se fait au Feelness Bar de ${catalog.location.name}.`, `Pickup is at the Feelness Bar in ${catalog.location.name}.`)}</p><button className="store-primary" onClick={startCheckout}>{tr('Continuer', 'Continue')} <span>→</span></button>
         </>}
       </section></div>}
 
-      {checkoutOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setCheckoutOpen(false) }}><section className="store-sheet checkout-sheet" role="dialog" aria-modal="true" aria-label="Coordonnées et paiement">
-        <button className="sheet-close" onClick={() => setCheckoutOpen(false)} aria-label="Fermer" disabled={submitting}>×</button><p className="store-eyebrow">Dernière étape</p><h2>Où te retrouver&nbsp;?</h2><p className="sheet-description">Nous utilisons ces coordonnées pour le reçu et pour te prévenir quand ta commande est prête.</p>
+      {checkoutOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setCheckoutOpen(false) }}><section className="store-sheet checkout-sheet" role="dialog" aria-modal="true" aria-label={identity.token ? tr('Paiement', 'Payment') : tr('Connexion WhatsApp', 'WhatsApp sign-in')}>
+        <button className="sheet-close" onClick={() => setCheckoutOpen(false)} aria-label={tr('Fermer', 'Close')} disabled={submitting}>×</button>
+        <p className="store-eyebrow">{tr('Ta commande', 'Your order')}</p>
         {checkoutError && <p className="store-form-error">{checkoutError}</p>}
-        <form className="store-checkout-form" onSubmit={submitCheckout}>
-          {!identity.token && !verificationId && <>
-            <label>Prénom<input required autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
-            <label>Nom <span>(facultatif)</span><input autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
-            <label>E-mail<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-            <label>Téléphone
-              <span className="phone-field"><select aria-label="Indicatif pays" value={country} onChange={(event) => setCountry(event.target.value as CountryCode)}>{getCountries().map((code) => <option key={code} value={code}>+{getCountryCallingCode(code)} · {code}</option>)}</select><input required type="tel" autoComplete="tel-national" placeholder="6 12 34 56 78" value={phone} onChange={(event) => setPhone(event.target.value)} /></span>
-            </label>
-          </>}
-          {!identity.token && verificationId && <>
-            <div className="saved-identity"><span>Vérification de ton compte Ayana</span><strong>Code envoyé à {verificationEmail}</strong><small>Le code est valable 10 minutes. Il permet de rattacher cette commande à ton compte.</small></div>
-            <label>Code reçu par e-mail<input required inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
-            <button type="button" className="store-text-button" onClick={() => { setVerificationId(''); setVerificationCode(''); setCheckoutError('') }}>Modifier mes coordonnées</button>
-          </>}
-          {identity.token && <div className="saved-identity"><span>Commande pour</span><strong>{identity.firstName} {identity.lastName}</strong><small>{identity.email} · {identity.phone}</small></div>}
-          <div className="checkout-total"><span>À payer</span><b>{money(total, currency)}</b></div>
-          <button className="store-primary" disabled={submitting}>{submitting ? 'Préparation du paiement…' : verificationId && !identity.token ? 'Vérifier et continuer' : 'Payer en toute sécurité'} <span>→</span></button>
-          <p className="secure-note">Paiement sécurisé par Stripe. La commande est confirmée après validation du paiement.</p>
-        </form>
+        {!identity.token ? <>
+          <h2>{tr('Connecte-toi avec WhatsApp', 'Connect with WhatsApp')}</h2>
+          <p className="sheet-description">{tr('Pour commander avec ton compte Ayana, demande ton lien personnel sur WhatsApp. Reviens ensuite ici pour régler ta commande.', 'To order with your Ayana account, request your personal link on WhatsApp. Then return here to pay.')}</p>
+          {whatsappHref
+            ? <a className="store-primary store-whatsapp-login" href={whatsappHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp', 'Connect with WhatsApp')} <span>↗</span></a>
+            : <p className="store-form-error">{tr('WhatsApp n’est pas configuré pour cette boutique.', 'WhatsApp is not configured for this shop.')}</p>}
+          <p className="secure-note">{tr('Après connexion, reviens sur cette page : ton panier sera toujours là.', 'After signing in, return to this page. Your cart will still be here.')}</p>
+        </> : <>
+          <h2>{tr('Paiement de la commande', 'Order payment')}</h2>
+          <div className="saved-identity"><span>{tr('Compte Ayana connecté', 'Ayana account connected')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div>
+          <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
+          <p className="secure-note">{tr('Stripe te demandera l’e-mail pour le reçu. Le paiement est sécurisé et la commande sera confirmée après validation.', 'Stripe will collect the email for your receipt. Payment is secure, and your order will be confirmed once payment is complete.')}</p>
+          <form className="store-checkout-form" onSubmit={submitCheckout}>
+            <button className="store-primary" disabled={submitting}>{submitting ? tr('Préparation du paiement…', 'Preparing payment…') : tr('Payer en toute sécurité', 'Pay securely')} <span>→</span></button>
+          </form>
+        </>}
       </section></div>}
     </main>
   )
 }
 
 export function StorefrontPage() { return <StorefrontRoute /> }
+
+function LanguageSelector({ language, onChange }: { language: StorefrontLanguage; onChange: (language: StorefrontLanguage) => void }) {
+  return <div className="store-language" role="group" aria-label={language === 'fr' ? 'Langue' : 'Language'}>
+    <button type="button" aria-pressed={language === 'fr'} className={language === 'fr' ? 'active' : ''} onClick={() => onChange('fr')}>FR</button>
+    <button type="button" aria-pressed={language === 'en'} className={language === 'en' ? 'active' : ''} onClick={() => onChange('en')}>EN</button>
+  </div>
+}
 
 export function StorefrontApp() {
   return <BrowserRouter><Routes><Route path="/:customerSlug/:locationSlug/success" element={<StorefrontRoute />} /><Route path="/:customerSlug/:locationSlug" element={<StorefrontRoute />} /><Route path="*" element={<main className="ayana-store"><section className="store-empty"><h1>Boutique Ayana</h1><p>Le lien de la boutique est incomplet.</p></section></main>} /></Routes></BrowserRouter>

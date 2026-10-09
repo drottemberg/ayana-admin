@@ -21,7 +21,7 @@ type Target = { kind: CustomerSettingKind; location?: CustomerLocationPolicyRow 
 
 const messagingFields = [
   { key: 'whatsappPhoneNumberId', label: 'WhatsApp phone number ID' },
-  { key: 'whatsappBusinessPhoneNumber', label: 'WhatsApp business phone number (+33612345678)' },
+  { key: 'whatsappBusinessPhoneNumber', label: 'WhatsApp business phone number (+33612345678)', type: 'tel' },
   { key: 'whatsappBusinessAccountId', label: 'WhatsApp Business Account ID' },
   { key: 'whatsappAccessToken', label: 'WhatsApp access token', secret: true },
   { key: 'whatsappVerifyToken', label: 'WhatsApp verify token', secret: true },
@@ -183,11 +183,10 @@ export function CustomerSettingsEditDrawer({
         }
         await updateCustomerMessagingConfigRequest(customerId, payload)
         const savedConfig = await getCustomerMessagingConfigRequest(customerId)
-        const requestedPhone = typeof payload.whatsappBusinessPhoneNumber === 'string'
-          ? payload.whatsappBusinessPhoneNumber.trim()
-          : null
+        const canonicalPhone = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '')
+        const requestedPhone = typeof payload.whatsappBusinessPhoneNumber === 'string' ? payload.whatsappBusinessPhoneNumber.trim() : null
         const savedPhone = savedConfig?.whatsappBusinessPhoneNumber?.trim() || null
-        if (savedPhone !== requestedPhone) {
+        if (canonicalPhone(savedPhone) !== canonicalPhone(requestedPhone)) {
           throw new Error('The WhatsApp business phone number was not saved. Your form values are still here; please try again.')
         }
       } else if (target.kind === 'prompt-profile') {

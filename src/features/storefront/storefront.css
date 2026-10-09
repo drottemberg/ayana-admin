@@ -18,6 +18,10 @@
 .store-topbar { position: sticky; z-index: 5; top: 0; display: flex; align-items: center; gap: 10px; height: 68px; padding: 12px 0; color: var(--store-clay); background: var(--store-ivory); border-bottom: 1px solid rgba(166,56,28,.16); font-size: 10px; letter-spacing: .24em; }
 .ayana-logo-link { display: inline-flex; align-items: center; }.ayana-logo { display: block; width: 116px; height: auto; }.store-topbar > .ayana-logo { width: 116px; }
 .store-cart-top { margin-left: auto; border: 0; background: transparent; color: var(--store-espresso); font: inherit; font-size: 13px; letter-spacing: 0; }
+.store-language { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; border: 1px solid var(--store-line); border-radius: 999px; letter-spacing: 0; }
+.store-language button { min-width: 31px; height: 27px; padding: 0 6px; border: 0; border-radius: 999px; color: var(--store-muted); background: transparent; font: inherit; font-size: 10px; font-weight: 700; }
+.store-language button.active { color: #fff; background: var(--store-clay); }
+.store-language button:focus-visible { outline: 2px solid var(--store-clay); outline-offset: 2px; }
 .store-cart-top b { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 5px; border-radius: 50%; color: white; background: var(--store-clay); }
 .store-hero { position: relative; overflow: hidden; margin: 20px -20px 0; padding: 34px 24px 32px; background: var(--store-paper); border-radius: 0 0 28px 28px; }
 .store-eyebrow { margin: 0 0 10px; color: var(--store-clay); font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
