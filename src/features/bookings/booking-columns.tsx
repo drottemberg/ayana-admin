@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import type { Booking } from '@/types/booking'
 
-export function getBookingColumns(options: { showCustomer?: boolean; showLocation?: boolean } = {}): ColumnDef<Booking>[] {
+export function getBookingColumns(options: { showUser?: boolean; showCustomer?: boolean; showLocation?: boolean } = {}): ColumnDef<Booking>[] {
   return [
     { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.status.replaceAll('_', ' ')}</Badge> },
     {
       id: 'booking', header: 'Booking',
       cell: ({ row }) => <Link to={`/bookings/${row.original.id}`} className="font-medium underline-offset-2 hover:underline">{row.original.id}</Link>,
     },
-    {
+    ...(options.showUser === false ? [] : [{
       id: 'member', header: 'Member',
       cell: ({ row }) => {
         const user = row.original.user
@@ -18,7 +18,7 @@ export function getBookingColumns(options: { showCustomer?: boolean; showLocatio
           {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user.id}
         </Link>
       },
-    },
+    } as ColumnDef<Booking>]),
     {
       id: 'className', header: 'Class session',
       cell: ({ row }) => <Link

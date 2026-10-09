@@ -45,6 +45,10 @@ import { getOrderColumns } from '@/features/orders/order-columns'
 import { OrderService } from '@/features/orders/order-service'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { Order } from '@/types/order'
+import { getBookingsRequest } from '@/features/bookings/api'
+import { getBookingColumns } from '@/features/bookings/booking-columns'
+import { bookingsQueryKeys } from '@/features/bookings/query-keys'
+import type { Booking } from '@/types/booking'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
 
@@ -180,6 +184,7 @@ export default function UserPage() {
       ? [
           { key: 'client-contracts', label: 'Client contracts' },
           { key: 'credit-transactions', label: 'Credit transactions' },
+          { key: 'bookings', label: 'Bookings' },
           { key: 'orders', label: 'Orders' },
         ]
       : []),
@@ -283,7 +288,7 @@ export default function UserPage() {
         queryKey={clientContractsQueryKeys.userCreditMovements(userId)}
         loadData={(state: DataTableState<ClientContractCreditMovement>) => getUserCreditMovementsRequest(state, userId)}
         tableKey={`credit-transactions.user.${userId}`}
-        columns={getCreditMovementColumns({ showUser: false, showCustomer: false })}
+        columns={getCreditMovementColumns({ showUser: false, showCustomer: isAdminContext })}
         action={canManageOrdersAndContracts && (isAdminContext || currentCustomerId) && user ? {
           label: 'Adjust credits',
           onClick: () => setWalletAdjustmentOpen(true),
@@ -291,6 +296,22 @@ export default function UserPage() {
         loadingMessage="Loading credit transactions..."
         emptyMessage="No credit transactions found."
         errorMessage="Failed to load credit transactions."
+      /> : null}
+      {canManageOrdersAndContracts ? <RelatedEntityModule
+        id={`${MODULE_ANCHOR_PREFIX}-bookings`}
+        title="Bookings"
+        icon={EntityIcon.classes}
+        viewAllTo={makeViewAllTo('/bookings', userId)}
+        queryKey={bookingsQueryKeys.user(userId)}
+        loadData={(state: DataTableState<Booking>) => getBookingsRequest(state, {
+          userId,
+          ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
+        })}
+        tableKey={`bookings.user.${userId}`}
+        columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
+        loadingMessage="Loading bookings..."
+        emptyMessage="No bookings found."
+        errorMessage="Failed to load bookings."
       /> : null}
       {canManageOrdersAndContracts ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-orders`}
