@@ -120,6 +120,7 @@ function BookingPortalRoute() {
   const [searchParams] = useSearchParams()
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [member, setMember] = useState<MemberState | null>(null)
+  const [firstNameDraft, setFirstNameDraft] = useState('')
   const [language, setLanguage] = useState<'fr' | 'en'>(readBookingLanguage)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -149,6 +150,7 @@ function BookingPortalRoute() {
   const logout = () => {
     try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory session even if storage is unavailable */ }
     setMember(null)
+    setFirstNameDraft('')
     setSessionFilter('all')
     setNotice('')
   }
@@ -203,6 +205,7 @@ function BookingPortalRoute() {
         localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
         if (active) {
           setMember(nextMember)
+          setFirstNameDraft(nextMember.identity.firstName ?? '')
           setNotice('')
         }
       } catch (reason) {
@@ -356,6 +359,10 @@ function BookingPortalRoute() {
 
   const purchaseOffer = async (pricingOptionId: string) => {
     if (!member) return
+    if (!member.identity.firstName?.trim() && !firstNameDraft.trim()) {
+      setOffersError(isFrench ? 'Indique ton prénom avant d’acheter cette formule.' : 'Enter your first name before buying this plan.')
+      return
+    }
     setPurchasingOfferId(pricingOptionId)
     setOffersError('')
     try {
@@ -363,11 +370,16 @@ function BookingPortalRoute() {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
-        body: JSON.stringify({ pricingOptionId, sessionId: selected?.id, sessionFilter }),
+        body: JSON.stringify({ pricingOptionId, sessionId: selected?.id, sessionFilter, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
       })
       const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; message?: string | string[] }
       if (!response.ok || !payload.checkoutUrl) throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
       setCheckoutUrls((current) => ({ ...current, [pricingOptionId]: payload.checkoutUrl! }))
+      if (!member.identity.firstName?.trim()) {
+        const updated = { ...member, identity: { ...member.identity, firstName: firstNameDraft.trim() } }
+        setMember(updated)
+        localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updated))
+      }
     } catch (reason) {
       setOffersError(reason instanceof Error ? reason.message : (isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
     } finally { setPurchasingOfferId('') }
@@ -375,18 +387,23 @@ function BookingPortalRoute() {
 
   const createBooking = async () => {
     if (!selected || !member) return
+    if (!member.identity.firstName?.trim() && !firstNameDraft.trim()) {
+      setBookingError(isFrench ? 'Indique ton prénom avant de réserver ce cours.' : 'Enter your first name before booking this class.')
+      return
+    }
     setSubmitting(true)
     setBookingError('')
     try {
       const response = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/bookings`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
-        body: JSON.stringify({ sessionId: selected.id }),
+        body: JSON.stringify({ sessionId: selected.id, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
       })
       const payload = await response.json().catch(() => ({})) as BookingResult & { message?: string | string[] }
       if (!response.ok) throw new Error(responseMessage(payload, isFrench ? 'La réservation n’a pas pu être confirmée.' : 'The booking could not be confirmed.'))
       const nextMember = {
         ...member,
+        identity: { ...member.identity, firstName: member.identity.firstName?.trim() || firstNameDraft.trim() },
         creditBalance: payload.creditBalance,
         bookedSessionIds: [...new Set([...member.bookedSessionIds, selected.id])],
         bookings: [...member.bookings.filter((booking) => booking.sessionId !== selected.id), { bookingId: payload.bookingId, sessionId: selected.id, status: payload.status }],
@@ -516,6 +533,7 @@ function BookingPortalRoute() {
       <p className="booking-eyebrow">{bookingUpsell ? (isFrench ? 'RÉSERVATION CONFIRMÉE' : 'BOOKING CONFIRMED') : selectedAction === 'cancel' ? (isFrench ? 'POLITIQUE D’ANNULATION' : 'CANCELLATION POLICY') : (isFrench ? 'RÉCAPITULATIF' : 'BOOKING SUMMARY')}</p>
       <h2 id="booking-confirm-title">{bookingUpsell ? (isFrench ? 'C’est réservé !' : 'You’re booked!') : selectedAction === 'cancel' ? (isFrench ? 'Annuler cette réservation ?' : 'Cancel this booking?') : (isFrench ? 'Confirmer ce cours ?' : 'Confirm this class?')}</h2>
       <div className="booking-recap"><strong>{selected.name}</strong><span>{formatDate(selected.localDate)} · {selected.localStartTime}–{selected.localEndTime}</span><span>{schedule?.location.name}</span>{selectedAction === 'book' && <span>{selected.creditCost} {isFrench ? 'crédit(s)' : 'credit(s)'}</span>}{selected.description && <p className="booking-recap-description">{selected.description}</p>}{selected.conditions && <p>{selected.conditions}</p>}</div>
+      {member && selectedAction === 'book' && !member.identity.firstName?.trim() && <label className="booking-first-name">{isFrench ? 'Ton prénom' : 'Your first name'}<input autoComplete="given-name" maxLength={80} value={firstNameDraft} onChange={(event) => setFirstNameDraft(event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
       {bookingUpsell ? <>
         <p className="booking-upsell-confirmation">{isFrench ? 'La confirmation a été envoyée sur tes canaux liés. Pour ce cours, tu peux aussi apporter ces articles ou les acheter à la boutique du studio.' : 'Your confirmation was sent to your linked channels. You can bring these items for class or buy them from the studio shop.'}</p>
         <section className="booking-class-products" aria-label={isFrench ? 'Produits associés au cours' : 'Products for this class'}>
@@ -567,13 +585,13 @@ function BookingPortalRoute() {
             {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
             {checkoutUrls[offer.id]
               ? <a className="booking-offer-buy" href={checkoutUrls[offer.id]}>{isFrench ? 'Continuer vers le paiement' : 'Continue to payment'}<span>↗</span></a>
-              : <button type="button" className="booking-offer-buy" disabled={purchasingOfferId === offer.id} onClick={() => void purchaseOffer(offer.id)}>{purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Acheter cette formule' : 'Buy this plan')}<span>→</span></button>}
+              : <button type="button" className="booking-offer-buy" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id)}>{purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Acheter cette formule' : 'Buy this plan')}<span>→</span></button>}
           </article>)}
           {offersError && <div className="booking-error" role="alert">{offersError}</div>}
         </div>
         : <p className="booking-confirm-hint">{isFrench ? 'Ta réservation sera confirmée après validation.' : 'Your booking will be confirmed after you submit.'}</p>}
       {bookingError && <div className="booking-error" role="alert">{bookingError}</div>}
-      <div className={`booking-sheet-actions${bookingUpsell ? ' booking-sheet-actions-done' : ''}`}>{bookingUpsell ? <button type="button" className="booking-confirm" onClick={() => { setBookingUpsell(null); setSelected(null) }}>{isFrench ? 'Terminé' : 'Done'}</button> : <><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</>}</div>
+      <div className={`booking-sheet-actions${bookingUpsell ? ' booking-sheet-actions-done' : ''}`}>{bookingUpsell ? <button type="button" className="booking-confirm" onClick={() => { setBookingUpsell(null); setSelected(null) }}>{isFrench ? 'Terminé' : 'Done'}</button> : <><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</>}</div>
     </section></div>}
   </main>
 }

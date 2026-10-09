@@ -68,6 +68,7 @@ function StorefrontRoute() {
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
+  const [checkoutFirstName, setCheckoutFirstName] = useState(() => readIdentity(customerSlug, locationSlug).firstName ?? '')
   const handledProductLink = useRef('')
   const [submitting, setSubmitting] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
@@ -150,6 +151,7 @@ function StorefrontRoute() {
       const next = { ...session.identity, token: session.storeToken }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(next))
       setIdentity(next)
+      setCheckoutFirstName(next.firstName ?? '')
     }).catch((reason: unknown) => {
       setCheckoutError(reason instanceof Error ? reason.message : tr('Le lien personnalisé a expiré.', 'Your personal link has expired.'))
     })
@@ -231,6 +233,7 @@ function StorefrontRoute() {
     setCheckoutError('')
     const savedIdentity = readIdentity(customerSlug, locationSlug)
     setIdentity(savedIdentity)
+    setCheckoutFirstName(savedIdentity.firstName ?? '')
     setCheckoutOpen(true)
     setCartOpen(false)
   }
@@ -242,12 +245,17 @@ function StorefrontRoute() {
       setCheckoutError(tr('Connecte-toi avec WhatsApp pour commander avec ton compte Ayana.', 'Connect with WhatsApp to order using your Ayana account.'))
       return
     }
+    if (!identity.firstName?.trim() && !checkoutFirstName.trim()) {
+      setCheckoutError(tr('Indique ton prénom pour continuer.', 'Enter your first name to continue.'))
+      return
+    }
     setSubmitting(true)
     try {
       const response = await fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/checkout`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           token: identity.token,
+          ...(!identity.firstName?.trim() ? { firstName: checkoutFirstName.trim() } : {}),
           language,
           items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity, modifierIds: line.modifierIds })),
         }),
@@ -259,6 +267,7 @@ function StorefrontRoute() {
       }
       const nextIdentity = {
         ...identity,
+        firstName: identity.firstName?.trim() || checkoutFirstName.trim(),
         token: payload.storeToken ?? identity.token,
       }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
@@ -346,6 +355,7 @@ function StorefrontRoute() {
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
           <p className="secure-note">{tr('Stripe te demandera l’e-mail pour le reçu. Le paiement est sécurisé et la commande sera confirmée après validation.', 'Stripe will collect the email for your receipt. Payment is secure, and your order will be confirmed once payment is complete.')}</p>
           <form className="store-checkout-form" onSubmit={submitCheckout}>
+            {!identity.firstName?.trim() && <label>{tr('Ton prénom', 'Your first name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => setCheckoutFirstName(event.target.value)} /></label>}
             <button className="store-primary" disabled={submitting}>{submitting ? tr('Préparation du paiement…', 'Preparing payment…') : tr('Payer en toute sécurité', 'Pay securely')} <span>→</span></button>
           </form>
         </>}

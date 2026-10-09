@@ -10,6 +10,7 @@ export type BroadcastAudienceFilters = {
 }
 
 export type BroadcastChannel = 'WHATSAPP' | 'TELEGRAM' | 'EMAIL'
+export type BroadcastReplyButton = { label: string }
 
 export type ApprovedWhatsappTemplate = {
   name: string
@@ -101,6 +102,7 @@ export type BroadcastHistoryItem = Record<string, unknown> & {
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
     whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
+    buttons?: BroadcastReplyButton[]
   } | null
 }
 
@@ -129,6 +131,7 @@ export type BroadcastHistoryDetail = BroadcastHistoryItem & {
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
     whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
+    buttons?: BroadcastReplyButton[]
   } | null
   deliveries: BroadcastDelivery[]
 }
@@ -212,6 +215,7 @@ export async function sendCustomerBroadcastRequest(input: {
   channels: BroadcastChannel[]
   message: string
   files: File[]
+  buttons?: BroadcastReplyButton[]
   whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean }
 }): Promise<BroadcastSendResult> {
   const body = new FormData()
@@ -221,6 +225,7 @@ export async function sendCustomerBroadcastRequest(input: {
   body.append('activity', input.filters.activity)
   body.append('channels', JSON.stringify(input.channels))
   body.append('message', input.message)
+  if (input.buttons?.length) body.append('buttons', JSON.stringify(input.buttons))
   if (input.whatsappTemplate) {
     body.append('whatsappTemplateName', input.whatsappTemplate.name)
     body.append('whatsappTemplateLanguage', input.whatsappTemplate.language)

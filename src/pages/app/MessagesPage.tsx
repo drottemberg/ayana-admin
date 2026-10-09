@@ -62,6 +62,7 @@ export default function MessagesPage() {
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
   const [message, setMessage] = useState('')
+  const [replyButtons, setReplyButtons] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [selectedChannels, setSelectedChannels] = useState<BroadcastChannel[]>(['WHATSAPP', 'TELEGRAM', 'EMAIL'])
   const [sendWhatsappTemplate, setSendWhatsappTemplate] = useState(false)
@@ -148,6 +149,7 @@ export default function MessagesPage() {
       channels: selectedChannels,
       message,
       files,
+      buttons: replyButtons.map((label) => label.trim()).filter(Boolean).map((label) => ({ label })),
       whatsappTemplate: sendWhatsappTemplate && selectedChannels.includes('WHATSAPP') && whatsappTemplateName.trim()
         ? {
             name: whatsappTemplateName.trim(),
@@ -175,6 +177,7 @@ export default function MessagesPage() {
         toast.success(`Message sent via ${result.channelsSent} chat channels and emailed ${result.emailsSent} people.`)
       }
       setMessage('')
+      setReplyButtons([])
       setFiles([])
       setSendWhatsappTemplate(false)
       setWhatsappTemplateName('')
@@ -255,6 +258,7 @@ export default function MessagesPage() {
     setWhatsappTemplateParameters('')
     setWhatsappTemplateParameterNames('')
     setWhatsappTemplateHeaderImage(false)
+    setReplyButtons([])
     setShowTemplateLibrary(false)
     setSelectedLibraryTemplateKey('')
     setLibraryTemplateName('')
@@ -305,10 +309,11 @@ export default function MessagesPage() {
     )
   }
   const toggleChannel = (channel: BroadcastChannel) => {
-    setSelectedChannels((current) => current.includes(channel)
-      ? current.filter((item) => item !== channel)
-      : [...current, channel],
-    )
+    const next = selectedChannels.includes(channel)
+      ? selectedChannels.filter((item) => item !== channel)
+      : [...selectedChannels, channel]
+    setSelectedChannels(next)
+    if (!next.some((item) => item === 'WHATSAPP' || item === 'TELEGRAM')) setReplyButtons([])
   }
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return
@@ -355,6 +360,17 @@ export default function MessagesPage() {
       const values = whatsappTemplateParameters.split('\n').map((value) => value.trim()).filter(Boolean)
       if (names.length !== values.length) return toast.error('Enter one named variable for each body variable value.')
     }
+    if (replyButtons.some((label) => !label.trim())) return toast.error('Complete or remove every reply button.')
+    const normalizedButtons = replyButtons.map((label) => label.trim().toLocaleLowerCase())
+    if (new Set(normalizedButtons).size !== normalizedButtons.length) return toast.error('Reply button labels must be unique.')
+    if (replyButtons.length && !selectedChannels.some((channel) => channel === 'WHATSAPP' || channel === 'TELEGRAM')) {
+      return toast.error('Reply buttons are only available for WhatsApp and Telegram.')
+    }
+    if (replyButtons.length && !message.trim()) return toast.error('Write a message to go with the reply buttons.')
+    if (replyButtons.length && selectedRecipients.some((recipient) => recipient.channel === 'WHATSAPP' && selectedChannels.includes('WHATSAPP')) && message.length > 1024) {
+      return toast.error('WhatsApp messages with reply buttons must be 1,024 characters or fewer.')
+    }
+    if (replyButtons.length && selectedChatCount === 0) return toast.error('Select at least one WhatsApp or Telegram recipient for the reply buttons.')
     if (!message.trim() && !files.length && !(sendWhatsappTemplate && selectedChannels.includes('WHATSAPP'))) {
       return toast.error('Write a message, attach an image, or choose an approved WhatsApp template.')
     }
@@ -705,6 +721,27 @@ export default function MessagesPage() {
                 <Textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={4096} rows={6} placeholder="Write your message..." />
                 <span className="text-right text-xs font-normal text-muted-foreground">{message.length}/4096</span>
               </label>
+              {selectedChannels.some((channel) => channel === 'WHATSAPP' || channel === 'TELEGRAM') ? (
+                <fieldset className="grid gap-3 rounded-lg border border-border p-3">
+                  <legend className="px-1 text-sm font-medium">Reply buttons · WhatsApp and Telegram</legend>
+                  <p className="text-xs text-muted-foreground">When someone taps a button, its label is sent back as their reply. Email recipients receive the message without buttons.</p>
+                  {replyButtons.map((label, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={label}
+                        onChange={(event) => setReplyButtons((current) => current.map((value, buttonIndex) => buttonIndex === index ? event.target.value : value))}
+                        maxLength={20}
+                        placeholder={`Button ${index + 1} label`}
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => setReplyButtons((current) => current.filter((_, buttonIndex) => buttonIndex !== index))}>Remove</Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <Button type="button" variant="outline" size="sm" disabled={replyButtons.length >= 3} onClick={() => setReplyButtons((current) => [...current, ''])}>Add reply button</Button>
+                    <span className="text-xs text-muted-foreground">{replyButtons.length}/3 · up to 20 characters each</span>
+                  </div>
+                </fieldset>
+              ) : null}
               <label className="grid gap-1.5 text-sm font-medium">
                 <span>Images <span className="font-normal text-muted-foreground">(JPEG or PNG, up to 5 images, 5 MB each)</span></span>
                 <Input type="file" accept="image/jpeg,image/png" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = '' }} />
@@ -833,6 +870,14 @@ function CampaignDetailPage({
                 return name ? `{{${name}}}: ${value}` : value
               }).join('\n')}</p> : null}
               {detail.filters.whatsappTemplate.headerImage ? <p className="mt-1 text-muted-foreground">First attached image used as header.</p> : null}
+            </div>
+          ) : null}
+          {detail.filters?.buttons?.length ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground">WhatsApp and Telegram reply buttons</p>
+              <div className="flex flex-wrap gap-2">
+                {detail.filters.buttons.map((button, index) => <Badge key={`${button.label}-${index}`} variant="secondary">{button.label}</Badge>)}
+              </div>
             </div>
           ) : null}
           {detail.media.length ? <div className="flex flex-wrap gap-3">{detail.media.map((media) => <a key={`${media.name}-${media.url}`} href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-md border p-2 text-sm underline-offset-2 hover:underline"><img src={media.url} alt="" className="size-12 rounded object-cover" /><span>{media.name}</span></a>)}</div> : null}
