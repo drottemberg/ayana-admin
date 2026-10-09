@@ -10,6 +10,11 @@ import type {
 
 export const customerMessagingConfigColumns: ColumnDef<CustomerMessagingConfigRow>[] = [
   { accessorKey: 'whatsapp', header: 'WhatsApp' },
+  {
+    accessorKey: 'whatsappBusinessPhoneNumber',
+    header: 'WhatsApp business number',
+    cell: ({ row }) => row.original.whatsappBusinessPhoneNumber?.trim() || NO_VALUE_STR,
+  },
   { accessorKey: 'telegram', header: 'Telegram' },
 ]
 

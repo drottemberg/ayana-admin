@@ -96,7 +96,7 @@ export async function loadCustomerMessagingConfigRow(
   const row: CustomerMessagingConfigRow = {
     ...config,
     id: customerId,
-    whatsapp: config?.whatsappPhoneNumberId || config?.hasWhatsappAccessToken ? 'Configured' : 'Not configured',
+    whatsapp: config?.whatsappPhoneNumberId || config?.whatsappBusinessPhoneNumber || config?.hasWhatsappAccessToken ? 'Configured' : 'Not configured',
     telegram: config?.telegramBotUsername
       ? `@${config.telegramBotUsername}`
       : config?.hasTelegramBotToken

@@ -321,7 +321,7 @@ function StorefrontRoute() {
       </section>
       {identity.token
         ? <section className="store-account-card"><div><span>Connecté·e</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div><button type="button" className="store-account-logout" onClick={logout} aria-label="Se déconnecter" title="Se déconnecter">↪</button></section>
-        : whatsappHref && <section className="store-account-card store-account-login"><div><strong>Déjà client·e Ayana&nbsp;?</strong><span>Demande ton lien personnel pour te connecter à la boutique et commander avec ton compte.</span></div><a className="store-login-cta" href={whatsappHref} target="_blank" rel="noreferrer">Se connecter avec WhatsApp <span>↗</span></a></section>}
+        : whatsappHref && <section className="store-account-card store-account-login"><div><strong>Commande avec ton compte Ayana</strong></div><a className="store-login-cta" href={whatsappHref} target="_blank" rel="noreferrer">Se connecter avec WhatsApp <span>↗</span></a></section>}
       {checkoutError && !checkoutOpen && <div className="store-notice">{checkoutError}</div>}
       <nav className="store-categories" aria-label="Catégories">
         {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}
