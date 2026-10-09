@@ -44,11 +44,25 @@ import type { Order } from '@/types/order'
 import { getProductLocationSettingsRequest, productLocationQueryKeys, type ProductLocationSettings } from '@/features/products/location-products'
 import { getLocationProductColumns } from '@/features/products/location-product-columns'
 import { ProductLocationSettingsDrawer } from '@/features/products/ProductLocationSettingsDrawer'
+import { Button } from '@/components/ui/button'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { PencilEdit02Icon } from '@hugeicons/core-free-icons'
+import { Drawer, DrawerId } from '@/providers/drawer'
 
-function getSections(location?: Location): DetailPanelSection[] {
+function getSections(location?: Location, canEdit = false): DetailPanelSection[] {
   return [
     {
       title: 'Details',
+      actions: location && canEdit ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Edit location details"
+          onClick={() => Drawer.show(DrawerId.CreateLocation, { location })}
+        >
+          <HugeiconsIcon icon={PencilEdit02Icon} strokeWidth={2} className="size-4" />
+        </Button>
+      ) : null,
       fields: [
         {
           label: 'Status',
@@ -75,6 +89,12 @@ function getSections(location?: Location): DetailPanelSection[] {
         },
         { label: 'Phone', value: formatPhoneNumber(location?.phone) || NO_VALUE_STR },
         { label: 'Email', value: location?.email ?? NO_VALUE_STR },
+        {
+          label: 'Google review link',
+          value: location?.googleReviewUrl
+            ? <a href={location.googleReviewUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open Google review page ↗</a>
+            : NO_VALUE_STR,
+        },
         { label: 'Contact name', value: location?.contactName ?? NO_VALUE_STR },
         { label: 'Contact phone', value: formatPhoneNumber(location?.contactPhone) || NO_VALUE_STR },
         { label: 'Contact email', value: location?.contactEmail ?? NO_VALUE_STR },
@@ -95,6 +115,7 @@ export default function LocationPage() {
   const [editingProduct, setEditingProduct] = useState<ProductLocationSettings | null>(null)
   const { session } = useConnect()
   const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
+  const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
   const modules = useMemo(() => [
     { key: 'pricing-options', label: 'Pricing options' },
     { key: 'classes', label: 'Classes' },
@@ -136,7 +157,7 @@ export default function LocationPage() {
           backTo: '/locations',
         }}
         modules={modules}
-        aside={<DetailSidePanel sections={getSections(location)} isLoading={isLoading} />}
+        aside={<DetailSidePanel sections={getSections(location, canEditLocation)} isLoading={isLoading} />}
       >
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
           {isLoading ? 'Loading location...' : location?.description || 'No description.'}

@@ -50,6 +50,7 @@ const locationFormSchema = z.object({
   zip: z.string().trim().min(1, 'Zip code is required.'),
   countryId: z.string().trim().min(1, 'Country is required.'),
   description: z.string().optional(),
+  googleReviewUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || z.string().url().safeParse(value).success, 'Enter a valid Google review URL.'),
   contactName: z.string().optional(),
   contactPhone: optionalPhone,
   contactEmail: z
@@ -160,6 +161,7 @@ export function CreateLocationForm({
       zip: location?.address?.zip ?? '',
       countryId: location?.address?.countryId ?? '',
       description: location?.description ?? '',
+      googleReviewUrl: location?.googleReviewUrl ?? '',
       contactName: location?.contactName ?? '',
       contactPhone: location?.contactPhone ?? '',
       contactEmail: location?.contactEmail ?? '',
@@ -216,6 +218,7 @@ export function CreateLocationForm({
       timezone: values.timezone,
       currency: values.currency.toUpperCase(),
       description: values.description?.trim() || undefined,
+      googleReviewUrl: values.googleReviewUrl?.trim() || null,
       contactName: values.contactName?.trim() || undefined,
       contactPhone: values.contactPhone?.trim() || undefined,
       contactEmail: values.contactEmail?.trim() || undefined,
@@ -409,6 +412,16 @@ export function CreateLocationForm({
             {...register('contactEmail')}
           />
           <TextInput label="Description" error={errors.description?.message} {...register('description')} />
+          <div>
+            <TextInput
+              label="Google review link"
+              type="url"
+              placeholder="https://g.page/r/.../review"
+              error={errors.googleReviewUrl?.message}
+              {...register('googleReviewUrl')}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Used to invite customers to review this location after a completed visit or pickup.</p>
+          </div>
         </FieldGroup>
       </div>
 

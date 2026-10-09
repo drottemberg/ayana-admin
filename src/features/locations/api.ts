@@ -20,6 +20,7 @@ export type CreateLocationPayload = {
   timezone?: string
   currency?: string
   description?: string
+  googleReviewUrl?: string | null
   contactName?: string
   contactPhone?: string
   contactEmail?: string

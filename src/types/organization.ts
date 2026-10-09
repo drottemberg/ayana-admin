@@ -45,6 +45,7 @@ export type Organization = {
   parent?: Organization
   address?: Address
   description?: string
+  googleReviewUrl?: string | null
   timezone?: string
   currency?: string
   phone?: string
