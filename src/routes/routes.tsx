@@ -48,6 +48,7 @@ const UserPage = lazy(() => import('@/pages/app/UserPage'))
 const AccountPage = lazy(() => import('@/pages/app/AccountPage'))
 const EmailPreviewPage = lazy(() => import('@/pages/EmailPreviewPage'))
 const DeviceTypesPage = lazy(() => import('@/pages/app/DeviceTypesPage'))
+const LlmConfigsPage = lazy(() => import('@/pages/app/LlmConfigsPage'))
 const DeviceTypeGroupsPage = lazy(() => import('@/pages/app/DeviceTypeGroupsPage'))
 const DeviceTypeGroupPage = lazy(() => import('@/pages/app/DeviceTypeGroupPage'))
 const DeviceGroupsPage = lazy(() => import('@/pages/app/DeviceGroupsPage'))
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
           { index: true, element: <HomePage /> },
           { path: 'dashboard', element: <DashboardPage /> },
           { path: 'devices', element: <DevicesPage /> },
+          { path: 'llm-configs', element: <LlmConfigsPage /> },
           { path: 'devices/:deviceId', element: <DevicePage /> },
           { path: 'contracts', element: <ContractsPage /> },
           { path: 'contracts/:contractId', element: <ContractPage /> },

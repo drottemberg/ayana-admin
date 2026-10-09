@@ -23,6 +23,9 @@ export function updateAiSupportIssueRequest(
     assignedToUserId?: string | null
     resolution?: string
     note?: string
+    resolutionMessage?: string
+    sendResolutionEmail?: boolean
+    sendResolutionChannel?: boolean
   },
 ): Promise<AiSupportIssueDetails> {
   return apiClient.patch<AiSupportIssueDetails>(`${baseUrl}/${issueId}`, input)

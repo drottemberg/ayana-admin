@@ -30,6 +30,7 @@ import { canUseFeature } from '@/features/app/features'
 import { useConnect } from '@/features/app/use-connect'
 import { Feature } from '@/types/feature'
 import { getAppMode } from '@/features/app/app-mode'
+import { StaffRole } from '@/types/membership'
 
 const Icon = ({ icon }: { icon: IconSvgElement }) => {
   return <HugeiconsIcon icon={icon} strokeWidth={2} />
@@ -144,6 +145,11 @@ const data = {
       icon: <Icon icon={EntityIcon.deviceTypes} />,
       feature: Feature.DEVICE_TYPE,
     },
+    {
+      title: 'LLM Config',
+      url: '/llm-configs',
+      icon: <Icon icon={EntityIcon.issues} />,
+    },
   ],
 }
 
@@ -186,14 +192,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { pathname } = useLocation()
   const { session } = useConnect()
   const isAdminContext = getAppMode() === 'admin'
+  const canManageLlmConfig = isAdminContext && session?.user.isStaff &&
+    [StaffRole.ADMIN, StaffRole.SUPER_ADMIN].includes(session.user.staffRole as StaffRole)
   const hasFeature = React.useCallback((feature: Feature) => Boolean(session?.hasFeature(feature)), [session])
   const manageItems = React.useMemo(() => data.manage.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const settingsItems = React.useMemo(
     () => data.settings
       .filter((item) => item.title !== 'Devices' || isAdminContext)
+      .filter((item) => item.title !== 'LLM Config' || canManageLlmConfig)
       .filter((item) => canUseFeature(item, hasFeature)),
-    [hasFeature, isAdminContext],
+    [canManageLlmConfig, hasFeature, isAdminContext],
   )
   return (
     <Sidebar collapsible="icon" {...props}>

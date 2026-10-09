@@ -51,4 +51,5 @@ export type AiSupportIssueDetails = AiSupportIssue & {
   resolvedAt: string | null
   assignee: { id: string; firstName: string; lastName: string; email: string | null } | null
   activities: AiSupportIssueActivity[]
+  messageDelivery?: Array<{ channel: 'EMAIL' | 'WHATSAPP' | 'TELEGRAM' | 'WEB'; sent: boolean; error?: string }>
 }

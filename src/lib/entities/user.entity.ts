@@ -1,5 +1,5 @@
 import { UserRole, type User, type UserOrganizationPermission, type UserRole as UserRoleType } from '@/types/user'
-import type { CustomerMembershipRecord } from '@/types/membership'
+import type { CustomerMembershipRecord, StaffRole } from '@/types/membership'
 
 type CustomerMembershipDto = Pick<CustomerMembershipRecord, 'customerId' | 'role'>
   & Partial<Omit<CustomerMembershipRecord, 'customerId' | 'role'>>
@@ -16,6 +16,8 @@ export type UserDto = {
   permissions?: UserOrganizationPermission[] | null
   customerMemberships?: CustomerMembershipDto[] | null
   isActive?: boolean | null
+  isStaff?: boolean | null
+  staffRole?: StaffRole | null
   hasPassword?: boolean | null
   mfaEnabled?: boolean | null
   lastLoginAt?: string | null
@@ -36,6 +38,8 @@ export class UserEntity {
   readonly permissions: UserOrganizationPermission[]
   readonly customerMemberships: CustomerMembershipRecord[]
   readonly isActive: boolean
+  readonly isStaff: boolean
+  readonly staffRole: StaffRole | null
   readonly hasPassword: boolean
   readonly mfaEnabled: boolean
   readonly lastLoginAt?: string
@@ -58,6 +62,8 @@ export class UserEntity {
       storeScope: membership.storeScope ?? membership.locationScope ?? 'ALL',
     }))
     this.isActive = dto.isActive ?? false
+    this.isStaff = dto.isStaff ?? false
+    this.staffRole = dto.staffRole ?? null
     this.hasPassword = dto.hasPassword ?? false
     this.mfaEnabled = dto.mfaEnabled ?? false
     this.lastLoginAt = dto.lastLoginAt ?? undefined

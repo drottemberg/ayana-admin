@@ -23,6 +23,9 @@ export default function AiSupportIssuesPage() {
   const [status, setStatus] = useState<AiSupportIssueStatus>('OPEN')
   const [note, setNote] = useState('')
   const [resolution, setResolution] = useState('')
+  const [resolutionMessage, setResolutionMessage] = useState('')
+  const [sendResolutionEmail, setSendResolutionEmail] = useState(false)
+  const [sendResolutionChannel, setSendResolutionChannel] = useState(false)
   const [saving, setSaving] = useState(false)
   const queryClient = useQueryClient()
   const { session } = useConnect()
@@ -43,6 +46,9 @@ export default function AiSupportIssuesPage() {
     if (!issue) return
     setResolution(issue.resolution ?? '')
     setNote('')
+    setResolutionMessage('')
+    setSendResolutionEmail(false)
+    setSendResolutionChannel(false)
   }, [issue?.id, issue?.resolution])
 
   const columns = useMemo<ColumnDef<AiSupportIssue>[]>(() => [
@@ -105,13 +111,26 @@ export default function AiSupportIssuesPage() {
     const previousStatus = issue?.status ?? status
     setSaving(true)
     try {
-      await updateAiSupportIssueRequest(selectedIssueId, patch)
+      const result = await updateAiSupportIssueRequest(selectedIssueId, patch)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: aiSupportIssueQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: aiSupportIssueQueryKeys.detail(selectedIssueId) }),
       ])
       setNote('')
-      toast.success('Support issue updated.')
+      if (result.messageDelivery?.length) {
+        const sent = result.messageDelivery.filter((delivery) => delivery.sent).map((delivery) => delivery.channel)
+        const failed = result.messageDelivery.filter((delivery) => !delivery.sent)
+        setResolutionMessage('')
+        setSendResolutionEmail(false)
+        setSendResolutionChannel(false)
+        if (failed.length) {
+          toast.error(`Issue updated. Sent: ${sent.join(', ') || 'none'}. Failed: ${failed.map((delivery) => `${delivery.channel}: ${delivery.error}`).join('; ')}`)
+        } else {
+          toast.success(`Issue updated. Resolution message sent via ${sent.join(' and ')}.`)
+        }
+      } else {
+        toast.success('Support issue updated.')
+      }
     } catch (error) {
       if (patch.status !== undefined) setStatus(previousStatus)
       toast.error(error instanceof Error ? error.message : 'Could not update the issue.')
@@ -145,7 +164,7 @@ export default function AiSupportIssuesPage() {
       </section>
 
       <Drawer open={Boolean(selectedIssueId)} onOpenChange={(open) => { if (!open && !saving) setSelectedIssueId(null) }} direction="right">
-        <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-3xl">
+        <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-xl">
           <DrawerHeader className="border-b px-6 pb-4">
             <DrawerTitle>{issue?.summary ?? 'AI support issue'}</DrawerTitle>
             <DrawerDescription>{issue ? `${issue.id} · ${formatDate(issue.createdAt)}` : 'Loading issue details...'}</DrawerDescription>
@@ -198,7 +217,7 @@ export default function AiSupportIssuesPage() {
                       onChange={(event) => {
                         const nextStatus = event.currentTarget.value as AiSupportIssueStatus
                         setStatus(nextStatus)
-                        void saveIssue({ status: nextStatus })
+                        if (nextStatus !== 'RESOLVED') void saveIssue({ status: nextStatus })
                       }}
                       className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-normal disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -217,7 +236,34 @@ export default function AiSupportIssuesPage() {
                     Internal note
                     <textarea className="min-h-20 rounded-md border border-input bg-background p-3 font-normal" value={note} onChange={(event) => setNote(event.target.value)} />
                   </label>
-                  <Button disabled={saving} onClick={() => void saveIssue({ status, resolution, ...(note.trim() ? { note: note.trim() } : {}) })}>{saving ? 'Saving...' : 'Save update'}</Button>
+                  <fieldset className="space-y-3 rounded-md border p-3">
+                    <legend className="px-1 text-sm font-semibold">Message to the user</legend>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Custom message
+                      <textarea className="min-h-24 rounded-md border border-input bg-background p-3 font-normal" value={resolutionMessage} onChange={(event) => setResolutionMessage(event.target.value)} placeholder="Write the message the user should receive..." />
+                    </label>
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={sendResolutionEmail} disabled={!issue.userEmail || saving} onChange={(event) => setSendResolutionEmail(event.currentTarget.checked)} />
+                        Email{issue.userEmail ? ` · ${issue.userEmail}` : ' · no email available'}
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={sendResolutionChannel} disabled={!issue.channel || !issue.conversationId || saving} onChange={(event) => setSendResolutionChannel(event.currentTarget.checked)} />
+                        User channel{issue.channel ? ` · ${issue.channel}` : ' · unavailable'}
+                      </label>
+                    </div>
+                    {(sendResolutionEmail || sendResolutionChannel) && status !== 'RESOLVED' ? <p className="text-xs text-amber-700">Set the issue status to Resolved before sending the message.</p> : null}
+                  </fieldset>
+                  <Button disabled={saving || ((sendResolutionEmail || sendResolutionChannel) && (!resolutionMessage.trim() || status !== 'RESOLVED'))} onClick={() => void saveIssue({
+                    status,
+                    resolution,
+                    ...(note.trim() ? { note: note.trim() } : {}),
+                    ...(sendResolutionEmail || sendResolutionChannel ? {
+                      resolutionMessage,
+                      sendResolutionEmail,
+                      sendResolutionChannel,
+                    } : {}),
+                  })}>{saving ? 'Saving...' : sendResolutionEmail || sendResolutionChannel ? 'Resolve and send message' : 'Save update'}</Button>
                 </section>
 
                 <section className="space-y-3">

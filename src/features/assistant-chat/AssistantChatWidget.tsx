@@ -91,7 +91,7 @@ export function AssistantChatWidget() {
 
     const socket = io(`${socketUrl()}/messaging`, {
       path: '/api/socket.io',
-      auth: { token, organizationId: selectedOrganizationId },
+      auth: { token, organizationId: selectedOrganizationId, languageCode: navigator.language },
       reconnection: true,
       transports: ['websocket', 'polling'],
     })
