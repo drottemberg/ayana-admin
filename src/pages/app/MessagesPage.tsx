@@ -290,6 +290,10 @@ export default function MessagesPage() {
 
   const selectedRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id))
   const selectedChatCount = selectedRecipients.filter((recipient) => selectedChannels.includes(recipient.channel)).length
+  const selectedWhatsappRecipients = selectedChannels.includes('WHATSAPP')
+    ? selectedRecipients.filter((recipient) => recipient.channel === 'WHATSAPP')
+    : []
+  const selectedWhatsappOutsideWindow = selectedWhatsappRecipients.filter((recipient) => !recipient.whatsappWindowOpen).length
   const selectedEmailCount = selectedChannels.includes('EMAIL')
     ? new Set(selectedRecipients.filter((recipient) => recipient.email).map((recipient) => recipient.userId)).size
     : 0
@@ -340,6 +344,9 @@ export default function MessagesPage() {
     if (sendMutation.isPending) return
     if (!selectedRecipientIds.length) return toast.error('Select at least one recipient.')
     if (!selectedChannels.length) return toast.error('Select at least one channel.')
+    if (selectedWhatsappOutsideWindow && !sendWhatsappTemplate) {
+      return toast.error(`${selectedWhatsappOutsideWindow} WhatsApp recipient(s) need an approved template because their last message was over 24 hours ago.`)
+    }
     if (sendWhatsappTemplate && selectedChannels.includes('WHATSAPP') && !whatsappTemplateName.trim()) {
       return toast.error('Enter the approved WhatsApp template name.')
     }
@@ -367,7 +374,7 @@ export default function MessagesPage() {
       return toast.error('Reply buttons are only available for WhatsApp and Telegram.')
     }
     if (replyButtons.length && !message.trim()) return toast.error('Write a message to go with the reply buttons.')
-    if (replyButtons.length && selectedRecipients.some((recipient) => recipient.channel === 'WHATSAPP' && selectedChannels.includes('WHATSAPP')) && message.length > 1024) {
+    if (replyButtons.length && selectedWhatsappRecipients.some((recipient) => recipient.whatsappWindowOpen) && message.length > 1024) {
       return toast.error('WhatsApp messages with reply buttons must be 1,024 characters or fewer.')
     }
     if (replyButtons.length && selectedChatCount === 0) return toast.error('Select at least one WhatsApp or Telegram recipient for the reply buttons.')
@@ -505,6 +512,11 @@ export default function MessagesPage() {
                   <p className="text-sm text-muted-foreground">
                     {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.length} chat channels · ${availableEmailCount} with email`}
                   </p>
+                  {selectedWhatsappRecipients.length ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      WhatsApp: {selectedWhatsappRecipients.length - selectedWhatsappOutsideWindow} direct message(s) · {selectedWhatsappOutsideWindow} approved-template fallback(s) needed.
+                    </p>
+                  ) : null}
                 </div>
                 <Button variant="outline" size="sm" onClick={toggleAll} disabled={!filteredRecipients.length || audienceQuery.isFetching}>
                   {allSelected ? 'Deselect all' : 'Select all'}
@@ -558,9 +570,15 @@ export default function MessagesPage() {
                   <legend className="px-1 text-sm font-medium">WhatsApp template</legend>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={sendWhatsappTemplate} onChange={(event) => setSendWhatsappTemplate(event.target.checked)} />
-                    Also send an approved WhatsApp template
+                    Use an approved template automatically outside the 24-hour window
                   </label>
-                  <p className="text-xs text-muted-foreground">The regular message and images are still sent. The approved template is an additional WhatsApp message and can reach people outside the 24-hour window.</p>
+                  <p className="text-xs text-muted-foreground">Ayana checks each recipient’s latest incoming WhatsApp message when sending. Contacts within 24 hours get your regular message; older conversations get only this approved template. Add a template when any selected WhatsApp contact is outside the window.</p>
+                  {selectedWhatsappOutsideWindow > 0 && !sendWhatsappTemplate ? (
+                    <p className="text-xs text-destructive">{selectedWhatsappOutsideWindow} selected WhatsApp contact(s) are outside the window. Enable the template fallback to send this campaign to them.</p>
+                  ) : null}
+                  {selectedWhatsappOutsideWindow > 0 && sendWhatsappTemplate && (files.length > Number(whatsappTemplateHeaderImage) || replyButtons.length > 0) ? (
+                    <p className="text-xs text-muted-foreground">Outside the window, WhatsApp sends only the approved template and its configured header image. Other campaign images and reply buttons are sent only to contacts within 24 hours.</p>
+                  ) : null}
                   <div>
                     <Button type="button" variant="outline" size="sm" onClick={() => setShowTemplateLibrary((current) => !current)}>
                       {showTemplateLibrary ? 'Hide Meta template library' : 'Browse Meta template library'}
@@ -963,8 +981,11 @@ function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRe
         {recipient.email ? <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span> : null}
         {recipient.phone ? <span className="block truncate text-xs text-muted-foreground">{recipient.phone}</span> : null}
       </span>
-      <Badge variant="outline">{recipient.channel === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}</Badge>
-      <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(recipient.lastContactAt).toLocaleDateString()}</span>
+      <span className="flex flex-col items-end gap-1">
+        <Badge variant="outline">{recipient.channel === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}</Badge>
+        {recipient.channel === 'WHATSAPP' ? <Badge variant={recipient.whatsappWindowOpen ? 'secondary' : 'destructive'}>{recipient.whatsappWindowOpen ? 'Direct · 24 h' : 'Template required'}</Badge> : null}
+        <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(recipient.lastContactAt).toLocaleDateString()}</span>
+      </span>
     </label>
   )
 }

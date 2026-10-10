@@ -56,6 +56,7 @@ export type BroadcastRecipient = {
   channelId: string
   channelLabel: string
   lastContactAt: string
+  whatsappWindowOpen: boolean | null
 }
 
 export type BroadcastAudience = {

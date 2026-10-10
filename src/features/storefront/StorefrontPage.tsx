@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import ayanaLogo from '@/assets/ayana-logo.png'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { validatePhone } from '@/lib/phone'
 import './storefront.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
@@ -69,6 +71,8 @@ function StorefrontRoute() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
   const [checkoutFirstName, setCheckoutFirstName] = useState(() => readIdentity(customerSlug, locationSlug).firstName ?? '')
+  const [checkoutPhone, setCheckoutPhone] = useState(() => readIdentity(customerSlug, locationSlug).phone ?? '')
+  const [checkoutEmail, setCheckoutEmail] = useState(() => readIdentity(customerSlug, locationSlug).email ?? '')
   const handledProductLink = useRef('')
   const [submitting, setSubmitting] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
@@ -83,6 +87,9 @@ function StorefrontRoute() {
     ? `Connecte-moi à la boutique pour commander à emporter chez ${catalog?.location.name ?? 'Ayana'}.`
     : `Connect me to the shop to order takeaway from ${catalog?.location.name ?? 'Ayana'}.`
   const whatsappHref = whatsappLink(catalog?.location.whatsappNumber, whatsappMessage)
+  const orderCode = searchParams.get('code')?.trim()
+  const trackOrderMessage = `${tr('Suivre ma commande', 'Track my order')}${orderCode ? ` ${orderCode}` : ''}`
+  const trackOrderHref = whatsappLink(catalog?.location.whatsappNumber, trackOrderMessage)
 
   const logout = () => {
     try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory identity even if storage is unavailable */ }
@@ -117,21 +124,17 @@ function StorefrontRoute() {
   useEffect(() => {
     if (!location.pathname.endsWith('/success')) return
     const key = whatsappReturnKey(customerSlug, locationSlug)
-    const code = searchParams.get('code')
-    const message = isFrench
-      ? `Bonjour, je viens de terminer le paiement de ma commande${code ? ` #${code}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
-      : `Hello, I have just completed payment for my order${code ? ` #${code}` : ''} at ${catalog?.location.name ?? 'Ayana'}.`
     let storedUrl = ''
-    try { storedUrl = sessionStorage.getItem(key) ?? '' } catch { /* build a fresh link from the catalog if available */ }
-    const returnUrl = storedUrl || whatsappLink(catalog?.location.whatsappNumber, message)
+    try { storedUrl = sessionStorage.getItem(key) ?? '' } catch { /* automatic WhatsApp return is unavailable when session storage is blocked */ }
+    const returnUrl = storedUrl
     if (!returnUrl) return
     setWhatsappReturnUrl(returnUrl)
     const redirect = window.setTimeout(() => {
-      window.location.assign(returnUrl)
       try { sessionStorage.removeItem(key) } catch { /* the return link can expire naturally with the tab */ }
+      window.location.assign(returnUrl)
     }, 900)
     return () => window.clearTimeout(redirect)
-  }, [catalog, customerSlug, isFrench, location.pathname, locationSlug, searchParams])
+  }, [customerSlug, location.pathname, locationSlug])
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -152,6 +155,8 @@ function StorefrontRoute() {
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(next))
       setIdentity(next)
       setCheckoutFirstName(next.firstName ?? '')
+      setCheckoutPhone(next.phone ?? '')
+      setCheckoutEmail(next.email ?? '')
     }).catch((reason: unknown) => {
       setCheckoutError(reason instanceof Error ? reason.message : tr('Le lien personnalisé a expiré.', 'Your personal link has expired.'))
     })
@@ -234,6 +239,8 @@ function StorefrontRoute() {
     const savedIdentity = readIdentity(customerSlug, locationSlug)
     setIdentity(savedIdentity)
     setCheckoutFirstName(savedIdentity.firstName ?? '')
+    setCheckoutPhone(savedIdentity.phone ?? '')
+    setCheckoutEmail(savedIdentity.email ?? '')
     setCheckoutOpen(true)
     setCartOpen(false)
   }
@@ -241,12 +248,12 @@ function StorefrontRoute() {
   const submitCheckout = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setCheckoutError('')
-    if (!identity.token) {
-      setCheckoutError(tr('Connecte-toi avec WhatsApp pour commander avec ton compte Ayana.', 'Connect with WhatsApp to order using your Ayana account.'))
-      return
-    }
     if (!identity.firstName?.trim() && !checkoutFirstName.trim()) {
       setCheckoutError(tr('Indique ton prénom pour continuer.', 'Enter your first name to continue.'))
+      return
+    }
+    if (!identity.token && validatePhone(checkoutPhone)) {
+      setCheckoutError(tr('Entre un numéro de téléphone valide avec son indicatif.', 'Enter a valid phone number with its country code.'))
       return
     }
     setSubmitting(true)
@@ -254,13 +261,14 @@ function StorefrontRoute() {
       const response = await fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/checkout`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          token: identity.token,
-          ...(!identity.firstName?.trim() ? { firstName: checkoutFirstName.trim() } : {}),
+          ...(identity.token
+            ? { token: identity.token, ...(!identity.firstName?.trim() ? { firstName: checkoutFirstName.trim() } : {}) }
+            : { firstName: checkoutFirstName.trim(), phone: checkoutPhone, email: checkoutEmail.trim() }),
           language,
           items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity, modifierIds: line.modifierIds })),
         }),
       })
-      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; storeToken?: string; orderId?: string; shortCode?: string; message?: string | string[] }
+      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; storeToken?: string; orderId?: string; shortCode?: string; whatsappConnected?: boolean; message?: string | string[] }
       if (!response.ok || !payload.checkoutUrl) {
         const message = Array.isArray(payload.message) ? payload.message.join(' ') : payload.message
         throw new Error(message || tr('Impossible de préparer le paiement. Vérifie le panier et réessaie.', 'Could not prepare payment. Check your cart and try again.'))
@@ -268,16 +276,19 @@ function StorefrontRoute() {
       const nextIdentity = {
         ...identity,
         firstName: identity.firstName?.trim() || checkoutFirstName.trim(),
-        token: payload.storeToken ?? identity.token,
+        ...(!identity.token ? { phone: checkoutPhone, email: checkoutEmail.trim() } : {}),
+        ...(payload.storeToken ?? identity.token ? { token: payload.storeToken ?? identity.token } : { token: undefined }),
       }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
       const returnMessage = isFrench
         ? `Bonjour, je viens de terminer le paiement de ma commande${payload.shortCode ? ` #${payload.shortCode}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
         : `Hello, I have just completed payment for my order${payload.shortCode ? ` #${payload.shortCode}` : ''} at ${catalog?.location.name ?? 'Ayana'}.`
       const returnUrl = whatsappLink(catalog?.location.whatsappNumber, returnMessage)
-      if (returnUrl) {
-        try { sessionStorage.setItem(whatsappReturnKey(customerSlug, locationSlug), returnUrl) } catch { /* the success page can rebuild this URL from the catalog */ }
-      }
+      const returnKey = whatsappReturnKey(customerSlug, locationSlug)
+      try {
+        sessionStorage.removeItem(returnKey)
+        if (payload.whatsappConnected && returnUrl) sessionStorage.setItem(returnKey, returnUrl)
+      } catch { /* automatic WhatsApp return is unavailable when session storage is blocked */ }
       window.location.assign(payload.checkoutUrl)
     } catch (reason) {
       setCheckoutError(reason instanceof Error ? reason.message : tr('Une erreur est survenue. Réessaie.', 'Something went wrong. Please try again.'))
@@ -286,7 +297,7 @@ function StorefrontRoute() {
   }
 
   if (location.pathname.endsWith('/success')) {
-    return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">{tr('Commande Ayana', 'Ayana order')}</p><h1>{tr('Merci pour ta commande !', 'Thank you for your order!')}</h1><p>{tr('Ton paiement est en cours de confirmation. Tu vas retourner sur WhatsApp pour retrouver la conversation avec l’équipe Ayana.', 'Your payment is being confirmed. You will return to WhatsApp to continue your conversation with the Ayana team.')}</p>{searchParams.get('code') && <strong className="success-code">{searchParams.get('code')}</strong>}{whatsappReturnUrl && <a className="store-primary" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} <span>↗</span></a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a></section></main>
+    return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">{tr('Commande Ayana', 'Ayana order')}</p><h1>{tr('Merci pour ta commande !', 'Thank you for your order!')}</h1><p>{whatsappReturnUrl ? tr('Ton paiement est en cours de confirmation. Tu retournes sur WhatsApp pour retrouver ta conversation avec Ayana.', 'Your payment is being confirmed. You are returning to WhatsApp to continue your conversation with Ayana.') : tr('Ton paiement est en cours de confirmation. Tu peux fermer cette page ou retourner à la boutique.', 'Your payment is being confirmed. You can close this page or return to the shop.')}</p>{orderCode && <strong className="success-code">{orderCode}</strong>}{trackOrderHref && <a className="store-primary" href={trackOrderHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp pour suivre ma commande', 'Connect with WhatsApp to follow my order')} <span>↗</span></a>}{whatsappReturnUrl && <a className="store-secondary-link" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} ↗</a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a></section></main>
   }
 
   if (loading) return <main className="ayana-store"><div className="store-loading"><span className="store-spinner" />{tr('Ouverture de la boutique…', 'Opening the shop…')}</div></main>
@@ -343,12 +354,20 @@ function StorefrontRoute() {
         <p className="store-eyebrow">{tr('Ta commande', 'Your order')}</p>
         {checkoutError && <p className="store-form-error">{checkoutError}</p>}
         {!identity.token ? <>
-          <h2>{tr('Connecte-toi avec WhatsApp', 'Connect with WhatsApp')}</h2>
-          <p className="sheet-description">{tr('Pour commander avec ton compte Ayana, demande ton lien personnel sur WhatsApp. Reviens ensuite ici pour régler ta commande.', 'To order with your Ayana account, request your personal link on WhatsApp. Then return here to pay.')}</p>
+          <h2>{tr('Comment veux-tu continuer ?', 'How would you like to continue?')}</h2>
+          <p className="sheet-description">{tr('Connecte-toi avec WhatsApp pour retrouver ton compte, ou commande en invité avec tes coordonnées.', 'Connect with WhatsApp to use your Ayana account, or continue as a guest with your contact details.')}</p>
           {whatsappHref
             ? <a className="store-primary store-whatsapp-login" href={whatsappHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp', 'Connect with WhatsApp')} <span>↗</span></a>
-            : <p className="store-form-error">{tr('WhatsApp n’est pas configuré pour cette boutique.', 'WhatsApp is not configured for this shop.')}</p>}
-          <p className="secure-note">{tr('Après connexion, reviens sur cette page : ton panier sera toujours là.', 'After signing in, return to this page. Your cart will still be here.')}</p>
+            : null}
+          <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
+          <p className="checkout-divider"><span>{tr('ou commander sans WhatsApp', 'or continue without WhatsApp')}</span></p>
+          <form className="store-checkout-form" onSubmit={submitCheckout}>
+            <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => setCheckoutFirstName(event.target.value)} /></label>
+            <PhoneInput label={tr('Téléphone', 'Phone number')} value={checkoutPhone} placeholder={tr('Numéro de téléphone', 'Phone number')} required nativeCountrySelector onValueChange={setCheckoutPhone} />
+            <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required maxLength={254} value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} /></label>
+            <button className="store-primary" disabled={submitting}>{submitting ? tr('Préparation du paiement…', 'Preparing payment…') : tr('Payer en toute sécurité', 'Pay securely')} <span>→</span></button>
+          </form>
+          <p className="secure-note">{tr('Le panier reste enregistré si tu reviens après la connexion.', 'Your cart is saved if you return after signing in.')}</p>
         </> : <>
           <h2>{tr('Paiement de la commande', 'Order payment')}</h2>
           <div className="saved-identity"><span>{tr('Compte Ayana connecté', 'Ayana account connected')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div>

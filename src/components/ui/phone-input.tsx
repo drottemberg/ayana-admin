@@ -21,6 +21,7 @@ type PhoneInputProps = {
   error?: React.ReactNode
   disabled?: boolean
   required?: boolean
+  nativeCountrySelector?: boolean
   onValueChange?: (value: string) => void
   onBlur?: () => void
 }
@@ -92,7 +93,7 @@ function getDisplayParts(value: string, fallbackCountry: CountryCode) {
 }
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
-  ({ id, name, label, value = '', placeholder = 'Phone number', error, disabled, required, onValueChange, onBlur }, ref) => {
+  ({ id, name, label, value = '', placeholder = 'Phone number', error, disabled, required, nativeCountrySelector, onValueChange, onBlur }, ref) => {
     const inputId = id ?? React.useId()
     const browserCountry = React.useMemo(getBrowserCountry, [])
     const locale = typeof navigator === 'undefined' ? 'en' : navigator.language
@@ -134,23 +135,43 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
           </FieldLabel>
         ) : null}
         <div className="flex min-w-0 gap-2">
-          <SelectInput
-            aria-label="Country calling code"
-            containerClassName="w-[170px] shrink-0"
-            className="h-9"
-            items={items}
-            value={country}
-            searchable
-            disabled={disabled}
-            onValueChange={(selectedCountry) => {
-              const nextCountry = String(selectedCountry).toUpperCase()
-              if (!isPhoneCountryCode(nextCountry)) return
+          {nativeCountrySelector ? (
+            <select
+              aria-label="Country calling code"
+              value={country}
+              disabled={disabled}
+              onChange={(event) => {
+                const nextCountry = event.target.value.toUpperCase()
+                if (!isPhoneCountryCode(nextCountry)) return
 
-              setCountry(nextCountry)
-              emitValue(toE164(nationalNumber, nextCountry))
-            }}
-            onBlur={onBlur}
-          />
+                setCountry(nextCountry)
+                emitValue(toE164(nationalNumber, nextCountry))
+              }}
+              onBlur={onBlur}
+            >
+              {items.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
+          ) : (
+            <SelectInput
+              aria-label="Country calling code"
+              containerClassName="w-[170px] shrink-0"
+              className="h-9"
+              items={items}
+              value={country}
+              searchable
+              disabled={disabled}
+              onValueChange={(selectedCountry) => {
+                const nextCountry = String(selectedCountry).toUpperCase()
+                if (!isPhoneCountryCode(nextCountry)) return
+
+                setCountry(nextCountry)
+                emitValue(toE164(nationalNumber, nextCountry))
+              }}
+              onBlur={onBlur}
+            />
+          )}
           <Input
             ref={ref}
             id={inputId}
