@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -12,16 +12,66 @@ import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import { Modals } from '@/providers/modal'
+import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ClassSession } from '@/types/class-type'
+
+function getDateRangeFilters(dateRange?: DateRangeValue) {
+  if (!dateRange?.from) return {}
+
+  const from = new Date(`${dateRange.from}T00:00:00`)
+  const to = new Date(`${dateRange.to ?? dateRange.from}T00:00:00`)
+  to.setDate(to.getDate() + 1)
+  to.setMilliseconds(to.getMilliseconds() - 1)
+
+  return { from: from.toISOString(), to: to.toISOString() }
+}
+
+function readDateFilter(params: URLSearchParams): 'all' | 'upcoming' | 'range' {
+  const value = params.get('dateMode')
+  return value === 'all' || value === 'range' || value === 'upcoming' ? value : 'upcoming'
+}
+
+function readDateRange(params: URLSearchParams): DateRangeValue | undefined {
+  const from = params.get('dateFrom')
+  if (!from) return undefined
+  const to = params.get('dateTo')
+  return { from, ...(to ? { to } : {}) }
+}
 
 export default function ClassSessionsPage() {
   const { session } = useConnect()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const dateFilter = readDateFilter(searchParams)
+  const dateRange = readDateRange(searchParams)
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
-  const [searchParams] = useSearchParams()
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
+  const searchParamsString = searchParams.toString()
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamsString)
+    if (params.has('dateMode')) return
+    params.set('dateMode', 'upcoming')
+    setSearchParams(params, { replace: true })
+  }, [searchParamsString, setSearchParams])
+
+  function updateDateFilter(mode: 'all' | 'upcoming' | 'range', range?: DateRangeValue) {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('dateMode', mode)
+    if (mode === 'range' && range?.from) {
+      nextParams.set('dateFrom', range.from)
+      if (range.to) nextParams.set('dateTo', range.to)
+      else nextParams.delete('dateTo')
+    } else {
+      nextParams.delete('dateFrom')
+      nextParams.delete('dateTo')
+    }
+    setSearchParams(nextParams, { replace: true })
+  }
+
   const filterCustomerId = searchParams.get('filterCustomerId')
   const filterLocationId = searchParams.get('filterLocationId')
   const initialFilters = {
@@ -42,12 +92,17 @@ export default function ClassSessionsPage() {
       />
       <section className="p-4 md:p-6">
         <DataTableAsync
-          queryKey={[...classSessionsQueryKeys.all, 'table']}
+          queryKey={[...classSessionsQueryKeys.all, 'table', dateFilter, dateRange?.from, dateRange?.to]}
           loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(
             state,
-            !isAdminContext && currentCustomerId
-              ? { customerId: currentCustomerId }
-              : undefined,
+            {
+              ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
+              ...(dateFilter === 'upcoming'
+                ? { from: new Date().toISOString() }
+                : dateFilter === 'range'
+                  ? getDateRangeFilters(dateRange)
+                  : {}),
+            },
           )}
           refetchOnMount="always"
           tableKey="class-sessions.root"
@@ -83,6 +138,31 @@ export default function ClassSessionsPage() {
           disabledSelection
           searchPlaceholder="Search by class, session, or coach"
           searchColumns={['id', 'className', 'coachName']}
+          toolbarExtra={(
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={dateFilter}
+                onValueChange={(value) => updateDateFilter(value as 'all' | 'upcoming' | 'range')}
+              >
+                <SelectTrigger className="h-9 w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All dates</SelectItem>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="range">Date range</SelectItem>
+                </SelectContent>
+              </Select>
+              {dateFilter === 'range' && (
+                <DateRangePicker
+                  value={dateRange}
+                  placeholder="Choose dates"
+                  className="w-[220px]"
+                  onValueChange={(range) => updateDateFilter('range', range)}
+                />
+              )}
+            </div>
+          )}
           filters={[
             ...(!isAdminContext ? [] : [{
               id: 'customerId',
