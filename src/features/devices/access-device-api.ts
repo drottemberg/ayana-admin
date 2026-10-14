@@ -25,7 +25,17 @@ export type CreateAccessDeviceInput = {
   isActive: boolean
 }
 
+export type UpdateAccessDeviceInput = Partial<Omit<CreateAccessDeviceInput, 'organizationId' | 'label'>> & { label?: string | null }
+
 export type CreatedAccessDevice = AccessDevice & { secret: string }
+
+export function getAccessDeviceOrganization(device: AccessDevice): { id: string; name: string; type: 'CUSTOMER' | 'LOCATION' } {
+  return {
+    id: device.organization?.id ?? device.organizationId,
+    name: device.organization?.name ?? device.organizationId,
+    type: device.organization?.type === 'LOCATION' ? 'LOCATION' : 'CUSTOMER',
+  }
+}
 
 export const accessDevicesListConfig = {
   url: '/access/devices/list',
@@ -50,4 +60,8 @@ export async function getAccessDevicesRequest(
 
 export function createAccessDeviceRequest(payload: CreateAccessDeviceInput) {
   return apiClient.post<CreatedAccessDevice>('/access/devices', payload)
+}
+
+export function updateAccessDeviceRequest(id: string, payload: UpdateAccessDeviceInput) {
+  return apiClient.patch<AccessDevice>(`/access/devices/${id}`, payload)
 }

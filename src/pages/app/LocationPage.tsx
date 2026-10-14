@@ -48,7 +48,7 @@ import { Button } from '@/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import { Drawer, DrawerId } from '@/providers/drawer'
-import { getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
+import { getAccessDeviceOrganization, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
 import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
@@ -118,6 +118,7 @@ export default function LocationPage() {
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [editingProduct, setEditingProduct] = useState<ProductLocationSettings | null>(null)
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
+  const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
   const { session } = useConnect()
   const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
   const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
@@ -218,6 +219,9 @@ export default function LocationPage() {
           loadData={(state: DataTableState<AccessDevice>) => getAccessDevicesRequest(state, { locationId })}
           tableKey={`locations.detail.modules.devices.${locationId}`}
           columns={accessDeviceColumns}
+          getRowCommands={(device) => session?.permissions.devices?.edit
+            ? [{ label: 'Edit', onClick: () => setEditingDevice(device) }]
+            : []}
           loadingMessage="Loading devices..."
           emptyMessage="No devices found for this location."
         />
@@ -275,9 +279,15 @@ export default function LocationPage() {
       />
       {location ? (
         <AccessDeviceDrawer
-          open={isCreateDeviceOpen}
-          onOpenChange={setIsCreateDeviceOpen}
-          fixedOrganization={{ id: location.id, name: location.name, type: 'LOCATION' }}
+          open={isCreateDeviceOpen || Boolean(editingDevice)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsCreateDeviceOpen(false)
+              setEditingDevice(null)
+            }
+          }}
+          device={editingDevice ?? undefined}
+          fixedOrganization={editingDevice ? getAccessDeviceOrganization(editingDevice) : { id: location.id, name: location.name, type: 'LOCATION' }}
         />
       ) : null}
     </>

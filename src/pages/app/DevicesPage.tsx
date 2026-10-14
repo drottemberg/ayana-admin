@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { DataTableAsync } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
-import { getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
+import { getAccessDeviceOrganization, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
 import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { useConnect } from '@/features/app/use-connect'
@@ -19,6 +19,7 @@ export default function DevicesPage() {
   const customerId = session?.currentOrganization?.id
   const locationScope = portal === Portal.CUSTOMER && customerId ? readSelectedLocationScope(customerId) : null
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
+  const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
   const customer = portal === Portal.CUSTOMER && session?.currentOrganization?.id
     ? { id: session.currentOrganization.id, name: session.currentOrganization.name ?? '' } as Customer
     : undefined
@@ -34,9 +35,16 @@ export default function DevicesPage() {
       />
 
       <AccessDeviceDrawer
-        open={isCreateDrawerOpen}
-        onOpenChange={setIsCreateDrawerOpen}
+        open={isCreateDrawerOpen || Boolean(editingDevice)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsCreateDrawerOpen(false)
+            setEditingDevice(null)
+          }
+        }}
         fixedCustomer={customer}
+        fixedOrganization={editingDevice ? getAccessDeviceOrganization(editingDevice) : undefined}
+        device={editingDevice ?? undefined}
       />
 
       <section className="space-y-5 p-4 md:p-6">
@@ -45,6 +53,9 @@ export default function DevicesPage() {
           loadData={(state) => getAccessDevicesRequest(state)}
           tableKey="devices.root"
           columns={accessDeviceColumns}
+          getRowCommands={(device) => session?.permissions.devices?.edit
+            ? [{ label: 'Edit', onClick: () => setEditingDevice(device) }]
+            : []}
           searchPlaceholder="Search by device ID or name"
           searchColumns={['deviceId', 'name']}
           filters={[

@@ -21,7 +21,7 @@ import { NO_VALUE_STR } from '@/constants'
 import { getCustomerRequest } from '@/features/customers/api'
 import { CustomerService } from '@/features/customers/customer-service'
 import { customersQueryKeys } from '@/features/customers/query-keys'
-import { accessDevicesListConfig, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
+import { accessDevicesListConfig, getAccessDeviceOrganization, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
 import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
@@ -223,6 +223,7 @@ export default function CustomerPage() {
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [isCoachDrawerOpen, setIsCoachDrawerOpen] = useState(false)
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
+  const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
   const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
   const [editingProductScope, setEditingProductScope] = useState<Product | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -697,6 +698,9 @@ export default function CustomerPage() {
                 loadData={(state: DataTableState<AccessDevice>) => getAccessDevicesRequest(state, { customerId: customer.id })}
                 tableKey="customers.detail.modules.devices"
                 columns={accessDeviceColumns}
+                getRowCommands={(device) => session?.permissions.devices?.edit
+                  ? [{ label: 'Edit', onClick: () => setEditingDevice(device) }]
+                  : []}
                 loadingMessage="Loading devices..."
                 emptyMessage="No devices found."
                 refetchOnMount={false}
@@ -757,9 +761,16 @@ export default function CustomerPage() {
         }}
       />
       <AccessDeviceDrawer
-        open={isCreateDeviceOpen}
-        onOpenChange={setIsCreateDeviceOpen}
+        open={isCreateDeviceOpen || Boolean(editingDevice)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsCreateDeviceOpen(false)
+            setEditingDevice(null)
+          }
+        }}
         fixedCustomer={customer}
+        fixedOrganization={editingDevice ? getAccessDeviceOrganization(editingDevice) : undefined}
+        device={editingDevice ?? undefined}
       />
       <ProductScopeDrawer
         product={editingProductScope}

@@ -9,7 +9,7 @@ import { SelectInputAsync } from '@/components/ui/select-input'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
-import { createAccessDeviceRequest, type CreatedAccessDevice } from '@/features/devices/access-device-api'
+import { createAccessDeviceRequest, updateAccessDeviceRequest, type AccessDevice, type CreatedAccessDevice } from '@/features/devices/access-device-api'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { ALL_LOCATIONS_SCOPE, readSelectedLocationScope } from '@/features/organizations/storage'
@@ -29,11 +29,13 @@ export function AccessDeviceDrawer({
   onOpenChange,
   fixedCustomer,
   fixedOrganization,
+  device,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   fixedCustomer?: Customer
   fixedOrganization?: DeviceOrganization
+  device?: AccessDevice
 }) {
   const queryClient = useQueryClient()
   const { session } = useConnect()
@@ -53,6 +55,7 @@ export function AccessDeviceDrawer({
   const [isActive, setIsActive] = useState(true)
   const [created, setCreated] = useState<CreatedAccessDevice>()
   const [isSaving, setIsSaving] = useState(false)
+  const isEditMode = Boolean(device)
 
   const customerId = fixedOrganization?.type === 'CUSTOMER'
     ? fixedOrganization.id
@@ -75,23 +78,23 @@ export function AccessDeviceDrawer({
     setCustomer(initialCustomer)
     setLocation(undefined)
     setUseLocation(fixedOrganization?.type === 'LOCATION' || Boolean(preferredLocationId && preferredLocationId !== ALL_LOCATIONS_SCOPE))
-    setType('GENERIC')
-    setPurpose('ACCESS')
-    setDeviceId('')
-    setSecret(generateSecret())
-    setLabel('')
-    setIsActive(true)
+    setType((device?.type as DeviceType) ?? 'GENERIC')
+    setPurpose((device?.purpose as DevicePurpose) ?? 'ACCESS')
+    setDeviceId(device?.deviceId ?? '')
+    setSecret(isEditMode ? '' : generateSecret())
+    setLabel(device?.label ?? '')
+    setIsActive(device?.isActive ?? true)
     setCreated(undefined)
     if (!fixedOrganization && preferredLocationId && preferredLocationId !== ALL_LOCATIONS_SCOPE && initialCustomer?.id) {
       void getAllLocationsForCustomerRequest(initialCustomer.id).then((locations) => {
         setLocation(locations.find((item) => item.id === preferredLocationId))
       })
     }
-  }, [open, fixedOrganization?.id, fixedOrganization?.type, initialCustomer?.id, isAdmin])
+  }, [open, fixedOrganization?.id, fixedOrganization?.type, initialCustomer?.id, isAdmin, device?.id])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!assignedOrganizationId || !deviceId.trim() || !secret.trim()) {
+    if (!assignedOrganizationId || !deviceId.trim() || (!isEditMode && !secret.trim())) {
       toast.error('Choose where the device belongs and enter its device ID and secret.')
       return
     }
@@ -101,21 +104,34 @@ export function AccessDeviceDrawer({
     }
     setIsSaving(true)
     try {
-      const device = await createAccessDeviceRequest({
-        deviceId: deviceId.trim(),
-        secret: secret.trim(),
-        type,
-        organizationId: assignedOrganizationId,
-        purpose,
-        label: label.trim() || undefined,
-        isActive,
-      })
-      setCreated(device)
+      if (device) {
+        await updateAccessDeviceRequest(device.id, {
+          deviceId: deviceId.trim(),
+          ...(secret.trim() ? { secret: secret.trim() } : {}),
+          type,
+          purpose,
+          label: label.trim() || null,
+          isActive,
+        })
+        toast.success('Device updated.')
+        onOpenChange(false)
+      } else {
+        const createdDevice = await createAccessDeviceRequest({
+          deviceId: deviceId.trim(),
+          secret: secret.trim(),
+          type,
+          organizationId: assignedOrganizationId,
+          purpose,
+          label: label.trim() || undefined,
+          isActive,
+        })
+        setCreated(createdDevice)
+        toast.success('Device added.')
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: devicesQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: ['device-detail-batch'] }),
       ])
-      toast.success('Device added.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not add the device.')
     } finally {
@@ -136,8 +152,8 @@ export function AccessDeviceDrawer({
     <AppDrawer
       open={open}
       onOpenChange={onOpenChange}
-      title={created ? 'Device added' : 'Add device'}
-      description={created ? 'Save these credentials to configure the device.' : 'Register a device and assign it to a customer or location.'}
+      title={created ? 'Device added' : isEditMode ? 'Edit device' : 'Add device'}
+      description={created ? 'Save these credentials to configure the device.' : isEditMode ? 'Update the device details.' : 'Register a device and assign it to a customer or location.'}
       contentClassName="sm:max-w-xl"
     >
       {({ containerRef }) => created ? (
@@ -264,9 +280,9 @@ export function AccessDeviceDrawer({
             </label>
 
             <label className="grid gap-1.5 text-sm font-medium">
-              <span>Device secret</span>
+              <span>{isEditMode ? 'New device secret (optional)' : 'Device secret'}</span>
               <div className="flex gap-2">
-                <Input required value={secret} onChange={(event) => setSecret(event.target.value)} />
+                <Input required={!isEditMode} placeholder={isEditMode ? 'Leave empty to keep the current secret' : undefined} value={secret} onChange={(event) => setSecret(event.target.value)} />
                 <Button type="button" variant="outline" onClick={() => setSecret(generateSecret())}>Generate</Button>
               </div>
             </label>
@@ -283,8 +299,8 @@ export function AccessDeviceDrawer({
           </div>
           <div className="flex justify-end gap-2 border-t border-border p-5">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>
-            <Button type="submit" disabled={isSaving || !assignedOrganizationId || !deviceId.trim() || !secret.trim()}>
-              {isSaving ? 'Saving…' : 'Add device'}
+            <Button type="submit" disabled={isSaving || !assignedOrganizationId || !deviceId.trim() || (!isEditMode && !secret.trim())}>
+              {isSaving ? 'Saving…' : isEditMode ? 'Save changes' : 'Add device'}
             </Button>
           </div>
         </form>
