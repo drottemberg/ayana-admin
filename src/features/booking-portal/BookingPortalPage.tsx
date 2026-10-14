@@ -71,6 +71,7 @@ type PricingOffer = {
   creditsRefreshInterval?: string | null
   validityDays?: number | null
   billingInterval?: string | null
+  minimumCommitmentMonths?: number | null
   perks?: string[] | null
 }
 type CancellationQuote = {
@@ -136,6 +137,11 @@ function BookingPortalRoute() {
   const [bookingError, setBookingError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sessionFilter, setSessionFilter] = useState<'all' | 'booked'>('all')
+  const [classFilter, setClassFilter] = useState('all')
+  const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'midday' | 'evening'>('all')
+  const [selectedDate, setSelectedDate] = useState('')
+  const [sessionLayout, setSessionLayout] = useState<'list' | 'grid'>('list')
+  const [activeSection, setActiveSection] = useState<'planning' | 'offers'>(() => searchParams.get('section') === 'offers' ? 'offers' : 'planning')
   const [cancellationQuote, setCancellationQuote] = useState<CancellationQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [offers, setOffers] = useState<PricingOffer[]>([])
@@ -181,6 +187,9 @@ function BookingPortalRoute() {
         if (!scheduleResponse.ok) throw new Error(responseMessage(schedulePayload, isFrench ? 'Ce planning est introuvable.' : 'This schedule could not be found.'))
         if (!active) return
         setSchedule(schedulePayload)
+        setSelectedDate((current) => current && schedulePayload.sessions.some((session) => session.localDate === current)
+          ? current
+          : schedulePayload.sessions[0]?.localDate ?? '')
 
         const saved = tokenFromUrl ? null : readSession(customerSlug, locationSlug)
         const handoffToken = tokenFromUrl
@@ -227,10 +236,20 @@ function BookingPortalRoute() {
   }, [customerSlug, locationSlug, searchParams])
 
   const booked = useMemo(() => new Set(member?.bookedSessionIds ?? []), [member?.bookedSessionIds])
-  const visibleSessions = useMemo(() => {
+  const memberSessions = useMemo(() => {
     const sessions = schedule?.sessions ?? []
     return member && sessionFilter === 'booked' ? sessions.filter((session) => booked.has(session.id)) : sessions
   }, [schedule, member, sessionFilter, booked])
+  const sessionDates = useMemo(() => [...new Set(memberSessions.map((session) => session.localDate))].sort(), [memberSessions])
+  const classNames = useMemo(() => [...new Set(memberSessions.map((session) => session.name))].sort((a, b) => a.localeCompare(b)), [memberSessions])
+  const visibleSessions = useMemo(() => memberSessions.filter((session) => {
+    if (classFilter !== 'all' && session.name !== classFilter) return false
+    const hour = Number(session.localStartTime.slice(0, 2))
+    if (timeFilter === 'morning' && (hour < 6 || hour >= 12)) return false
+    if (timeFilter === 'midday' && (hour < 12 || hour >= 17)) return false
+    if (timeFilter === 'evening' && (hour < 17 || hour >= 24)) return false
+    return true
+  }), [memberSessions, classFilter, timeFilter])
   const sessionsByDate = useMemo(() => {
     const sessions = visibleSessions
     return sessions.reduce<Record<string, ClassSession[]>>((groups, session) => {
@@ -238,6 +257,14 @@ function BookingPortalRoute() {
       return groups
     }, {})
   }, [visibleSessions])
+  const selectedDateIndex = sessionDates.indexOf(selectedDate)
+  const dateWindowStart = Math.max(0, Math.min(selectedDateIndex - 3, sessionDates.length - 7))
+  const dateWindow = sessionDates.slice(dateWindowStart, dateWindowStart + 7)
+  const selectedDateSessions = sessionsByDate[selectedDate] ?? []
+  const moveSelectedDate = (offset: number) => {
+    const nextIndex = Math.max(0, Math.min(sessionDates.length - 1, selectedDateIndex + offset))
+    if (sessionDates[nextIndex]) setSelectedDate(sessionDates[nextIndex])
+  }
   const needsCredits = Boolean(selected && member && selectedAction === 'book' && !member.hasUnlimitedContract && (forcedOfferFlow || member.creditBalance < selected.creditCost))
   const whatsappMessage = isFrench
     ? `Connecte-moi au planning de ${schedule?.location.name ?? 'ce studio'}`
@@ -245,15 +272,17 @@ function BookingPortalRoute() {
   const whatsappHref = whatsappLink(schedule?.location.whatsappNumber, whatsappMessage)
 
   useEffect(() => {
-    if (!member || !needsCredits || selectedAction !== 'book') {
+    const shouldLoadOffers = activeSection === 'offers' || Boolean(member && needsCredits && selectedAction === 'book')
+    if (!shouldLoadOffers) {
       setOffers([])
       setOffersError('')
       return
     }
     let active = true
     setOffersLoading(true)
+    setOffersError('')
     const url = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/offers`
-    void fetch(url, { method: 'POST', headers: { authorization: `Bearer ${member.token}` } })
+    void fetch(url, { method: 'POST', headers: member?.token ? { authorization: `Bearer ${member.token}` } : {} })
       .then(async (response) => {
         const payload = await response.json().catch(() => []) as PricingOffer[] & { message?: string | string[] }
         if (!response.ok) throw new Error(responseMessage(payload, isFrench ? 'Impossible de charger les formules.' : 'Could not load available plans.'))
@@ -262,7 +291,7 @@ function BookingPortalRoute() {
       .catch((reason) => { if (active) setOffersError(reason instanceof Error ? reason.message : (isFrench ? 'Impossible de charger les formules.' : 'Could not load available plans.')) })
       .finally(() => { if (active) setOffersLoading(false) })
     return () => { active = false }
-  }, [customerSlug, locationSlug, member?.token, needsCredits, selectedAction, isFrench])
+  }, [customerSlug, locationSlug, member?.token, needsCredits, selectedAction, activeSection, isFrench])
 
   useEffect(() => {
     if (!member) return
@@ -284,28 +313,32 @@ function BookingPortalRoute() {
   useEffect(() => {
     const payment = searchParams.get('payment')
     const sessionId = searchParams.get('sessionId')
-    if (payment !== 'success' || !sessionId || !schedule || !member) return
-    const returnKey = `${payment}:${sessionId}`
+    if (payment !== 'success' || !schedule || !member) return
+    const returnKey = `${payment}:${sessionId ?? 'offers'}`
     if (handledPaymentReturn.current === returnKey) return
-    const session = schedule.sessions.find((item) => item.id === sessionId)
-    if (!session) return
+    const session = sessionId ? schedule.sessions.find((item) => item.id === sessionId) : null
+    if (sessionId && !session) return
 
     handledPaymentReturn.current = returnKey
-    const filter = searchParams.get('filter')
-    setSessionFilter(filter === 'booked' ? 'booked' : 'all')
-    setSelected(session)
-    setSelectedAction('book')
-    setForcedOfferFlow(false)
-    setBookingError('')
-    setOffersError('')
+    setActiveSection(session ? 'planning' : 'offers')
+    if (session) {
+      const filter = searchParams.get('filter')
+      setSessionFilter(filter === 'booked' ? 'booked' : 'all')
+      setSelected(session)
+      setSelectedAction('book')
+      setForcedOfferFlow(false)
+      setBookingError('')
+      setOffersError('')
+    }
     setNotice(isFrench
-      ? 'Paiement effectué. Actualisation de tes crédits pour reprendre cette réservation…'
-      : 'Payment complete. Refreshing your credits so you can continue this booking…')
+      ? session ? 'Paiement effectué. Actualisation de tes crédits pour reprendre cette réservation…' : 'Paiement effectué. Actualisation de tes crédits…'
+      : session ? 'Payment complete. Refreshing your credits so you can continue this booking…' : 'Payment complete. Refreshing your credits…')
 
     const cleanUrl = new URL(window.location.href)
     cleanUrl.searchParams.delete('payment')
     cleanUrl.searchParams.delete('sessionId')
     cleanUrl.searchParams.delete('filter')
+    cleanUrl.searchParams.delete('section')
     window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`)
 
     let active = true
@@ -319,10 +352,10 @@ function BookingPortalRoute() {
             const updated = { ...member, ...payload, token: member.token } as MemberState
             setMember(updated)
             localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updated))
-            if (updated.hasUnlimitedContract || updated.creditBalance >= session.creditCost) {
+            if (!session || updated.hasUnlimitedContract || updated.creditBalance >= session.creditCost) {
               setNotice(isFrench
-                ? 'Tes crédits sont à jour. Tu peux maintenant confirmer cette réservation.'
-                : 'Your credits are up to date. You can now confirm this booking.')
+                ? session ? 'Tes crédits sont à jour. Tu peux maintenant confirmer cette réservation.' : 'Tes crédits sont à jour. Tu peux consulter tes formules et réserver un cours.'
+                : session ? 'Your credits are up to date. You can now confirm this booking.' : 'Your credits are up to date. You can view your plans and book a class.')
               return
             }
           }
@@ -330,8 +363,8 @@ function BookingPortalRoute() {
         await new Promise((resolve) => window.setTimeout(resolve, 1200))
       }
       if (active) setNotice(isFrench
-        ? 'Paiement effectué. Le solde met un peu plus de temps à se mettre à jour ; cette séance est conservée, réessaie dans un instant.'
-        : 'Payment complete. Your balance is taking a little longer to update; this class is still selected, please try again shortly.')
+        ? session ? 'Paiement effectué. Le solde met un peu plus de temps à se mettre à jour ; cette séance est conservée, réessaie dans un instant.' : 'Paiement effectué. Le solde met un peu plus de temps à se mettre à jour ; réessaie dans un instant.'
+        : session ? 'Payment complete. Your balance is taking a little longer to update; this class is still selected, please try again shortly.' : 'Payment complete. Your balance is taking a little longer to update; please try again shortly.')
     }
     void refreshCredits()
     return () => { active = false }
@@ -379,7 +412,7 @@ function BookingPortalRoute() {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
-        body: JSON.stringify({ pricingOptionId, sessionId: selected?.id, sessionFilter, paymentMethod, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
+        body: JSON.stringify({ pricingOptionId, ...(selected?.id ? { sessionId: selected.id, sessionFilter } : {}), paymentMethod, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
       })
       const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; message?: string | string[] }
       if (!response.ok) throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
@@ -509,45 +542,159 @@ function BookingPortalRoute() {
     }).format(new Date(Date.UTC(year, month - 1, day, 12)))
   }
 
+  const formatDateParts = (date: string) => {
+    const [year, month, day] = date.split('-').map(Number)
+    const value = new Date(Date.UTC(year, month - 1, day, 12))
+    return {
+      weekday: new Intl.DateTimeFormat(isFrench ? 'fr-FR' : 'en-GB', { weekday: 'short', timeZone: schedule?.location.timezone ?? 'Europe/Paris' }).format(value).replace('.', ''),
+      day: new Intl.DateTimeFormat(isFrench ? 'fr-FR' : 'en-GB', { day: '2-digit', month: 'short', timeZone: schedule?.location.timezone ?? 'Europe/Paris' }).format(value).replace('.', ''),
+    }
+  }
+
+  const renderPricingOffer = (offer: PricingOffer, standalone = false) => {
+    const price = new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: offer.currency || 'EUR' }).format(offer.price)
+    const whatsappOfferHref = whatsappLink(schedule?.location.whatsappNumber, isFrench
+      ? `Connecte-moi au planning de ${schedule?.location.name ?? 'ce studio'} pour acheter ${offer.name}.`
+      : `Connect me to the class schedule for ${schedule?.location.name ?? 'this studio'} to buy ${offer.name}.`)
+    const creditsLabel = offer.creditsTotal != null
+      ? `${offer.creditsTotal} ${isFrench ? 'crédits au total' : 'total credits'}`
+      : offer.creditsPerPeriod != null
+        ? `${offer.creditsPerPeriod} ${isFrench ? 'crédits' : 'credits'} / ${offer.creditsRefreshInterval?.toLowerCase() ?? (isFrench ? 'période' : 'period')}`
+        : (isFrench ? 'Accès illimité' : 'Unlimited access')
+    const billingLabel = offer.billingInterval && offer.billingInterval !== 'ONCE'
+      ? `${isFrench ? 'Facturation' : 'Billed'} ${offer.billingInterval.toLowerCase()}`
+      : (isFrench ? 'Paiement unique' : 'One-time payment')
+    return <article className={`booking-offer${standalone ? ' booking-offer-standalone' : ''}`} key={offer.id}>
+      <div><strong>{offer.name}</strong><b>{price}</b></div>
+      {offer.description && <p>{offer.description}</p>}
+      <small>{creditsLabel}{offer.validityDays ? ` · ${offer.validityDays} ${isFrench ? 'jours de validité' : 'days validity'}` : ''} · {billingLabel}{offer.minimumCommitmentMonths ? ` · ${offer.minimumCommitmentMonths} ${isFrench ? 'mois d’engagement minimum' : 'months minimum commitment'}` : ''}</small>
+      {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
+      {offer.billingInterval && offer.billingInterval !== 'ONCE' && schedule?.location.paymentMethods?.terminal && <small className="booking-terminal-consent-hint">{isFrench ? 'Sur place, tu confirmeras sur le terminal le prélèvement initial et les renouvellements automatiques.' : 'In person, you’ll confirm the initial payment and automatic renewals on the reader.'}</small>}
+      {!member
+        ? whatsappOfferHref
+          ? <a className="booking-offer-buy" href={whatsappOfferHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp pour acheter' : 'Connect with WhatsApp to buy'}<span>↗</span></a>
+          : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>
+        : checkoutUrls[offer.id]
+          ? <a className="booking-offer-buy" href={checkoutUrls[offer.id]}>{isFrench ? 'Continuer vers le paiement en ligne' : 'Continue to online payment'}<span>↗</span></a>
+          : offerPaymentNotices[offer.id] ? null
+            : <div className="booking-offer-payment-actions">
+              {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-offer-buy booking-offer-pay-online" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'link')}>
+                {purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer en ligne' : 'Pay online')}<span>→</span>
+              </button>}
+              {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-offer-buy booking-offer-pay-in-person" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'terminal')}>
+                {purchasingOfferId === offer.id ? (isFrench ? 'Enregistrement…' : 'Saving…') : (isFrench ? 'Payer sur place' : 'Pay in person')}<span>→</span>
+              </button>}
+            </div>}
+      {offerPaymentNotices[offer.id] && <p className="booking-offer-payment-notice" role="status">{offerPaymentNotices[offer.id]}</p>}
+    </article>
+  }
+
   return <main className="ayana-booking">
     <header className="booking-topbar"><img src={ayanaLogo} alt="Ayana Feelness Club" /><span>{isFrench ? 'PLANNING & RÉSERVATION' : 'SCHEDULE & BOOKING'}</span><div className="booking-language" role="group" aria-label={isFrench ? 'Langue' : 'Language'}><button type="button" aria-pressed={isFrench} className={isFrench ? 'active' : ''} onClick={() => changeLanguage('fr')}>FR</button><button type="button" aria-pressed={!isFrench} className={!isFrench ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button></div></header>
     {loading ? <div className="booking-loading"><span className="booking-spinner" />{isFrench ? 'Chargement du planning…' : 'Loading schedule…'}</div> : error ? <section className="booking-empty"><p className="booking-eyebrow">AYANA FEELNESS CLUB</p><h1>{isFrench ? 'Planning indisponible' : 'Schedule unavailable'}</h1><p>{error}</p></section> : <>
       <section className="booking-hero">
-        <p className="booking-eyebrow">{schedule?.customer.name}</p>
-        <h1>{isFrench ? 'Le planning' : 'Class schedule'}<br /><em>{schedule?.location.name}</em></h1>
-        <p>{isFrench ? 'Choisis ton cours et réserve en quelques instants.' : 'Choose your class and book in just a few taps.'}</p>
+        <p className="booking-eyebrow">{schedule?.location.name}</p>
+        <h1>{activeSection === 'offers' ? (isFrench ? 'Nos formules' : 'Our plans') : (isFrench ? 'Le planning' : 'Class schedule')}<br /><em>{schedule?.location.name}</em></h1>
+        <p>{activeSection === 'offers'
+          ? (isFrench ? 'Choisis un pack ou un abonnement pour réserver tes cours.' : 'Choose a pack or membership to book classes.')
+          : (isFrench ? 'Choisis ton cours et réserve en quelques instants.' : 'Choose your class and book in just a few taps.')}</p>
+        <div className="booking-hero-pillars" aria-label={isFrench ? 'Univers Ayana' : 'The Ayana experience'}>
+          <div><span aria-hidden="true">♧</span><p>Reformer<br />Pilates</p></div>
+          <div><span aria-hidden="true">☕</span><p>Coffee<br />Matcha</p></div>
+          <div><span aria-hidden="true">✧</span><p>Wellness<br />Lifestyle</p></div>
+        </div>
       </section>
 
       {member
-        ? <section className="booking-member"><div><span>{isFrench ? 'Connecté·e' : 'Signed in'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ')}</strong></div><div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (isFrench ? 'accès illimité' : 'unlimited') : (isFrench ? 'crédits' : 'credits')}</span></div><button type="button" className="booking-logout" onClick={logout} aria-label={isFrench ? 'Se déconnecter' : 'Log out'} title={isFrench ? 'Se déconnecter' : 'Log out'}>↪</button></div></section>
+        ? <section className="booking-member">
+          <div className="booking-member-identity"><span className="booking-avatar">{(member.identity.firstName?.[0] ?? member.identity.lastName?.[0] ?? 'A').toUpperCase()}</span><div><span>{isFrench ? 'Connecté·e' : 'Signed in'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ')}</strong></div></div>
+          <div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (isFrench ? 'accès illimité' : 'unlimited') : (isFrench ? 'crédits' : 'credits')}</span></div><button type="button" className="booking-member-plans" onClick={() => setActiveSection('offers')}><span aria-hidden="true">▤</span>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}<b>→</b></button><button type="button" className="booking-logout" onClick={logout} aria-label={isFrench ? 'Se déconnecter' : 'Log out'} title={isFrench ? 'Se déconnecter' : 'Log out'}>↪</button></div>
+        </section>
         : <section className="booking-login-card"><div><strong>{isFrench ? 'Réserve avec ton compte Ayana' : 'Book with your Ayana account'}</strong><span>{isFrench ? 'Connecte-toi pour voir tes crédits et gérer tes réservations.' : 'Connect to see your credits and manage your bookings.'}</span></div>{whatsappHref ? <a className="booking-whatsapp-cta" href={whatsappHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp' : 'Connect with WhatsApp'}<span>↗</span></a> : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>}</section>}
       {notice && <div className="booking-notice" role="status">{notice}</div>}
 
-      {member && <div className="booking-session-filters" role="group" aria-label={isFrench ? 'Filtrer les cours' : 'Filter classes'}>
-        <button type="button" className={sessionFilter === 'all' ? 'active' : ''} aria-pressed={sessionFilter === 'all'} onClick={() => setSessionFilter('all')}>{isFrench ? 'Tous les cours' : 'All classes'}</button>
-        <button type="button" className={sessionFilter === 'booked' ? 'active' : ''} aria-pressed={sessionFilter === 'booked'} onClick={() => setSessionFilter('booked')}>{isFrench ? 'Mes réservations' : 'My bookings'}</button>
-      </div>}
+      <nav className="booking-section-tabs" role="tablist" aria-label={isFrench ? 'Planning et formules' : 'Schedule and plans'}>
+        <button type="button" role="tab" aria-selected={activeSection === 'planning'} className={activeSection === 'planning' ? 'active' : ''} onClick={() => setActiveSection('planning')}><span aria-hidden="true">▣</span>{isFrench ? 'Planning' : 'Schedule'}</button>
+        <button type="button" role="tab" aria-selected={activeSection === 'offers'} className={activeSection === 'offers' ? 'active' : ''} onClick={() => setActiveSection('offers')}><span aria-hidden="true">◇</span>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}</button>
+      </nav>
 
-      {Object.keys(sessionsByDate).length === 0 ? <section className="booking-empty"><h2>{member && sessionFilter === 'booked' ? (isFrench ? 'Aucune réservation à venir' : 'No upcoming bookings') : (isFrench ? 'Aucun cours prévu pour le moment' : 'No upcoming classes yet')}</h2><p>{member && sessionFilter === 'booked' ? (isFrench ? 'Tes prochaines réservations apparaîtront ici.' : 'Your upcoming bookings will appear here.') : (isFrench ? 'Reviens bientôt pour découvrir les prochains créneaux.' : 'Check back soon for upcoming sessions.')}</p>{member && sessionFilter === 'booked' && <button type="button" className="booking-empty-action" onClick={() => setSessionFilter('all')}>{isFrench ? 'Voir tous les cours' : 'View all classes'}</button>}</section> : <div className="booking-days">
-        {Object.entries(sessionsByDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, sessions]) => <section className="booking-day" key={date}>
-          <h2>{formatDate(date)}</h2>
-          <div className="booking-session-list">{sessions.map((session) => {
+      {activeSection === 'planning' && <>
+        <section className="booking-calendar-controls" aria-label={isFrench ? 'Choisir une date et filtrer les cours' : 'Choose a date and filter classes'}>
+          <div className="booking-date-carousel">
+            <button type="button" className="booking-date-arrow" aria-label={isFrench ? 'Jours précédents' : 'Previous days'} disabled={!selectedDateIndex || selectedDateIndex < 0} onClick={() => moveSelectedDate(-1)}>‹</button>
+            <div className="booking-date-strip">
+              {dateWindow.map((date) => {
+                const parts = formatDateParts(date)
+                return <button type="button" key={date} className={`booking-date-option${date === selectedDate ? ' active' : ''}`} aria-pressed={date === selectedDate} onClick={() => setSelectedDate(date)}>
+                  <span>{parts.weekday}</span><strong>{parts.day}</strong>
+                </button>
+              })}
+            </div>
+            <button type="button" className="booking-date-arrow" aria-label={isFrench ? 'Jours suivants' : 'Next days'} disabled={selectedDateIndex < 0 || selectedDateIndex >= sessionDates.length - 1} onClick={() => moveSelectedDate(1)}>›</button>
+          </div>
+
+          <div className="booking-filterbar">
+            <label className="booking-filter-select booking-filter-bookings"><span aria-hidden="true">☷</span><select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value as 'all' | 'booked')} aria-label={isFrench ? 'Afficher les cours ou mes réservations' : 'Show classes or my bookings'}>
+              <option value="all">{isFrench ? 'Tous les cours' : 'All classes'}</option>
+              {member && <option value="booked">{isFrench ? 'Mes réservations' : 'My bookings'}</option>}
+            </select><span className="booking-select-chevron">⌄</span></label>
+            <label className="booking-filter-select"><select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} aria-label={isFrench ? 'Type de cours' : 'Class type'}>
+              <option value="all">{isFrench ? 'Tous les types' : 'All class types'}</option>
+              {classNames.map((name) => <option value={name} key={name}>{name}</option>)}
+            </select><span className="booking-select-chevron">⌄</span></label>
+            <label className="booking-filter-select"><select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value as typeof timeFilter)} aria-label={isFrench ? 'Horaire' : 'Time of day'}>
+              <option value="all">{isFrench ? 'Tous les horaires' : 'All times'}</option>
+              <option value="morning">{isFrench ? 'Matin' : 'Morning'}</option>
+              <option value="midday">{isFrench ? 'Midi / après-midi' : 'Midday / afternoon'}</option>
+              <option value="evening">{isFrench ? 'Soir' : 'Evening'}</option>
+            </select><span className="booking-select-chevron">⌄</span></label>
+            <div className="booking-layout-switch" role="group" aria-label={isFrench ? 'Affichage des cours' : 'Class layout'}>
+              <button type="button" className={sessionLayout === 'grid' ? 'active' : ''} aria-label={isFrench ? 'Affichage en grille' : 'Grid view'} aria-pressed={sessionLayout === 'grid'} onClick={() => setSessionLayout('grid')}>▦</button>
+              <button type="button" className={sessionLayout === 'list' ? 'active' : ''} aria-label={isFrench ? 'Affichage en liste' : 'List view'} aria-pressed={sessionLayout === 'list'} onClick={() => setSessionLayout('list')}>☷</button>
+            </div>
+          </div>
+        </section>
+
+        <div className="booking-day-heading"><h2>{selectedDate ? formatDate(selectedDate) : (isFrench ? 'Prochains cours' : 'Upcoming classes')}</h2><span>{selectedDateSessions.length} {isFrench ? 'cours disponibles' : 'classes available'}</span></div>
+        {selectedDateSessions.length === 0 ? <section className="booking-empty booking-day-empty">
+          <h2>{member && sessionFilter === 'booked' ? (isFrench ? 'Aucune réservation ce jour-là' : 'No bookings on this day') : (isFrench ? 'Aucun cours disponible ce jour-là' : 'No classes available on this day')}</h2>
+          <p>{isFrench ? 'Choisis un autre jour ou modifie les filtres.' : 'Choose another day or change the filters.'}</p>
+          {member && sessionFilter === 'booked' && <button type="button" className="booking-empty-action" onClick={() => setSessionFilter('all')}>{isFrench ? 'Voir tous les cours' : 'View all classes'}</button>}
+        </section> : <div className={`booking-session-list booking-session-list-${sessionLayout}`}>
+          {selectedDateSessions.map((session) => {
             const alreadyBooked = booked.has(session.id)
             const booking = member?.bookings.find((item) => item.sessionId === session.id)
             return <article className="booking-session" key={session.id}>
               <div className="booking-session-time"><strong>{session.localStartTime}</strong><span>{session.localEndTime}</span></div>
               <div className="booking-session-copy">
                 <div className="booking-session-title"><h3>{session.name}</h3>{session.category && <span>{session.category}</span>}</div>
-                <p className="booking-session-meta">{session.duration} min{session.coachName ? ` · ${session.coachName}` : ''}</p>
+                <div className="booking-session-meta"><span>◷</span>{session.duration} min{session.coachName ? ` · ${session.coachName}` : ''}{session.category && <><i />{session.category}</>}</div>
                 {session.description && <p className="booking-session-description">{session.description}</p>}
-                {session.conditions && <p className="booking-conditions">{session.conditions}</p>}
-                <div className="booking-session-bottom"><span>{session.creditCost} {isFrench ? 'crédit' : 'credit'}{session.creditCost === 1 ? '' : 's'}</span><span>{alreadyBooked ? (isFrench ? 'Déjà réservé' : 'Already booked') : session.isWaitlist ? (isFrench ? 'Liste d’attente' : 'Waitlist') : `${session.availableSpots} ${isFrench ? 'places' : 'spots'}`}</span></div>
-                <button type="button" className={`booking-session-action${alreadyBooked ? ' booking-manage-action' : ''}`} onClick={() => alreadyBooked && booking ? void openCancellation(session, booking.bookingId) : openBooking(session)}>{alreadyBooked ? (isFrench ? 'Gérer / annuler' : 'Manage / cancel') : session.isWaitlist ? (isFrench ? 'Rejoindre la liste' : 'Join waitlist') : (isFrench ? 'Choisir ce cours' : 'Choose this class')}<span>→</span></button>
+                {session.conditions && <p className="booking-conditions"><span aria-hidden="true">♧</span>{session.conditions}</p>}
+              </div>
+              <div className="booking-session-actions">
+                <span className="booking-spots">♙ {alreadyBooked ? (isFrench ? 'Réservé·e' : 'Booked') : `${session.availableSpots} ${isFrench ? 'places' : 'spots'}`}</span>
+                <button type="button" className={`booking-session-action${alreadyBooked ? ' booking-manage-action' : ''}`} onClick={() => alreadyBooked && booking ? void openCancellation(session, booking.bookingId) : openBooking(session)}>{alreadyBooked ? (isFrench ? 'Gérer / annuler' : 'Manage / cancel') : session.isWaitlist ? (isFrench ? 'Liste d’attente' : 'Join waitlist') : (isFrench ? 'Réserver' : 'Book')}<span>→</span></button>
+                <small>{session.creditCost} {isFrench ? 'crédit' : 'credit'}{session.creditCost === 1 ? '' : 's'}</small>
               </div>
             </article>
-          })}</div>
-        </section>)}
-      </div>}
+          })}
+        </div>}
+      </>}
+
+      {activeSection === 'offers' && <section className="booking-plans">
+        <header className="booking-plans-heading">
+          <p className="booking-eyebrow">{isFrench ? 'FORMULES DU STUDIO' : 'STUDIO PLANS'}</p>
+          <h2>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}</h2>
+          <p>{isFrench ? 'Choisis une formule pour profiter des cours de ce studio. Tes crédits seront associés à ton compte Ayana.' : 'Choose a plan for classes at this studio. Your credits will be added to your Ayana account.'}</p>
+        </header>
+        {!member && <div className="booking-plans-signin">{isFrench ? 'Connecte-toi avec WhatsApp pour acheter une formule et retrouver tes crédits dans ton compte.' : 'Connect with WhatsApp to buy a plan and keep its credits in your account.'}</div>}
+        {member && !member.identity.firstName?.trim() && <label className="booking-first-name booking-plans-first-name">{isFrench ? 'Ton prénom est nécessaire avant l’achat' : 'Your first name is required before purchase'}<input autoComplete="given-name" maxLength={80} value={firstNameDraft} onChange={(event) => setFirstNameDraft(event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
+        {offersLoading && <div className="booking-loading booking-plans-loading"><span className="booking-spinner" />{isFrench ? 'Chargement des formules…' : 'Loading plans…'}</div>}
+        {!offersLoading && offers.length === 0 && !offersError && <div className="booking-empty booking-plans-empty"><h2>{isFrench ? 'Aucune formule disponible' : 'No plans available'}</h2><p>{isFrench ? 'Les formules disponibles à l’achat apparaîtront ici.' : 'Plans available to purchase will appear here.'}</p></div>}
+        {offersError && <div className="booking-error" role="alert">{offersError}</div>}
+        {offers.length > 0 && <div className="booking-plans-list">{offers.map((offer) => renderPricingOffer(offer, true))}</div>}
+      </section>}
       <footer className="booking-footer">{isFrench ? 'AYANA FEELNESS CLUB · RÉSERVATION EN LIGNE' : 'AYANA FEELNESS CLUB · ONLINE BOOKING'}</footer>
     </>}
 
@@ -601,25 +748,7 @@ function BookingPortalRoute() {
           <div className="booking-no-credit"><strong>{isFrench ? 'Solde insuffisant' : 'Not enough credits'}</strong><span>{isFrench ? `Ce cours demande ${selected.creditCost} crédit(s). Ton solde est de ${member.creditBalance}. Voici les formules disponibles à l’achat.` : `This class requires ${selected.creditCost} credit(s). Your balance is ${member.creditBalance}. Here are the plans available to buy.`}</span></div>
           {offersLoading && <p className="booking-confirm-hint">{isFrench ? 'Chargement des formules…' : 'Loading plans…'}</p>}
           {!offersLoading && offers.length === 0 && !offersError && <p className="booking-confirm-hint">{isFrench ? 'Aucune formule disponible à l’achat pour ce studio.' : 'No plans are currently available to buy for this studio.'}</p>}
-          {offers.map((offer) => <article className="booking-offer" key={offer.id}>
-            <div><strong>{offer.name}</strong><b>{new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: offer.currency || 'EUR' }).format(offer.price)}</b></div>
-            {offer.description && <p>{offer.description}</p>}
-            <small>{offer.creditsTotal != null ? `${offer.creditsTotal} ${isFrench ? 'crédits' : 'credits'}` : offer.creditsPerPeriod != null ? `${offer.creditsPerPeriod} ${isFrench ? 'crédits' : 'credits'} / ${offer.creditsRefreshInterval?.toLowerCase() ?? 'period'}` : (isFrench ? 'Accès illimité' : 'Unlimited access')}{offer.validityDays ? ` · ${offer.validityDays} ${isFrench ? 'jours de validité' : 'days validity'}` : ''}{offer.billingInterval && offer.billingInterval !== 'ONCE' ? ` · ${isFrench ? 'facturation' : 'billed'} ${offer.billingInterval.toLowerCase()}` : ''}</small>
-            {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
-            {offer.billingInterval && offer.billingInterval !== 'ONCE' && schedule?.location.paymentMethods?.terminal && <small className="booking-terminal-consent-hint">{isFrench ? 'Sur place, tu confirmeras sur le terminal le prélèvement initial et les renouvellements automatiques.' : 'In person, you’ll confirm the initial payment and automatic renewals on the reader.'}</small>}
-            {checkoutUrls[offer.id]
-              ? <a className="booking-offer-buy" href={checkoutUrls[offer.id]}>{isFrench ? 'Continuer vers le paiement en ligne' : 'Continue to online payment'}<span>↗</span></a>
-              : offerPaymentNotices[offer.id] ? null
-              : <div className="booking-offer-payment-actions">
-                {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-offer-buy booking-offer-pay-online" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'link')}>
-                  {purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer en ligne' : 'Pay online')}<span>→</span>
-                </button>}
-                {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-offer-buy booking-offer-pay-in-person" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'terminal')}>
-                  {purchasingOfferId === offer.id ? (isFrench ? 'Enregistrement…' : 'Saving…') : (isFrench ? 'Payer sur place' : 'Pay in person')}<span>→</span>
-                </button>}
-              </div>}
-            {offerPaymentNotices[offer.id] && <p className="booking-offer-payment-notice" role="status">{offerPaymentNotices[offer.id]}</p>}
-          </article>)}
+          {offers.map((offer) => renderPricingOffer(offer))}
           {offersError && <div className="booking-error" role="alert">{offersError}</div>}
         </div>
         : <p className="booking-confirm-hint">{isFrench ? 'Ta réservation sera confirmée après validation.' : 'Your booking will be confirmed after you submit.'}</p>}
