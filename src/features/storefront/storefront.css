@@ -7,6 +7,7 @@
   --store-muted: #8b7e70;
   --store-line: #e8d7c1;
   --store-sage: #737c61;
+  --store-terminal: #485d3d;
   min-height: 100svh;
   padding: 0 20px 116px;
   color: var(--store-espresso);
@@ -75,3 +76,18 @@
 .store-checkout-form [data-slot="phone-input-field"] > div { display: flex; min-width: 0; gap: 7px; }
 .store-checkout-form [data-slot="phone-input-field"] select { flex: 0 0 142px; width: 142px; padding: 0 7px; font-size: 12px; }
 .store-checkout-form [data-slot="phone-input-field"] input { flex: 1 1 0; min-width: 0; }
+.payment-method-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: 100%; margin-top: 8px; }
+.payment-method-actions > button { width: 100%; min-height: 64px; box-sizing: border-box; justify-self: stretch; margin: 0; }
+.payment-method-actions .payment-online { color: #fff; background: var(--store-clay); }
+.payment-choice-terminal { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 17px; border: 1px solid var(--store-terminal); border-radius: 13px; color: #fff; background: var(--store-terminal); font: inherit; font-size: 14px; font-weight: 700; text-align: left; }
+.payment-choice-terminal:hover { background: #394b31; }
+.payment-choice-terminal strong { font-size: 14px; }
+.payment-choice-terminal > span { flex: 0 0 auto; font-size: 20px; }
+.payment-choice-terminal:disabled { opacity: .6; }
+.terminal-payment-sheet { text-align: center; }
+.terminal-payment-sheet .store-eyebrow { margin-top: 15px; }
+.terminal-payment-sheet h2 { padding: 0; }
+.terminal-payment-mark { display: grid; place-items: center; width: 62px; height: 62px; margin: 4px auto 0; border-radius: 50%; color: #fff; background: var(--store-sage); font-size: 28px; }
+.terminal-order-code { display: grid; gap: 4px; margin-top: 20px; padding: 13px; border: 1px dashed var(--store-clay); border-radius: 12px; }
+.terminal-order-code span { color: var(--store-muted); font-size: 11px; }
+.terminal-order-code strong { color: var(--store-clay); font-size: 21px; letter-spacing: .15em; }

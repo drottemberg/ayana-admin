@@ -36,12 +36,14 @@ export function ClassScheduleCreateDrawer({
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [coachValidFrom, setCoachValidFrom] = useState('')
+  const [coachValidUntil, setCoachValidUntil] = useState('')
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const locationId = classType?.locationId || classType?.organizationId || ''
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
-    queryKey: ['coaches', 'location', locationId],
-    queryFn: () => getLocationCoachesRequest(locationId),
+    queryKey: ['coaches', 'location', locationId, classType?.id],
+    queryFn: () => getLocationCoachesRequest(locationId, classType?.id),
     enabled: Boolean(open && locationId),
   })
 
@@ -60,6 +62,8 @@ export function ClassScheduleCreateDrawer({
       await createClassScheduleRequest(classType.locationId || classType.organizationId, {
         classTypeId: classType.id,
         coachId: coachId || null,
+        coachValidFrom: coachId ? (coachValidFrom || validFrom) : undefined,
+        coachValidUntil: coachId && coachValidUntil ? coachValidUntil : undefined,
         dayOfWeek: dayOfWeek as NonNullable<import('@/types/class-type').ClassSchedule['dayOfWeek']>,
         startHour,
         startMinute,
@@ -99,9 +103,14 @@ export function ClassScheduleCreateDrawer({
             isLoading={isLoadingCoaches}
             loadingMessage="Loading coaches..."
             placeholder="Select a coach"
-            emptyMessage="No coaches assigned to this location."
+            emptyMessage="No qualified instructors assigned to this location."
           />
         </Field>
+        {coachId ? <>
+          <Field label="Coach assigned from"><Input required type="date" value={coachValidFrom || validFrom} onChange={(event) => setCoachValidFrom(event.target.value)} /></Field>
+          <Field label="Coach assigned until (optional)"><Input type="date" value={coachValidUntil} onChange={(event) => setCoachValidUntil(event.target.value)} /></Field>
+          <p className="-mt-3 text-xs text-muted-foreground">The schedule can continue after this instructor assignment ends.</p>
+        </> : null}
         <Field label={`Capacity (default ${classType?.maxCapacity ?? 0})`}><Input type="number" min="1" step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} placeholder="Use class capacity" /></Field>
         <Field label="Valid from"><Input required type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
         <Field label="Valid until (optional)"><Input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></Field>

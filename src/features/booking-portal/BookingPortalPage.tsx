@@ -39,7 +39,13 @@ type ClassProductOffer = {
 
 type Schedule = {
   customer: { name: string; slug: string }
-  location: { name: string; slug: string; timezone: string; whatsappNumber?: string | null }
+  location: {
+    name: string
+    slug: string
+    timezone: string
+    whatsappNumber?: string | null
+    paymentMethods?: { online: boolean; terminal: boolean }
+  }
   sessions: ClassSession[]
 }
 
@@ -137,7 +143,9 @@ function BookingPortalRoute() {
   const [offersError, setOffersError] = useState('')
   const [forcedOfferFlow, setForcedOfferFlow] = useState(false)
   const [checkoutUrls, setCheckoutUrls] = useState<Record<string, string>>({})
+  const [offerPaymentNotices, setOfferPaymentNotices] = useState<Record<string, string>>({})
   const [purchasingOfferId, setPurchasingOfferId] = useState('')
+  const offerPurchaseInFlight = useRef(false)
   const [bookingUpsell, setBookingUpsell] = useState<{ className: string; products: ClassProductOffer[] } | null>(null)
   const handledPaymentReturn = useRef('')
   const isFrench = language === 'fr'
@@ -357,12 +365,13 @@ function BookingPortalRoute() {
     } finally { setQuoteLoading(false) }
   }
 
-  const purchaseOffer = async (pricingOptionId: string) => {
-    if (!member) return
+  const purchaseOffer = async (pricingOptionId: string, paymentMethod: 'link' | 'terminal') => {
+    if (!member || offerPurchaseInFlight.current) return
     if (!member.identity.firstName?.trim() && !firstNameDraft.trim()) {
       setOffersError(isFrench ? 'Indique ton prénom avant d’acheter cette formule.' : 'Enter your first name before buying this plan.')
       return
     }
+    offerPurchaseInFlight.current = true
     setPurchasingOfferId(pricingOptionId)
     setOffersError('')
     try {
@@ -370,11 +379,22 @@ function BookingPortalRoute() {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
-        body: JSON.stringify({ pricingOptionId, sessionId: selected?.id, sessionFilter, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
+        body: JSON.stringify({ pricingOptionId, sessionId: selected?.id, sessionFilter, paymentMethod, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
       })
-      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; message?: string | string[] }
-      if (!response.ok || !payload.checkoutUrl) throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
-      setCheckoutUrls((current) => ({ ...current, [pricingOptionId]: payload.checkoutUrl! }))
+      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; message?: string | string[] }
+      if (!response.ok) throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
+      if (paymentMethod === 'link' && payload.checkoutUrl) {
+        setCheckoutUrls((current) => ({ ...current, [pricingOptionId]: payload.checkoutUrl! }))
+      } else if (paymentMethod === 'terminal' && payload.awaitingPayment) {
+        setOfferPaymentNotices((current) => ({
+          ...current,
+          [pricingOptionId]: isFrench
+            ? 'Ta formule est enregistrée. À l’accueil, tu pourras lire et accepter ses conditions sur le terminal avant de payer. Les crédits seront ajoutés après validation du paiement.'
+            : 'Your plan is saved. At reception, review and accept its terms on the reader before paying. Credits will be added after payment is confirmed.',
+        }))
+      } else {
+        throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
+      }
       if (!member.identity.firstName?.trim()) {
         const updated = { ...member, identity: { ...member.identity, firstName: firstNameDraft.trim() } }
         setMember(updated)
@@ -382,7 +402,10 @@ function BookingPortalRoute() {
       }
     } catch (reason) {
       setOffersError(reason instanceof Error ? reason.message : (isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
-    } finally { setPurchasingOfferId('') }
+    } finally {
+      offerPurchaseInFlight.current = false
+      setPurchasingOfferId('')
+    }
   }
 
   const createBooking = async () => {
@@ -583,9 +606,19 @@ function BookingPortalRoute() {
             {offer.description && <p>{offer.description}</p>}
             <small>{offer.creditsTotal != null ? `${offer.creditsTotal} ${isFrench ? 'crédits' : 'credits'}` : offer.creditsPerPeriod != null ? `${offer.creditsPerPeriod} ${isFrench ? 'crédits' : 'credits'} / ${offer.creditsRefreshInterval?.toLowerCase() ?? 'period'}` : (isFrench ? 'Accès illimité' : 'Unlimited access')}{offer.validityDays ? ` · ${offer.validityDays} ${isFrench ? 'jours de validité' : 'days validity'}` : ''}{offer.billingInterval && offer.billingInterval !== 'ONCE' ? ` · ${isFrench ? 'facturation' : 'billed'} ${offer.billingInterval.toLowerCase()}` : ''}</small>
             {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
+            {offer.billingInterval && offer.billingInterval !== 'ONCE' && schedule?.location.paymentMethods?.terminal && <small className="booking-terminal-consent-hint">{isFrench ? 'Sur place, tu confirmeras sur le terminal le prélèvement initial et les renouvellements automatiques.' : 'In person, you’ll confirm the initial payment and automatic renewals on the reader.'}</small>}
             {checkoutUrls[offer.id]
-              ? <a className="booking-offer-buy" href={checkoutUrls[offer.id]}>{isFrench ? 'Continuer vers le paiement' : 'Continue to payment'}<span>↗</span></a>
-              : <button type="button" className="booking-offer-buy" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id)}>{purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Acheter cette formule' : 'Buy this plan')}<span>→</span></button>}
+              ? <a className="booking-offer-buy" href={checkoutUrls[offer.id]}>{isFrench ? 'Continuer vers le paiement en ligne' : 'Continue to online payment'}<span>↗</span></a>
+              : offerPaymentNotices[offer.id] ? null
+              : <div className="booking-offer-payment-actions">
+                {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-offer-buy booking-offer-pay-online" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'link')}>
+                  {purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer en ligne' : 'Pay online')}<span>→</span>
+                </button>}
+                {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-offer-buy booking-offer-pay-in-person" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'terminal')}>
+                  {purchasingOfferId === offer.id ? (isFrench ? 'Enregistrement…' : 'Saving…') : (isFrench ? 'Payer sur place' : 'Pay in person')}<span>→</span>
+                </button>}
+              </div>}
+            {offerPaymentNotices[offer.id] && <p className="booking-offer-payment-notice" role="status">{offerPaymentNotices[offer.id]}</p>}
           </article>)}
           {offersError && <div className="booking-error" role="alert">{offersError}</div>}
         </div>

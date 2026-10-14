@@ -346,6 +346,12 @@
   box-shadow: 0 0 18px rgba(76, 139, 80, 0.2);
 }
 
+.count-awaiting-payment {
+  color: #302720 !important;
+  background: linear-gradient(145deg, #ead1ad, #dfbd8f);
+  box-shadow: 0 3px 10px rgba(144, 101, 50, 0.12);
+}
+
 .count-preparing {
   background: linear-gradient(145deg, #ba8a4f, #76502e);
   box-shadow: 0 0 18px rgba(186, 138, 79, 0.18);
@@ -373,7 +379,7 @@
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(12px, 1.2vw, 19px);
 }
 
@@ -392,6 +398,11 @@
 
 .kitchen-lane-preparing {
   background: linear-gradient(145deg, #1b1914 0%, #151411 100%);
+}
+
+.kitchen-lane-awaiting_payment {
+  border-color: rgba(186, 138, 79, 0.2);
+  background: linear-gradient(145deg, #211b14 0%, #181611 100%);
 }
 
 .kitchen-lane-ready {
@@ -604,6 +615,26 @@
   font-size: 11px;
 }
 
+.kitchen-payment-awaiting {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 11px;
+  border: 1px solid #ead9c4;
+  border-radius: 10px;
+  padding: 9px 10px;
+  color: #7a4c2e;
+  background: #f7eddd;
+  font-size: 12px;
+}
+
+.kitchen-payment-awaiting strong {
+  flex: 0 0 auto;
+  color: #a6381c;
+  font-variant-numeric: tabular-nums;
+}
+
 .kitchen-order-item + .kitchen-order-item {
   border-top: 1px solid rgba(227, 213, 194, 0.12);
   padding-top: 10px;
@@ -739,6 +770,12 @@
   font-size: 13px;
 }
 
+.kitchen-card-action-payment {
+  color: #fffaf1;
+  background: linear-gradient(105deg, #b34627, #963217);
+  box-shadow: 0 4px 12px rgba(166, 56, 28, 0.14);
+}
+
 .kitchen-card-rollback,
 .kitchen-detail-rollback {
   display: flex;
@@ -769,6 +806,42 @@
 .kitchen-detail-rollback:disabled {
   cursor: wait;
   opacity: 0.5;
+}
+
+.kitchen-card-cancel-terminal,
+.kitchen-card-cancel-order {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  border: 1px solid #d9b99c;
+  border-radius: 11px;
+  padding: 8px 12px;
+  color: #7e3a25;
+  background: #fff8ef;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kitchen-card-cancel-order {
+  border-color: #e9c9bd;
+  color: #963217;
+  background: #fff0e9;
+}
+
+.kitchen-card-cancel-terminal:hover:not(:disabled),
+.kitchen-card-cancel-order:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.kitchen-card-cancel-terminal:disabled,
+.kitchen-card-cancel-order:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .kitchen-action-arrow {
@@ -1429,9 +1502,9 @@
   }
 
   .kitchen-board {
-    width: max(100%, 870px);
-    min-width: 870px;
-    grid-template-columns: repeat(3, minmax(270px, 1fr));
+    width: max(100%, 1120px);
+    min-width: 1120px;
+    grid-template-columns: repeat(4, minmax(260px, 1fr));
   }
 
   .kitchen-lane {
@@ -1561,6 +1634,11 @@
   background: linear-gradient(145deg, #b34627, #963217);
   box-shadow: 0 3px 10px rgba(166, 56, 28, 0.18);
 }
+.count-awaiting-payment {
+  color: #302720 !important;
+  background: linear-gradient(145deg, #ead1ad, #dfbd8f);
+  box-shadow: 0 3px 10px rgba(144, 101, 50, 0.12);
+}
 .count-preparing {
   color: #302720 !important;
   background: linear-gradient(145deg, #ead1ad, #dfbd8f);
@@ -1577,6 +1655,10 @@
 .kitchen-lane-preparing {
   border-color: #ead9c4;
   background: linear-gradient(155deg, #f8f0e3 0%, #f3e8d7 100%);
+}
+.kitchen-lane-awaiting_payment {
+  border-color: #e2c7a5;
+  background: linear-gradient(155deg, #f5e8d6 0%, #f0dfc9 100%);
 }
 .kitchen-lane-ready {
   border-color: #d6dfcb;
@@ -1651,6 +1733,11 @@
   background: #edf2e8;
   box-shadow: none;
 }
+.kitchen-card-action-payment {
+  color: #fffaf1;
+  background: linear-gradient(105deg, #b34627, #963217);
+  box-shadow: 0 4px 12px rgba(166, 56, 28, 0.14);
+}
 .kitchen-card-rollback,
 .kitchen-detail-rollback {
   border-color: #e8d7c1;
@@ -1662,6 +1749,21 @@
   border-color: #d7bda0;
   color: #302720;
   background: #f7efe2;
+}
+.kitchen-card-cancel-terminal,
+.kitchen-card-cancel-order {
+  border-color: #e8d7c1;
+  color: #65594e;
+  background: #fffdf9;
+}
+.kitchen-card-cancel-order {
+  border-color: #efcbbd;
+  color: #963217;
+  background: #fff2ec;
+}
+.kitchen-card-cancel-terminal:hover:not(:disabled),
+.kitchen-card-cancel-order:hover:not(:disabled) {
+  filter: brightness(0.97);
 }
 .kitchen-lane-empty {
   border-color: #dcc9b2;

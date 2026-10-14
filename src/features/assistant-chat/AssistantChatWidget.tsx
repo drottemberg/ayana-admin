@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, KeyboardEvent, PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import { io, type Socket } from 'socket.io-client'
@@ -31,6 +31,12 @@ type ChatAck = {
   appContext?: string
 }
 
+type FloatingPosition = { left: number; top: number }
+
+const CHAT_POSITION_STORAGE_KEY = 'ayana.admin.assistant-chat.position.v1'
+const CHAT_BUTTON_SIZE = 56
+const CHAT_EDGE_GAP = 12
+
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
 
 function socketUrl(): string {
@@ -44,10 +50,36 @@ function formatTime(timestamp: number | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(timestamp))
 }
 
+function clampChatPosition(position: FloatingPosition): FloatingPosition {
+  const maxLeft = Math.max(CHAT_EDGE_GAP, window.innerWidth - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP)
+  const maxTop = Math.max(CHAT_EDGE_GAP, window.innerHeight - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP)
+  return {
+    left: Math.min(maxLeft, Math.max(CHAT_EDGE_GAP, position.left)),
+    top: Math.min(maxTop, Math.max(CHAT_EDGE_GAP, position.top)),
+  }
+}
+
+function readChatPosition(): FloatingPosition {
+  const fallback = clampChatPosition({
+    left: window.innerWidth - CHAT_BUTTON_SIZE - 20,
+    top: window.innerHeight - CHAT_BUTTON_SIZE - 20,
+  })
+  try {
+    const saved = localStorage.getItem(CHAT_POSITION_STORAGE_KEY)
+    if (!saved) return fallback
+    const parsed = JSON.parse(saved) as Partial<FloatingPosition>
+    if (typeof parsed.left !== 'number' || typeof parsed.top !== 'number') return fallback
+    return clampChatPosition({ left: parsed.left, top: parsed.top })
+  } catch {
+    return fallback
+  }
+}
+
 export function AssistantChatWidget() {
   const { token, logout } = useAuth()
   const { session } = useConnect()
   const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState<FloatingPosition>(() => readChatPosition())
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [draft, setDraft] = useState('')
@@ -62,6 +94,15 @@ export function AssistantChatWidget() {
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    startLeft: number
+    startTop: number
+    moved: boolean
+  } | null>(null)
+  const draggedRef = useRef(false)
   const selectedOrganizationId = session?.orgId ?? readSelectedOrgId()
   const handleUnauthorized = useCallback(async () => {
     const refreshed = await apiClient.refreshSession()
@@ -84,6 +125,22 @@ export function AssistantChatWidget() {
       attributeFilter: ['data-state'],
     })
     return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const clampAndSave = () => {
+      setPosition((current) => {
+        const next = clampChatPosition(current)
+        try {
+          localStorage.setItem(CHAT_POSITION_STORAGE_KEY, JSON.stringify(next))
+        } catch {
+          // The position still works for this page even when storage is unavailable.
+        }
+        return next
+      })
+    }
+    window.addEventListener('resize', clampAndSave)
+    return () => window.removeEventListener('resize', clampAndSave)
   }, [])
 
   useEffect(() => {
@@ -225,16 +282,91 @@ export function AssistantChatWidget() {
     sendMessage(draft)
   }
 
+  const handleButtonPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: position.left,
+      startTop: position.top,
+      moved: false,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const handleButtonPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const deltaX = event.clientX - drag.startX
+    const deltaY = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 5) return
+    drag.moved = true
+    const next = clampChatPosition({ left: drag.startLeft + deltaX, top: drag.startTop + deltaY })
+    setPosition(next)
+  }
+
+  const handleButtonPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    dragRef.current = null
+    if (!drag.moved) return
+    draggedRef.current = true
+    const next = clampChatPosition({
+      left: drag.startLeft + event.clientX - drag.startX,
+      top: drag.startTop + event.clientY - drag.startY,
+    })
+    setPosition(next)
+    try {
+      localStorage.setItem(CHAT_POSITION_STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      // Keep the moved position for this page even when storage is unavailable.
+    }
+  }
+
+  const moveWithKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!event.altKey || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return
+    event.preventDefault()
+    const step = event.shiftKey ? 40 : 16
+    const next = clampChatPosition({
+      left: position.left + (event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0),
+      top: position.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0),
+    })
+    setPosition(next)
+    try {
+      localStorage.setItem(CHAT_POSITION_STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      // Keep the moved position for this page even when storage is unavailable.
+    }
+  }
+
+  const panelPosition = (() => {
+    const panelWidth = Math.min(390, window.innerWidth - CHAT_EDGE_GAP * 2)
+    const availableAbove = Math.max(0, position.top - CHAT_EDGE_GAP * 2)
+    const availableBelow = Math.max(0, window.innerHeight - position.top - CHAT_BUTTON_SIZE - CHAT_EDGE_GAP * 2)
+    const placeAbove = availableAbove >= availableBelow
+    const panelHeight = Math.min(640, Math.max(180, placeAbove ? availableAbove : availableBelow))
+    const left = Math.min(
+      window.innerWidth - panelWidth - CHAT_EDGE_GAP,
+      Math.max(CHAT_EDGE_GAP, position.left + CHAT_BUTTON_SIZE - panelWidth),
+    )
+    const top = placeAbove
+      ? Math.max(CHAT_EDGE_GAP, position.top - panelHeight - CHAT_EDGE_GAP)
+      : position.top + CHAT_BUTTON_SIZE + CHAT_EDGE_GAP
+    return { left, top, width: panelWidth, height: panelHeight }
+  })()
+
   if (!token) return null
 
   const widget = (
-    <div className="fixed right-5 bottom-5 z-[80] flex flex-col items-end gap-3">
+    <div className="pointer-events-none fixed inset-0 z-[80]">
       {open ? (
         <section
           aria-label="Ayana assistant chat"
-          className="flex h-[min(640px,calc(100dvh-7rem))] w-[min(390px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl"
+          className="pointer-events-auto fixed flex flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl"
           role="dialog"
           aria-modal="false"
+          style={{ left: panelPosition.left, top: panelPosition.top, width: panelPosition.width, height: panelPosition.height }}
         >
           <header className="flex items-center justify-between border-b px-4 py-3">
             <div className="min-w-0">
@@ -453,10 +585,24 @@ export function AssistantChatWidget() {
 
       <Button
         size="icon-lg"
-        className="size-14 rounded-full shadow-lg"
+        className="pointer-events-auto fixed size-14 touch-none select-none rounded-full shadow-lg cursor-grab active:cursor-grabbing"
         aria-label={open ? 'Close assistant chat' : 'Open assistant chat'}
+        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        title="Drag to move the assistant. Alt + arrow keys also move it."
+        style={{ left: position.left, top: position.top }}
+        onPointerDown={handleButtonPointerDown}
+        onPointerMove={handleButtonPointerMove}
+        onPointerUp={handleButtonPointerUp}
+        onPointerCancel={handleButtonPointerUp}
+        onKeyDown={moveWithKeyboard}
+        onClick={() => {
+          if (draggedRef.current) {
+            draggedRef.current = false
+            return
+          }
+          setOpen((value) => !value)
+        }}
       >
         {open ? <CloseIcon /> : <ChatIcon />}
       </Button>

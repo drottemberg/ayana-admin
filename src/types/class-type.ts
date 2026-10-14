@@ -54,6 +54,8 @@ export type ClassSchedule = {
   classTypeId: string
   coachId?: string | null
   coachName?: string | null
+  coachValidFrom?: string | null
+  coachValidUntil?: string | null
   roomId?: string | null
   frequencyUnit: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   frequencyMultiplier: number

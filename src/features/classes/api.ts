@@ -88,8 +88,9 @@ export type UpdateClassSessionPayload = {
 
 export type LocationCoach = { userId: string; coachName: string }
 
-export async function getLocationCoachesRequest(locationId: string): Promise<LocationCoach[]> {
-  return apiClient.get<LocationCoach[]>('/coaches', { headers: { 'x-org-id': locationId } })
+export async function getLocationCoachesRequest(locationId: string, classTypeId?: string): Promise<LocationCoach[]> {
+  const query = classTypeId ? `?classTypeId=${encodeURIComponent(classTypeId)}` : ''
+  return apiClient.get<LocationCoach[]>(`/coaches${query}`, { headers: { 'x-org-id': locationId } })
 }
 
 export async function updateClassSessionRequest(id: string, locationId: string, payload: UpdateClassSessionPayload) {
@@ -147,6 +148,8 @@ export async function getClassSchedulesRequest(locationId: string): Promise<Clas
 export type CreateClassSchedulePayload = {
   classTypeId: string
   coachId?: string | null
+  coachValidFrom?: string
+  coachValidUntil?: string
   dayOfWeek: NonNullable<ClassSchedule['dayOfWeek']>
   startHour: number
   startMinute: number
@@ -162,6 +165,8 @@ export async function createClassScheduleRequest(locationId: string, payload: Cr
 
 export type UpdateClassSchedulePayload = {
   coachId: string | null
+  coachValidFrom: string | null
+  coachValidUntil: string | null
   dayOfWeek: NonNullable<ClassSchedule['dayOfWeek']>
   startHour: number
   startMinute: number

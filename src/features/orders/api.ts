@@ -28,6 +28,7 @@ export type KitchenLocation = {
 
 export type KitchenOrder = {
   id: string
+  type: 'PRODUCT' | 'MEMBERSHIP' | 'MIXED'
   status: OrderStatus
   shortCode?: string | null
   pickupNumber?: number | null
@@ -41,6 +42,7 @@ export type KitchenOrder = {
   canSendPickupReminder?: boolean
   total?: number | null
   paymentStatus?: string | null
+  paymentMethod?: string | null
   lastReminderAt?: string | null
   issues?: Array<{ id: string; category: string; status: string; description: string; resolution?: string | null; resolutionNote?: string | null }>
   items: Array<{
@@ -110,6 +112,7 @@ export type KitchenIssueResolution = 'ASK_CUSTOMER' | 'REMOVE_ITEM_REFUND' | 'CA
 
 export type KitchenOrdersResult = {
   activeOrders: KitchenOrder[]
+  awaitingPaymentOrders: KitchenOrder[]
   recentOrders: KitchenOrder[]
 }
 
@@ -125,6 +128,22 @@ export function getKitchenOrdersRequest(locationId: string) {
 
 export function setKitchenOrderStatusRequest(orderId: string, locationId: string, status: OrderStatus, comment?: string) {
   return apiClient.patch<KitchenOrder>(`/orders/kitchen/${orderId}/status`, { locationId, status, comment })
+}
+
+export function startTerminalPaymentRequest(orderId: string) {
+  return apiClient.post<{ orderId: string; readerLabel: string; status: string }>(`/orders/${orderId}/terminal-payment/start`, {})
+}
+
+export function cancelKitchenTerminalPaymentRequest(orderId: string, locationId: string) {
+  return apiClient.post<{ success: boolean; orderId: string; paymentStatus: string }>(
+    `/orders/kitchen/${orderId}/terminal-payment/cancel`, { locationId },
+  )
+}
+
+export function cancelAwaitingKitchenOrderRequest(orderId: string, locationId: string) {
+  return apiClient.post<{ success: boolean; orderId: string; status: string; paymentStatus: string }>(
+    `/orders/kitchen/${orderId}/cancel-order`, { locationId },
+  )
 }
 
 export function getKitchenOrderDetailsRequest(orderId: string, locationId: string) {

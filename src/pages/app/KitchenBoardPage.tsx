@@ -7,7 +7,7 @@ import { io, type Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { getCustomerRequest, getCustomersListRequest } from '@/features/customers/api'
 import { customersQueryKeys } from '@/features/customers/query-keys'
-import { getKitchenLocationsRequest, getKitchenOrdersRequest, getKitchenOrderDetailsRequest, reportKitchenOrderIssueRequest, resolveKitchenOrderIssueRequest, sendKitchenPickupReminderRequest, setKitchenOrderStatusRequest, type KitchenIssueCategory, type KitchenIssueResolution, type KitchenOrder } from '@/features/orders/api'
+import { getKitchenLocationsRequest, getKitchenOrdersRequest, getKitchenOrderDetailsRequest, reportKitchenOrderIssueRequest, resolveKitchenOrderIssueRequest, sendKitchenPickupReminderRequest, setKitchenOrderStatusRequest, startTerminalPaymentRequest, cancelKitchenTerminalPaymentRequest, cancelAwaitingKitchenOrderRequest, type KitchenIssueCategory, type KitchenIssueResolution, type KitchenOrder } from '@/features/orders/api'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { OrderStatus } from '@/types/order'
 import type { Customer } from '@/types/customer'
@@ -23,7 +23,8 @@ function socketUrl() {
   return import.meta.env.VITE_SOCKET_URL || new URL(API_URL, window.location.origin).origin
 }
 
-const lanes: Array<{ status: 'RECEIVED' | 'PREPARING' | 'READY'; fr: string; en: string }> = [
+const lanes: Array<{ status: 'AWAITING_PAYMENT' | 'RECEIVED' | 'PREPARING' | 'READY'; fr: string; en: string }> = [
+  { status: 'AWAITING_PAYMENT', fr: 'À encaisser', en: 'Awaiting payment' },
   { status: 'RECEIVED', fr: 'À préparer', en: 'Received' },
   { status: 'PREPARING', fr: 'En préparation', en: 'Preparing' },
   { status: 'READY', fr: 'Prêtes', en: 'Ready' },
@@ -120,8 +121,12 @@ function KitchenCard({
   order,
   language,
   isUpdating,
+  isAwaitingPayment,
   isSendingReminder,
   onAdvance,
+  onStartTerminalPayment,
+  onCancelTerminalPayment,
+  onCancelOrder,
   onRollback,
   onOpen,
   onSendReminder,
@@ -129,8 +134,12 @@ function KitchenCard({
   order: KitchenOrder
   language: 'fr' | 'en'
   isUpdating: boolean
+  isAwaitingPayment: boolean
   isSendingReminder: boolean
   onAdvance: () => void
+  onStartTerminalPayment: () => void
+  onCancelTerminalPayment: () => void
+  onCancelOrder: () => void
   onRollback: (() => void) | null
   onOpen: () => void
   onSendReminder: () => void
@@ -138,19 +147,19 @@ function KitchenCard({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: order.id,
     data: { status: order.status },
-    disabled: false,
+    disabled: isAwaitingPayment,
   })
   const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.35 : 1 }
   const isDelivery = order.deliveryType === 'DELIVERY'
 
   return (
-    <article ref={setNodeRef} style={style} className={`kitchen-card kitchen-card-${order.status.toLowerCase()}`}>
+    <article ref={setNodeRef} style={style} className={`kitchen-card kitchen-card-${order.status.toLowerCase()}${isAwaitingPayment ? ' kitchen-card-awaiting-payment' : ''}`}>
       <div className="kitchen-card-heading">
         <div className="kitchen-card-drag">
           <button type="button" className="kitchen-order-code kitchen-order-open" onClick={onOpen} aria-label={language === 'fr' ? `Voir le détail de ${orderLabel(order)}` : `View details for ${orderLabel(order)}`}>
             {orderLabel(order)}
           </button>
-          <button {...attributes} {...listeners} type="button" className="kitchen-drag-grip" aria-label={language === 'fr' ? 'Déplacer la commande' : 'Drag order'}>⠿</button>
+          {!isAwaitingPayment && <button {...attributes} {...listeners} type="button" className="kitchen-drag-grip" aria-label={language === 'fr' ? 'Déplacer la commande' : 'Drag order'}>⠿</button>}
           {order.status === 'READY' && <span className="kitchen-ready-check" aria-label={language === 'fr' ? 'Commande prête' : 'Order ready'}>✓</span>}
         </div>
         <time className="kitchen-order-time">{formatTime(order.createdAt, language === 'fr' ? 'fr-FR' : 'en-GB')}</time>
@@ -162,6 +171,17 @@ function KitchenCard({
           : (language === 'fr' ? 'Client invité' : 'Guest customer')}
         <span>{language === 'fr' ? 'Voir le détail' : 'View details'} ↗</span>
       </button>
+
+      {isAwaitingPayment && (
+        <div className="kitchen-payment-awaiting">
+          <span>{order.paymentStatus === 'PROCESSING'
+            ? (language === 'fr' ? 'Présentez la carte sur le terminal' : 'Present the card on the terminal')
+            : order.paymentStatus === 'FAILED'
+              ? (language === 'fr' ? 'Paiement échoué · nouvelle tentative possible' : 'Payment failed · retry available')
+              : (language === 'fr' ? 'Paiement à effectuer au comptoir' : 'Payment due at the counter')}</span>
+          {typeof order.total === 'number' && <strong>{new Intl.NumberFormat(language === 'fr' ? 'fr-FR' : 'en-GB', { style: 'currency', currency: order.currency }).format(order.total)}</strong>}
+        </div>
+      )}
 
       <div className="kitchen-order-items">
         {order.items.map((item) => (
@@ -214,18 +234,36 @@ function KitchenCard({
 
       <button
         type="button"
-        onClick={onAdvance}
-        disabled={isUpdating}
-        className={`kitchen-card-action kitchen-card-action-${order.status.toLowerCase()}`}
+        onClick={isAwaitingPayment ? onStartTerminalPayment : onAdvance}
+        disabled={isUpdating || (isAwaitingPayment && order.paymentStatus === 'PROCESSING')}
+        className={`kitchen-card-action kitchen-card-action-${isAwaitingPayment ? 'payment' : order.status.toLowerCase()}`}
       >
-        {isUpdating ? (language === 'fr' ? 'Mise à jour…' : 'Updating…') : order.status === 'READY'
-          ? isDelivery ? (language === 'fr' ? 'Marquer comme livrée' : 'Mark delivered') : (language === 'fr' ? 'Marquer comme récupérée' : 'Mark picked up')
-          : order.status === 'RECEIVED'
-            ? (language === 'fr' ? 'Commencer' : 'Start preparing')
-            : (language === 'fr' ? 'Marquer comme prête' : 'Mark as ready')}
-        <span className="kitchen-action-arrow" aria-hidden="true">{order.status === 'READY' ? '✓' : '→'}</span>
+        {isUpdating
+          ? (language === 'fr' ? 'Envoi au terminal…' : 'Sending to terminal…')
+          : isAwaitingPayment
+            ? order.paymentStatus === 'PROCESSING'
+              ? (language === 'fr' ? 'Paiement en cours' : 'Payment in progress')
+              : order.paymentStatus === 'FAILED'
+                ? (language === 'fr' ? 'Réessayer sur le terminal' : 'Retry on terminal')
+                : (language === 'fr' ? 'Encaisser sur le terminal' : 'Charge on terminal')
+            : order.status === 'READY'
+              ? isDelivery ? (language === 'fr' ? 'Marquer comme livrée' : 'Mark delivered') : (language === 'fr' ? 'Marquer comme récupérée' : 'Mark picked up')
+              : order.status === 'RECEIVED'
+                ? (language === 'fr' ? 'Commencer' : 'Start preparing')
+                : (language === 'fr' ? 'Marquer comme prête' : 'Mark as ready')}
+        <span className="kitchen-action-arrow" aria-hidden="true">{isAwaitingPayment ? '€' : order.status === 'READY' ? '✓' : '→'}</span>
       </button>
-      {onRollback && (
+      {isAwaitingPayment && order.paymentStatus === 'PROCESSING' && (
+        <button type="button" className="kitchen-card-cancel-terminal" disabled={isUpdating} onClick={onCancelTerminalPayment}>
+          {language === 'fr' ? 'Arrêter l’appel du terminal' : 'Stop terminal payment'}
+        </button>
+      )}
+      {isAwaitingPayment && (
+        <button type="button" className="kitchen-card-cancel-order" disabled={isUpdating} onClick={onCancelOrder}>
+          {language === 'fr' ? 'Annuler la commande' : 'Cancel order'}
+        </button>
+      )}
+      {!isAwaitingPayment && onRollback && (
         <button type="button" className="kitchen-card-rollback" disabled={isUpdating} onClick={onRollback}>
           {language === 'fr' ? `↶ Revenir à « ${statusLabel(rollbackTargetFor(order.status)!, language)} »` : `↶ Move back to ${statusLabel(rollbackTargetFor(order.status)!, language)}`}
         </button>
@@ -245,8 +283,11 @@ function KitchenLane({
   onRollback,
   onOpen,
   onSendReminder,
+  onStartTerminalPayment,
+  onCancelTerminalPayment,
+  onCancelOrder,
 }: {
-  status: 'RECEIVED' | 'PREPARING' | 'READY'
+  status: 'AWAITING_PAYMENT' | 'RECEIVED' | 'PREPARING' | 'READY'
   title: string
   orders: KitchenOrder[]
   language: 'fr' | 'en'
@@ -256,6 +297,9 @@ function KitchenLane({
   onRollback: (order: KitchenOrder) => void
   onOpen: (order: KitchenOrder) => void
   onSendReminder: (order: KitchenOrder) => void
+  onStartTerminalPayment: (order: KitchenOrder) => void
+  onCancelTerminalPayment: (order: KitchenOrder) => void
+  onCancelOrder: (order: KitchenOrder) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
   return (
@@ -270,9 +314,13 @@ function KitchenLane({
             order={order}
             language={language}
             isUpdating={updatingId === order.id}
+            isAwaitingPayment={status === 'AWAITING_PAYMENT'}
             isSendingReminder={reminderSendingId === order.id}
             onAdvance={() => onAdvance(order)}
-            onRollback={rollbackTargetFor(order.status) ? () => onRollback(order) : null}
+            onStartTerminalPayment={() => onStartTerminalPayment(order)}
+            onCancelTerminalPayment={() => onCancelTerminalPayment(order)}
+            onCancelOrder={() => onCancelOrder(order)}
+            onRollback={status !== 'AWAITING_PAYMENT' && rollbackTargetFor(order.status) ? () => onRollback(order) : null}
             onOpen={() => onOpen(order)}
             onSendReminder={() => onSendReminder(order)}
           />
@@ -400,12 +448,16 @@ export default function KitchenBoardPage() {
     queryKey: ordersQueryKeys.kitchen(locationId),
     queryFn: () => getKitchenOrdersRequest(locationId),
     enabled: Boolean(customerId && locationId),
-    refetchInterval: isRealtimeConnected ? 30_000 : 4_000,
+    refetchInterval: (query) => {
+      const terminalPaymentInProgress = query.state.data?.awaitingPaymentOrders?.some((order) => order.paymentStatus === 'PROCESSING')
+      return terminalPaymentInProgress || !isRealtimeConnected ? 4_000 : 30_000
+    },
     refetchOnWindowFocus: true,
   })
   const allOrders = kitchenQuery.data?.activeOrders ?? []
+  const awaitingPaymentOrders = kitchenQuery.data?.awaitingPaymentOrders ?? []
   const recentOrders = kitchenQuery.data?.recentOrders ?? []
-  const selectedKitchenOrder = allOrders.find((order) => order.id === selectedOrderId)
+  const selectedKitchenOrder = [...awaitingPaymentOrders, ...allOrders].find((order) => order.id === selectedOrderId)
   const lastReminderAt = selectedKitchenOrder?.lastReminderAt ? new Date(selectedKitchenOrder.lastReminderAt) : null
   const reminderCooldownActive = Boolean(lastReminderAt && Date.now() - lastReminderAt.getTime() < 15 * 60_000)
   const detailQuery = useQuery({
@@ -479,7 +531,7 @@ export default function KitchenBoardPage() {
 
   useEffect(() => {
     if (!kitchenQuery.data) return
-    const incoming = kitchenQuery.data.activeOrders
+    const incoming = [...(kitchenQuery.data.awaitingPaymentOrders ?? []), ...kitchenQuery.data.activeOrders]
       .filter((order) => order.status === 'RECEIVED')
       .map((order) => order.id)
     if (knownOrderIds.current == null) {
@@ -509,6 +561,42 @@ export default function KitchenBoardPage() {
       void queryClient.invalidateQueries({ queryKey: ['orders', 'kitchen-detail', variables.orderId, locationId] })
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : tr('Impossible de mettre à jour la commande.', 'Could not update the order.')),
+  })
+  const terminalPaymentMutation = useMutation({
+    mutationFn: (orderId: string) => startTerminalPaymentRequest(orderId),
+    onSuccess: ({ readerLabel }) => {
+      toast.success(tr(`Paiement envoyé au terminal ${readerLabel}.`, `Payment sent to terminal ${readerLabel}.`))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : tr('Impossible de démarrer le paiement sur le terminal.', 'Could not start payment on the terminal.'))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+    },
+  })
+  const cancelTerminalPaymentMutation = useMutation({
+    mutationFn: (orderId: string) => cancelKitchenTerminalPaymentRequest(orderId, locationId),
+    onSuccess: (_result, orderId) => {
+      toast.success(tr('Appel du terminal arrêté. La commande reste à encaisser.', 'Terminal payment stopped. The order is still awaiting payment.'))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+      void queryClient.invalidateQueries({ queryKey: ['orders', 'kitchen-detail', orderId, locationId] })
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : tr('Impossible d’arrêter le paiement sur le terminal.', 'Could not stop the terminal payment.'))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+    },
+  })
+  const cancelAwaitingOrderMutation = useMutation({
+    mutationFn: (orderId: string) => cancelAwaitingKitchenOrderRequest(orderId, locationId),
+    onSuccess: (_result, orderId) => {
+      toast.success(tr('Commande annulée.', 'Order cancelled.'))
+      if (selectedOrderIdRef.current === orderId) setSelectedOrderId(null)
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.all })
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : tr('Impossible d’annuler la commande.', 'Could not cancel the order.'))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+    },
   })
   const reminderMutation = useMutation({
     mutationFn: (orderId: string) => sendKitchenPickupReminderRequest(orderId, locationId),
@@ -558,10 +646,11 @@ export default function KitchenBoardPage() {
   })
 
   const ordersByStatus = useMemo(() => ({
+    AWAITING_PAYMENT: awaitingPaymentOrders,
     RECEIVED: allOrders.filter((order) => order.status === 'RECEIVED'),
     PREPARING: allOrders.filter((order) => order.status === 'PREPARING'),
     READY: allOrders.filter((order) => order.status === 'READY'),
-  }), [allOrders])
+  }), [allOrders, awaitingPaymentOrders])
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
@@ -574,6 +663,22 @@ export default function KitchenBoardPage() {
         ? 'READY'
         : order.deliveryType === 'DELIVERY' ? 'DELIVERED' : 'PICKED_UP'
     statusMutation.mutate({ orderId: order.id, status })
+  }
+
+  function stopTerminalPayment(order: KitchenOrder) {
+    const confirmed = window.confirm(tr(
+      `Arrêter l’appel du terminal pour ${orderLabel(order)} ? La commande restera en attente de paiement.`,
+      `Stop the terminal payment for ${orderLabel(order)}? The order will remain awaiting payment.`,
+    ))
+    if (confirmed) cancelTerminalPaymentMutation.mutate(order.id)
+  }
+
+  function cancelAwaitingOrder(order: KitchenOrder) {
+    const confirmed = window.confirm(tr(
+      `Annuler définitivement la commande ${orderLabel(order)} ? Le paiement en attente sera invalidé.`,
+      `Cancel order ${orderLabel(order)}? Its pending payment will be voided.`,
+    ))
+    if (confirmed) cancelAwaitingOrderMutation.mutate(order.id)
   }
 
   function requestRollback(orderId: string, fromStatus: OrderStatus) {
@@ -746,6 +851,7 @@ export default function KitchenBoardPage() {
             <div className="kitchen-clock-date">{new Intl.DateTimeFormat(language === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(now)}</div>
           </div>
           <div className="kitchen-header-counts">
+            <span>{tr('À encaisser', 'Awaiting payment')} <b className="count-awaiting-payment">{ordersByStatus.AWAITING_PAYMENT.length}</b></span>
             <span>{tr('À préparer', 'To prepare')} <b className="count-received">{ordersByStatus.RECEIVED.length}</b></span>
             <span>{tr('En préparation', 'Preparing')} <b className="count-preparing">{ordersByStatus.PREPARING.length}</b></span>
           </div>
@@ -784,12 +890,21 @@ export default function KitchenBoardPage() {
                         title={language === 'fr' ? lane.fr : lane.en}
                         orders={ordersByStatus[lane.status]}
                         language={language}
-                        updatingId={statusMutation.isPending ? statusMutation.variables?.orderId ?? null : null}
+                        updatingId={terminalPaymentMutation.isPending
+                          ? terminalPaymentMutation.variables ?? null
+                          : cancelTerminalPaymentMutation.isPending
+                            ? cancelTerminalPaymentMutation.variables ?? null
+                            : cancelAwaitingOrderMutation.isPending
+                              ? cancelAwaitingOrderMutation.variables ?? null
+                              : statusMutation.isPending ? statusMutation.variables?.orderId ?? null : null}
                         reminderSendingId={reminderMutation.isPending ? reminderMutation.variables ?? null : null}
                         onAdvance={advance}
                         onRollback={(order) => requestRollback(order.id, order.status)}
                         onOpen={(order) => { setSelectedOrderId(order.id); setReportFormOpen(false) }}
                         onSendReminder={(order) => reminderMutation.mutate(order.id)}
+                        onStartTerminalPayment={(order) => terminalPaymentMutation.mutate(order.id)}
+                        onCancelTerminalPayment={stopTerminalPayment}
+                        onCancelOrder={cancelAwaitingOrder}
                       />
                     ))}
                   </div>

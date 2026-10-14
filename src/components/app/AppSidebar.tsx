@@ -200,10 +200,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const settingsItems = React.useMemo(
     () => data.settings
-      .filter((item) => item.title !== 'Devices' || isAdminContext)
       .filter((item) => item.title !== 'LLM Config' || canManageLlmConfig)
       .filter((item) => canUseFeature(item, hasFeature)),
-    [canManageLlmConfig, hasFeature, isAdminContext],
+    [canManageLlmConfig, hasFeature],
   )
   return (
     <Sidebar collapsible="icon" {...props}>

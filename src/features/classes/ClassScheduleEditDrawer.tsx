@@ -44,11 +44,13 @@ export function ClassScheduleEditDrawer({
   const [validFrom, setValidFrom] = useState('')
   const [validUntil, setValidUntil] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [coachValidFrom, setCoachValidFrom] = useState('')
+  const [coachValidUntil, setCoachValidUntil] = useState('')
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
-    queryKey: ['coaches', 'location', locationId],
-    queryFn: () => getLocationCoachesRequest(locationId),
+    queryKey: ['coaches', 'location', locationId, classType?.id],
+    queryFn: () => getLocationCoachesRequest(locationId, classType?.id),
     enabled: Boolean(open && locationId),
   })
 
@@ -60,6 +62,8 @@ export function ClassScheduleEditDrawer({
     setValidFrom(dateInput(schedule.validFrom))
     setValidUntil(dateInput(schedule.validUntil))
     setCoachId(schedule.coachId ?? '')
+    setCoachValidFrom(schedule.coachId ? dateInput(schedule.coachValidFrom ?? schedule.validFrom) : '')
+    setCoachValidUntil(schedule.coachId ? dateInput(schedule.coachValidUntil) : '')
     setAutoGenerateSessions(schedule.autoGenerateSessions !== false)
   }, [open, schedule])
 
@@ -77,6 +81,11 @@ export function ClassScheduleEditDrawer({
       toast.error('The end date must be on or after the start date.')
       return
     }
+    const effectiveCoachFrom = coachValidFrom || validFrom
+    if (coachId && coachValidUntil && effectiveCoachFrom && new Date(coachValidUntil) < new Date(effectiveCoachFrom)) {
+      toast.error('The instructor assignment end date must be on or after its start date.')
+      return
+    }
 
     setIsSaving(true)
     try {
@@ -88,6 +97,8 @@ export function ClassScheduleEditDrawer({
         validFrom: validFrom ? new Date(`${validFrom}T00:00:00.000Z`).toISOString() : null,
         validUntil: validUntil ? new Date(`${validUntil}T23:59:59.000Z`).toISOString() : null,
         coachId: coachId || null,
+        coachValidFrom: coachId ? effectiveCoachFrom || null : null,
+        coachValidUntil: coachId ? coachValidUntil || null : null,
         autoGenerateSessions,
       })
       await Promise.all([
@@ -118,9 +129,14 @@ export function ClassScheduleEditDrawer({
             isLoading={isLoadingCoaches}
             loadingMessage="Loading coaches..."
             placeholder="Select a coach"
-            emptyMessage="No coaches assigned to this location."
+            emptyMessage="No qualified instructors assigned to this location."
           />
         </Field>
+        {coachId ? <>
+          <Field label="Coach assigned from"><Input required type="date" value={coachValidFrom || validFrom} onChange={(event) => setCoachValidFrom(event.target.value)} /></Field>
+          <Field label="Coach assigned until (optional)"><Input type="date" value={coachValidUntil} onChange={(event) => setCoachValidUntil(event.target.value)} /></Field>
+          <p className="-mt-3 text-xs text-muted-foreground">The schedule can continue after this instructor assignment ends.</p>
+        </> : null}
         <Field label="Valid from"><Input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
         <Field label="Valid until"><Input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></Field>
         <label className="flex items-start gap-2 text-sm">

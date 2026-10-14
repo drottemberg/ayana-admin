@@ -12,7 +12,7 @@ type ProductOption = { id: string; name: string; price: number }
 type ModifierGroup = { id: string; name: string; required: boolean; minSelect: number; maxSelect: number; options: ProductOption[] }
 type Variant = { id: string; label: string; price: number; stock: number; available: boolean }
 type Product = { id: string; name: string; description?: string | null; category: string; imageUrl?: string | null; variants: Variant[]; modifierGroups: ModifierGroup[] }
-type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null }; currency: string; products: Product[] }
+type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null }; currency: string; paymentMethods?: { online: boolean; terminal: boolean }; products: Product[] }
 type CartLine = { key: string; productId: string; name: string; variantId: string; variantLabel: string; unitPrice: number; quantity: number; modifierIds: string[]; modifierNames: string[]; modifierTotal: number }
 type Identity = { token?: string; firstName?: string; lastName?: string; email?: string; phone?: string }
 type StorefrontLanguage = 'fr' | 'en'
@@ -69,6 +69,8 @@ function StorefrontRoute() {
   const [cart, setCart] = useState<CartLine[]>(readCart)
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'terminal'>('online')
+  const [terminalOrder, setTerminalOrder] = useState<{ shortCode?: string } | null>(null)
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
   const [checkoutFirstName, setCheckoutFirstName] = useState(() => readIdentity(customerSlug, locationSlug).firstName ?? '')
   const [checkoutPhone, setCheckoutPhone] = useState(() => readIdentity(customerSlug, locationSlug).phone ?? '')
@@ -178,6 +180,7 @@ function StorefrontRoute() {
   const totalCount = cart.reduce((sum, line) => sum + line.quantity, 0)
   const total = cart.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0)
   const currency = catalog?.currency ?? 'EUR'
+  const terminalAvailable = catalog?.paymentMethods?.terminal === true
 
   const openProduct = (product: Product) => {
     setSelectedProduct(product)
@@ -236,6 +239,7 @@ function StorefrontRoute() {
 
   const startCheckout = () => {
     setCheckoutError('')
+    setPaymentMethod('online')
     const savedIdentity = readIdentity(customerSlug, locationSlug)
     setIdentity(savedIdentity)
     setCheckoutFirstName(savedIdentity.firstName ?? '')
@@ -245,8 +249,9 @@ function StorefrontRoute() {
     setCartOpen(false)
   }
 
-  const submitCheckout = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitCheckout = async (event: React.FormEvent<HTMLFormElement>, selectedMethod: 'online' | 'terminal' = 'online') => {
     event.preventDefault()
+    setPaymentMethod(selectedMethod)
     setCheckoutError('')
     if (!identity.firstName?.trim() && !checkoutFirstName.trim()) {
       setCheckoutError(tr('Indique ton prénom pour continuer.', 'Enter your first name to continue.'))
@@ -264,12 +269,14 @@ function StorefrontRoute() {
           ...(identity.token
             ? { token: identity.token, ...(!identity.firstName?.trim() ? { firstName: checkoutFirstName.trim() } : {}) }
             : { firstName: checkoutFirstName.trim(), phone: checkoutPhone, email: checkoutEmail.trim() }),
+          paymentMethod: selectedMethod,
           language,
           items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity, modifierIds: line.modifierIds })),
         }),
       })
-      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; storeToken?: string; orderId?: string; shortCode?: string; whatsappConnected?: boolean; message?: string | string[] }
-      if (!response.ok || !payload.checkoutUrl) {
+      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; storeToken?: string; orderId?: string; shortCode?: string; paymentMethod?: string; awaitingPayment?: boolean; whatsappConnected?: boolean; message?: string | string[] }
+      const terminalQueued = selectedMethod === 'terminal' && payload.paymentMethod === 'terminal' && payload.awaitingPayment === true
+      if (!response.ok || (selectedMethod === 'terminal' ? !terminalQueued : !payload.checkoutUrl)) {
         const message = Array.isArray(payload.message) ? payload.message.join(' ') : payload.message
         throw new Error(message || tr('Impossible de préparer le paiement. Vérifie le panier et réessaie.', 'Could not prepare payment. Check your cart and try again.'))
       }
@@ -280,6 +287,14 @@ function StorefrontRoute() {
         ...(payload.storeToken ?? identity.token ? { token: payload.storeToken ?? identity.token } : { token: undefined }),
       }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
+      if (terminalQueued) {
+        setCart([])
+        setCheckoutOpen(false)
+        setTerminalOrder({ shortCode: payload.shortCode })
+        setSubmitting(false)
+        return
+      }
+      if (!payload.checkoutUrl) throw new Error(tr('Stripe n’a pas renvoyé de lien de paiement.', 'Stripe did not return a payment link.'))
       const returnMessage = isFrench
         ? `Bonjour, je viens de terminer le paiement de ma commande${payload.shortCode ? ` #${payload.shortCode}` : ''} chez ${catalog?.location.name ?? 'Ayana'}.`
         : `Hello, I have just completed payment for my order${payload.shortCode ? ` #${payload.shortCode}` : ''} at ${catalog?.location.name ?? 'Ayana'}.`
@@ -294,6 +309,12 @@ function StorefrontRoute() {
       setCheckoutError(reason instanceof Error ? reason.message : tr('Une erreur est survenue. Réessaie.', 'Something went wrong. Please try again.'))
       setSubmitting(false)
     }
+  }
+
+  const handleCheckoutSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+    const requestedMethod = submitter?.dataset.paymentMethod
+    void submitCheckout(event, requestedMethod === 'terminal' ? 'terminal' : 'online')
   }
 
   if (location.pathname.endsWith('/success')) {
@@ -349,6 +370,16 @@ function StorefrontRoute() {
         </>}
       </section></div>}
 
+      {terminalOrder && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setTerminalOrder(null) }}><section className="store-sheet terminal-payment-sheet" role="dialog" aria-modal="true" aria-label={tr('Paiement sur place', 'Pay at the shop')}>
+        <button className="sheet-close" onClick={() => setTerminalOrder(null)} aria-label={tr('Fermer', 'Close')}>×</button>
+        <div className="terminal-payment-mark">▣</div>
+        <p className="store-eyebrow">{tr('Paiement sur place', 'Pay at the shop')}</p>
+        <h2>{tr('Paiement en attente', 'Payment pending')}</h2>
+        <p className="sheet-description">{tr('Ta commande est enregistrée. L’équipe va activer le terminal pour le paiement.', 'Your order is saved. The team will activate the terminal for payment.')}</p>
+        {terminalOrder.shortCode && <div className="terminal-order-code"><span>{tr('Code de commande', 'Order code')}</span><strong>{terminalOrder.shortCode}</strong></div>}
+        <button className="store-primary" onClick={() => setTerminalOrder(null)}>{tr('Compris', 'Got it')}</button>
+      </section></div>}
+
       {checkoutOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setCheckoutOpen(false) }}><section className="store-sheet checkout-sheet" role="dialog" aria-modal="true" aria-label={identity.token ? tr('Paiement', 'Payment') : tr('Connexion WhatsApp', 'WhatsApp sign-in')}>
         <button className="sheet-close" onClick={() => setCheckoutOpen(false)} aria-label={tr('Fermer', 'Close')} disabled={submitting}>×</button>
         <p className="store-eyebrow">{tr('Ta commande', 'Your order')}</p>
@@ -361,21 +392,21 @@ function StorefrontRoute() {
             : null}
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
           <p className="checkout-divider"><span>{tr('ou commander sans WhatsApp', 'or continue without WhatsApp')}</span></p>
-          <form className="store-checkout-form" onSubmit={submitCheckout}>
+          <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
             <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => setCheckoutFirstName(event.target.value)} /></label>
             <PhoneInput label={tr('Téléphone', 'Phone number')} value={checkoutPhone} placeholder={tr('Numéro de téléphone', 'Phone number')} required nativeCountrySelector onValueChange={setCheckoutPhone} />
             <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required maxLength={254} value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} /></label>
-            <button className="store-primary" disabled={submitting}>{submitting ? tr('Préparation du paiement…', 'Preparing payment…') : tr('Payer en toute sécurité', 'Pay securely')} <span>→</span></button>
+          <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
           </form>
-          <p className="secure-note">{tr('Le panier reste enregistré si tu reviens après la connexion.', 'Your cart is saved if you return after signing in.')}</p>
+          {!terminalAvailable && <p className="secure-note">{tr('Le panier reste enregistré si tu reviens après la connexion.', 'Your cart is saved if you return after signing in.')}</p>}
         </> : <>
           <h2>{tr('Paiement de la commande', 'Order payment')}</h2>
           <div className="saved-identity"><span>{tr('Compte Ayana connecté', 'Ayana account connected')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div>
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
-          <p className="secure-note">{tr('Stripe te demandera l’e-mail pour le reçu. Le paiement est sécurisé et la commande sera confirmée après validation.', 'Stripe will collect the email for your receipt. Payment is secure, and your order will be confirmed once payment is complete.')}</p>
-          <form className="store-checkout-form" onSubmit={submitCheckout}>
+          {!terminalAvailable && <p className="secure-note">{tr('Stripe te demandera l’e-mail pour le reçu. Le paiement est sécurisé et la commande sera confirmée après validation.', 'Stripe will collect the email for your receipt. Payment is secure, and your order will be confirmed once payment is complete.')}</p>}
+          <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
             {!identity.firstName?.trim() && <label>{tr('Ton prénom', 'Your first name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => setCheckoutFirstName(event.target.value)} /></label>}
-            <button className="store-primary" disabled={submitting}>{submitting ? tr('Préparation du paiement…', 'Preparing payment…') : tr('Payer en toute sécurité', 'Pay securely')} <span>→</span></button>
+            <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
           </form>
         </>}
       </section></div>}
@@ -384,6 +415,22 @@ function StorefrontRoute() {
 }
 
 export function StorefrontPage() { return <StorefrontRoute /> }
+
+function PaymentActions({ language, terminalAvailable, submitting, paymentMethod }: { language: StorefrontLanguage; terminalAvailable: boolean; submitting: boolean; paymentMethod: 'online' | 'terminal' }) {
+  const isFrench = language === 'fr'
+  if (terminalAvailable) return <div className="payment-method-actions">
+    <button type="submit" data-payment-method="online" className="store-primary payment-online" disabled={submitting}>
+      <span>{submitting && paymentMethod === 'online' ? (isFrench ? 'Préparation du paiement…' : 'Preparing payment…') : (isFrench ? 'Payer en ligne par carte' : 'Pay online by card')}</span><span aria-hidden="true">→</span>
+    </button>
+    <button type="submit" data-payment-method="terminal" className="payment-choice-terminal" disabled={submitting}>
+      <strong>{submitting && paymentMethod === 'terminal' ? (isFrench ? 'Enregistrement de la commande…' : 'Saving your order…') : (isFrench ? 'Payer sur place par carte' : 'Pay by card at the shop')}</strong>
+      <span aria-hidden="true">→</span>
+    </button>
+  </div>
+  return <button type="submit" data-payment-method="online" className="store-primary" disabled={submitting}>
+    {submitting ? (paymentMethod === 'terminal' ? (isFrench ? 'Envoi au terminal…' : 'Sending to terminal…') : (isFrench ? 'Préparation du paiement…' : 'Preparing payment…')) : (isFrench ? 'Payer en toute sécurité' : 'Pay securely')} <span>→</span>
+  </button>
+}
 
 function LanguageSelector({ language, onChange }: { language: StorefrontLanguage; onChange: (language: StorefrontLanguage) => void }) {
   return <div className="store-language" role="group" aria-label={language === 'fr' ? 'Langue' : 'Language'}>

@@ -35,8 +35,8 @@ export function ClassSessionEditDrawer({
   const [coachId, setCoachId] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
-    queryKey: ['coaches', 'location', locationId],
-    queryFn: () => getLocationCoachesRequest(locationId),
+    queryKey: ['coaches', 'location', locationId, session?.classTypeId],
+    queryFn: () => getLocationCoachesRequest(locationId, session?.classTypeId),
     enabled: Boolean(open && locationId),
   })
 
@@ -106,7 +106,7 @@ export function ClassSessionEditDrawer({
             isLoading={isLoadingCoaches}
             loadingMessage="Loading coaches..."
             placeholder="Select a coach"
-            emptyMessage="No coaches assigned to this location."
+            emptyMessage="No qualified instructors assigned to this location."
           />
         </Field>
         <p className="text-sm text-muted-foreground">The class type and existing bookings stay attached to this session.</p>

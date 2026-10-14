@@ -10,6 +10,7 @@ export type Order = {
   source: string
   status: OrderStatus
   paymentStatus: OrderPaymentStatus
+  paymentMethod?: string | null
   deliveryType: string
   currency: string
   total: number

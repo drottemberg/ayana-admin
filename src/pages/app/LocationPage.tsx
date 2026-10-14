@@ -48,6 +48,10 @@ import { Button } from '@/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import { Drawer, DrawerId } from '@/providers/drawer'
+import { getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
+import { accessDeviceColumns } from '@/features/devices/access-device-columns'
+import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
+import { devicesQueryKeys } from '@/features/devices/query-keys'
 
 function getSections(location?: Location, canEdit = false): DetailPanelSection[] {
   return [
@@ -113,6 +117,7 @@ export default function LocationPage() {
   const { locationId = '' } = useParams()
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [editingProduct, setEditingProduct] = useState<ProductLocationSettings | null>(null)
+  const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
   const { session } = useConnect()
   const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
   const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
@@ -120,6 +125,7 @@ export default function LocationPage() {
     { key: 'pricing-options', label: 'Pricing options' },
     { key: 'classes', label: 'Classes' },
     { key: 'class-sessions', label: 'Class sessions' },
+    { key: 'devices', label: 'Devices' },
     ...(canManageOrdersAndContracts ? [{ key: 'products', label: 'Products' }] : []),
     ...(canManageOrdersAndContracts
       ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }]
@@ -201,6 +207,20 @@ export default function LocationPage() {
           loadingMessage="Loading class sessions..."
           emptyMessage="No class sessions found for this location."
         />
+        <RelatedEntityModule
+          id="module-devices"
+          title="Devices"
+          icon={EntityIcon.devices}
+          queryKey={[...devicesQueryKeys.all, 'location-module', locationId]}
+          action={session?.permissions.devices?.create
+            ? { label: 'Add device', onClick: () => setIsCreateDeviceOpen(true) }
+            : undefined}
+          loadData={(state: DataTableState<AccessDevice>) => getAccessDevicesRequest(state, { locationId })}
+          tableKey={`locations.detail.modules.devices.${locationId}`}
+          columns={accessDeviceColumns}
+          loadingMessage="Loading devices..."
+          emptyMessage="No devices found for this location."
+        />
         {canManageOrdersAndContracts ? <RelatedEntityModule
           id="module-products"
           title="Products"
@@ -253,6 +273,13 @@ export default function LocationPage() {
         open={Boolean(editingProduct)}
         onOpenChange={(open) => { if (!open) setEditingProduct(null) }}
       />
+      {location ? (
+        <AccessDeviceDrawer
+          open={isCreateDeviceOpen}
+          onOpenChange={setIsCreateDeviceOpen}
+          fixedOrganization={{ id: location.id, name: location.name, type: 'LOCATION' }}
+        />
+      ) : null}
     </>
   )
 }

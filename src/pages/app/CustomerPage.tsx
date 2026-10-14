@@ -3,6 +3,7 @@ import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import {
   DetailPageLayout,
@@ -20,9 +21,9 @@ import { NO_VALUE_STR } from '@/constants'
 import { getCustomerRequest } from '@/features/customers/api'
 import { CustomerService } from '@/features/customers/customer-service'
 import { customersQueryKeys } from '@/features/customers/query-keys'
-import { devicesListConfig, getDevicesRequest } from '@/features/devices/api'
-import { deviceColumns } from '@/features/devices/device-columns'
-import { DeviceService } from '@/features/devices/device-service'
+import { accessDevicesListConfig, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
+import { accessDeviceColumns } from '@/features/devices/access-device-columns'
+import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
 import { getIssuesRequest, issuesListConfig } from '@/features/issues/api'
 import { issueColumns } from '@/features/issues/issue-columns'
@@ -66,7 +67,6 @@ import {
 } from '@/lib/batch-query-cache'
 import { useDetailQuery } from '@/lib/query-hooks'
 import type { Customer } from '@/types/customer'
-import type { Device } from '@/types/device'
 import type { Location } from '@/types/location'
 import type { Issue } from '@/types/issue'
 import type { Product } from '@/types/product'
@@ -78,6 +78,12 @@ import { TimezoneUtils } from '@/utils'
 import { formatDateTime } from '@/utils/date-utils'
 import { formatPhoneNumber } from '@/lib/phone'
 import { getClientContractsRequest } from '@/features/client-contracts/api'
+import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
+import { coachColumns } from '@/features/coaches/coach-columns'
+import { coachesQueryKeys } from '@/features/coaches/query-keys'
+import { deleteCoachProfileRequest, getCoachProfilesRequest } from '@/features/coaches/api'
+import type { CoachProfile } from '@/features/coaches/types'
+import { Modals } from '@/providers/modal'
 import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
 import { ClientContractService } from '@/features/client-contracts/client-contract-service'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
@@ -215,6 +221,9 @@ export default function CustomerPage() {
   const [isCreatePricingOptionOpen, setIsCreatePricingOptionOpen] = useState(false)
   const [editingPricingOption, setEditingPricingOption] = useState<PricingOption | null>(null)
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [isCoachDrawerOpen, setIsCoachDrawerOpen] = useState(false)
+  const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
+  const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
   const [editingProductScope, setEditingProductScope] = useState<Product | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingCustomerSetting, setEditingCustomerSetting] = useState<{
@@ -226,6 +235,8 @@ export default function CustomerPage() {
   const permissions = session?.permissions.customers
   const canEditUserPermissions = session?.permissions.users?.edit
   const canManageCustomer = CustomerService.canManage(permissions)
+  const coachPermissions = session?.permissions.coaches
+  const canViewCoaches = Boolean(coachPermissions?.view)
   const canShowUsers = canManageCustomer
   const canEditCustomer = !permissions || permissions.edit
   const customerUsersHiddenFilters = useMemo(() => ({ organizationId: customerId }), [customerId])
@@ -286,14 +297,14 @@ export default function CustomerPage() {
         payload: (tableState) => productsListConfig.toPayload(tableState, { customerId }),
         map: productsListConfig.toResult,
       }),
-      createTableBatchCacheEntry<Device>({
+      createTableBatchCacheEntry<AccessDevice>({
         key: 'devices',
         queryKey: [...devicesQueryKeys.all, 'customer-module', customerId],
         tableKey: 'customers.detail.modules.devices',
         pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
-        url: devicesListConfig.url,
-        payload: (tableState) => devicesListConfig.toPayload(tableState, { customerId }),
-        map: devicesListConfig.toResult,
+        url: accessDevicesListConfig.url,
+        payload: (tableState) => accessDevicesListConfig.toPayload(tableState, { customerId }),
+        map: accessDevicesListConfig.toResult,
       }),
       createTableBatchCacheEntry<Issue>({
         key: 'issues',
@@ -343,13 +354,14 @@ export default function CustomerPage() {
       ...(canManageCustomer ? [{ key: 'location-policies', label: 'Location policies' }] : []),
       ...(canManageCustomer ? [{ key: 'customer-prompt-profile', label: 'Customer prompt profile' }] : []),
       ...(canManageCustomer ? [{ key: 'classes', label: 'Classes' }] : []),
+      ...(canViewCoaches ? [{ key: 'coaches', label: 'Instructors' }] : []),
       ...(canManageCustomer ? [{ key: 'class-sessions', label: 'Class sessions' }] : []),
       ...(canManageCustomer ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }] : []),
       { key: 'products', label: 'Products' },
       { key: 'devices', label: 'Devices' },
       { key: 'issues', label: 'Issues' },
     ],
-    [canManageCustomer, canShowUsers],
+    [canManageCustomer, canShowUsers, canViewCoaches],
   )
 
   if (isLoadingCustomer) {
@@ -559,6 +571,41 @@ export default function CustomerPage() {
                 />
               )
             ) : null}
+            {canViewCoaches ? (
+              <RelatedEntityModule
+                id={`${MODULE_ANCHOR_PREFIX}-coaches`}
+                title="Instructors"
+                icon={EntityIcon.classes}
+                action={coachPermissions?.create ? {
+                  label: 'Add instructor',
+                  onClick: () => { setEditingCoachProfile(null); setIsCoachDrawerOpen(true) },
+                } : undefined}
+                queryKey={coachesQueryKeys.customer(customer.id)}
+                loadData={(state: DataTableState<CoachProfile>) => getCoachProfilesRequest(customer.id, state)}
+                tableKey="customers.detail.modules.coaches"
+                columns={coachColumns}
+                getRowCommands={(coach) => [
+                  ...(coachPermissions?.edit ? [{ label: 'Edit profile', onClick: () => { setEditingCoachProfile(coach); setIsCoachDrawerOpen(true) } }] : []),
+                  ...(coachPermissions?.delete ? [{
+                    label: 'Remove profile',
+                    onClick: async () => {
+                      const confirmed = await Modals.confirm({ operation: `remove the instructor profile for “${coach.coachName}”`, okButtonProps: { variant: 'destructive' } })
+                      if (!confirmed) return
+                      try {
+                        await deleteCoachProfileRequest(customer.id, coach.userId)
+                        await queryClient.invalidateQueries({ queryKey: coachesQueryKeys.customer(customer.id) })
+                        toast.success('Instructor profile removed.')
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : 'Could not remove the instructor profile.')
+                      }
+                    },
+                  }] : []),
+                ]}
+                loadingMessage="Loading instructors..."
+                emptyMessage="No instructor profiles found. Add a profile to qualify an INSTRUCTOR member for class types."
+                refetchOnMount="always"
+              />
+            ) : null}
             {canManageCustomer ? (
               failedModuleKeys.has('class-sessions') ? (
                 <CustomerModuleError module={{ key: 'class-sessions', label: 'Class sessions' }} />
@@ -643,12 +690,13 @@ export default function CustomerPage() {
                 icon={EntityIcon.devices}
                 initialTotal={getInitialTotal('devices')}
                 viewAllTo={makeViewAllTo('/devices', customer)}
-                action={CustomerService.getModuleAction(customer, 'devices', permissions)}
+                action={session?.permissions.devices?.create
+                  ? { label: 'Add device', onClick: () => setIsCreateDeviceOpen(true) }
+                  : undefined}
                 queryKey={[...devicesQueryKeys.all, 'customer-module', customer.id]}
-                loadData={(state: DataTableState<Device>) => getDevicesRequest(state, { customerId: customer.id })}
+                loadData={(state: DataTableState<AccessDevice>) => getAccessDevicesRequest(state, { customerId: customer.id })}
                 tableKey="customers.detail.modules.devices"
-                columns={deviceColumns}
-                getRowCommands={(device) => DeviceService.getActions(device)}
+                columns={accessDeviceColumns}
                 loadingMessage="Loading devices..."
                 emptyMessage="No devices found."
                 refetchOnMount={false}
@@ -698,6 +746,20 @@ export default function CustomerPage() {
         classType={editingClassType}
         open={Boolean(editingClassType)}
         onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
+      />
+      <CoachProfileDrawer
+        customerId={customer.id}
+        profile={editingCoachProfile}
+        open={isCoachDrawerOpen}
+        onOpenChange={(open) => {
+          setIsCoachDrawerOpen(open)
+          if (!open) setEditingCoachProfile(null)
+        }}
+      />
+      <AccessDeviceDrawer
+        open={isCreateDeviceOpen}
+        onOpenChange={setIsCreateDeviceOpen}
+        fixedCustomer={customer}
       />
       <ProductScopeDrawer
         product={editingProductScope}
