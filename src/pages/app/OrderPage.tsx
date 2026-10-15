@@ -1,13 +1,19 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import { PageHeader } from '@/components/ui/page-header'
 import { useDetailQuery } from '@/lib/query-hooks'
-import { getOrderManagementDetailsRequest } from '@/features/orders/api'
+import { cancelOrderRequest, getOrderManagementDetailsRequest } from '@/features/orders/api'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { OrderManagementDetails } from '@/types/order'
 import { NO_VALUE_STR } from '@/constants'
+import { useConnect } from '@/features/app/use-connect'
+import { queryClient } from '@/lib/query-client'
+import { toast } from 'sonner'
 
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : NO_VALUE_STR
 
@@ -55,6 +61,13 @@ function getSections(details?: OrderManagementDetails): DetailPanelSection[] {
 
 export default function OrderPage() {
   const { orderId = '' } = useParams()
+  const { session } = useConnect()
+  const [cancellationOpen, setCancellationOpen] = useState(false)
+  const [refundMode, setRefundMode] = useState<'NONE' | 'PARTIAL' | 'FULL'>('NONE')
+  const [refundAmount, setRefundAmount] = useState('')
+  const [cancellationReason, setCancellationReason] = useState('')
+  const [requestKey, setRequestKey] = useState('')
+  const [cancelling, setCancelling] = useState(false)
   const { data, isError, isLoading } = useDetailQuery({
     queryKey: ordersQueryKeys.detail(orderId),
     queryFn: () => getOrderManagementDetailsRequest(orderId),
@@ -76,8 +89,61 @@ export default function OrderPage() {
 
   const { order, items, modifiers, history, transactions } = data
   const currency = order.currency || 'EUR'
-  return <DetailPageLayout
-    header={{ title: order.shortCode ? `Order ${order.shortCode}` : 'Order details', subtitle: order.id, backTo: '/orders' }}
+  const canCancel = Boolean(
+    session?.permissions.orders?.delete &&
+    order.type === 'PRODUCT' &&
+    ['RECEIVED', 'PREPARING', 'READY'].includes(order.status),
+  )
+  const alreadyRefunded = transactions
+    .filter((transaction) => transaction.type === 'REFUND' && transaction.status === 'SUCCEEDED')
+    .reduce((total, transaction) => total + Number(transaction.amount), 0)
+  const refundableAmount = Math.max(0, Number(order.total) - alreadyRefunded)
+
+  const openCancellation = () => {
+    setRefundMode(order.paymentStatus === 'PAID' && refundableAmount > 0 ? 'FULL' : 'NONE')
+    setRefundAmount('')
+    setCancellationReason('')
+    setRequestKey(crypto.randomUUID())
+    setCancellationOpen(true)
+  }
+
+  const confirmCancellation = async () => {
+    const amount = Number(refundAmount)
+    if (refundMode === 'PARTIAL' && (!Number.isFinite(amount) || amount <= 0 || amount > refundableAmount)) {
+      toast.error(`Enter a refund between 0.01 and ${refundableAmount.toFixed(2)} ${currency}.`)
+      return
+    }
+    setCancelling(true)
+    try {
+      await cancelOrderRequest(order.id, {
+        refundMode,
+        ...(refundMode === 'PARTIAL' ? { refundAmount: amount } : {}),
+        ...(cancellationReason.trim() ? { reason: cancellationReason.trim() } : {}),
+        requestKey,
+      })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(order.id) }),
+      ])
+      toast.success(refundMode === 'NONE' ? 'Order cancelled.' : 'Order cancelled and refund initiated.')
+      setCancellationOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not cancel this order.')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const header = {
+    title: order.shortCode ? `Order ${order.shortCode}` : 'Order details',
+    subtitle: order.id,
+    backTo: '/orders',
+    ...(canCancel ? { primaryAction: { children: 'Cancel / refund…', variant: 'destructive' as const, onClick: openCancellation } } : {}),
+  }
+
+  return <>
+    <DetailPageLayout
+    header={header}
     modules={[{ key: 'items', label: 'Items', count: items.length }, { key: 'history', label: 'History', count: history.length }, { key: 'financial-history', label: 'Financial history', count: transactions.length }]}
     aside={<DetailSidePanel sections={getSections(data)} />}
   >
@@ -139,5 +205,39 @@ export default function OrderPage() {
         </ol> : <p className="p-5 text-sm text-muted-foreground">No financial transactions recorded.</p>}
       </CardContent>
     </Card>
-  </DetailPageLayout>
+    </DetailPageLayout>
+    <Dialog open={cancellationOpen} onOpenChange={(open) => { if (!open && !cancelling) setCancellationOpen(false) }}>
+      <DialogContent>
+        <DialogHeader showCloseButton>
+          <DialogTitle>Cancel order {order.shortCode}</DialogTitle>
+          <DialogDescription>Cancellation stops fulfilment. Choose whether to refund the payment through Stripe.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <label className="grid gap-1.5 text-sm font-medium">
+            Refund
+            <select className="h-9 rounded-md border border-input bg-background px-3 font-normal" value={refundMode} onChange={(event) => { setRefundMode(event.target.value as typeof refundMode); setRequestKey(crypto.randomUUID()) }}>
+              <option value="NONE">Cancel without refund</option>
+              {order.paymentStatus === 'PAID' && refundableAmount > 0 ? <>
+                <option value="FULL">Refund remaining balance ({formatMoney(refundableAmount, currency)})</option>
+                <option value="PARTIAL">Partial refund</option>
+              </> : null}
+            </select>
+          </label>
+          {refundMode === 'PARTIAL' ? <label className="grid gap-1.5 text-sm font-medium">
+            Refund amount ({currency})
+            <input className="h-9 rounded-md border border-input bg-background px-3 font-normal" type="number" min="0.01" max={refundableAmount} step="0.01" value={refundAmount} onChange={(event) => { setRefundAmount(event.target.value); setRequestKey(crypto.randomUUID()) }} />
+            <span className="text-xs font-normal text-muted-foreground">Up to {formatMoney(refundableAmount, currency)} remains refundable.</span>
+          </label> : null}
+          <label className="grid gap-1.5 text-sm font-medium">
+            Reason (optional)
+            <textarea className="min-h-20 rounded-md border border-input bg-background p-3 font-normal" value={cancellationReason} onChange={(event) => { setCancellationReason(event.target.value); setRequestKey(crypto.randomUUID()) }} />
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={cancelling} onClick={() => setCancellationOpen(false)}>Keep order</Button>
+          <Button variant="destructive" loading={cancelling} onClick={() => void confirmCancellation()}>{refundMode === 'NONE' ? 'Cancel order' : 'Cancel and refund'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>
 }

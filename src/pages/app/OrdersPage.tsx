@@ -36,7 +36,8 @@ export default function OrdersPage() {
     ...(searchParams.get('userId') ? { userId: [searchParams.get('userId')!] } : {}),
   }
   const productId = searchParams.get('filterProductId')
-  const canManage = Boolean(session?.permissions.customers?.edit)
+  const canEditOrders = Boolean(session?.permissions.orders?.edit)
+  const canCancelOrders = Boolean(session?.permissions.orders?.delete)
 
   const openCancellation = (order: Order) => {
     setCancellationOrder(order)
@@ -102,9 +103,9 @@ export default function OrdersPage() {
           { id: 'locationId', label: 'Location', column: 'location' as const, selectionMode: 'single' as const, queryFn: getOrderLocationOptions, getValue: (order: Order) => order.location.id },
         ]}
         getRowCommands={(order) => [
-          ...OrderService.getRowActions(order, canManage),
-          ...(canManage && order.type === 'PRODUCT' && ['RECEIVED', 'PREPARING', 'READY'].includes(order.status)
-            ? [{ label: 'Cancel order…', variant: 'destructive' as const, onClick: () => openCancellation(order) }]
+          ...OrderService.getRowActions(order, canEditOrders),
+          ...(canCancelOrders && order.type === 'PRODUCT' && ['RECEIVED', 'PREPARING', 'READY'].includes(order.status)
+            ? [{ label: 'Cancel / refund…', variant: 'destructive' as const, onClick: () => openCancellation(order) }]
             : []),
         ]}
         loadingMessage="Loading orders..."
