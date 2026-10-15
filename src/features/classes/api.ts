@@ -99,10 +99,10 @@ export async function updateClassSessionRequest(id: string, locationId: string, 
   })
 }
 
-export async function cancelClassSessionRequest(id: string, locationId: string) {
+export async function cancelClassSessionRequest(id: string, locationId: string, reason?: string) {
   return apiClient.patch<{ sessionId: string; status: 'CANCELLED'; bookingCount: number; emailsAttempted: number; creditsReturned: number }>(
     `/bookings/session/${encodeURIComponent(id)}/cancel`,
-    {},
+    reason?.trim() ? { reason: reason.trim() } : {},
     { headers: { 'x-org-id': locationId } },
   )
 }

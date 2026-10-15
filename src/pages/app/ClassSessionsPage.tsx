@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, getClassCategoryOptions, getClassSessionsRequest, getClassTypeLocationOptions } from '@/features/classes/api'
+import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
@@ -40,6 +41,7 @@ function readDateRange(params: URLSearchParams): DateRangeValue | undefined {
 }
 
 export default function ClassSessionsPage() {
+  const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const { session } = useConnect()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -117,16 +119,18 @@ export default function ClassSessionsPage() {
               label: 'Cancel session',
               variant: 'destructive' as const,
               onClick: async () => {
+                let cancellationMessage = ''
                 const confirmed = await Modals.confirm({
                   title: 'Cancel this class session?',
-                  content: 'All bookings will be cancelled. Members with an email address will be notified, and used contract credits will be returned.',
+                  content: <CancelSessionConfirmation messageRef={cancellationMessageRef} />,
                   okText: 'Cancel session',
                   cancelText: 'Keep session',
                   okButtonProps: { variant: 'destructive' },
+                  onOk: () => { cancellationMessage = cancellationMessageRef.current?.value.trim() ?? '' },
                 })
                 if (!confirmed) return
                 try {
-                  const result = await cancelClassSessionRequest(item.id, item.locationId ?? item.organizationId)
+                  const result = await cancelClassSessionRequest(item.id, item.locationId ?? item.organizationId, cancellationMessage)
                   await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
                   toast.success(`Session cancelled. ${result.bookingCount} booking(s) cancelled; ${result.creditsReturned} credit(s) returned.`)
                 } catch (error) {

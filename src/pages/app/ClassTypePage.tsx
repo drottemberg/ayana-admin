@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -16,6 +16,7 @@ import { ClassScheduleCreateDrawer } from '@/features/classes/ClassScheduleCreat
 import { ClassScheduleEditDrawer } from '@/features/classes/ClassScheduleEditDrawer'
 import { classScheduleColumns, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeProductsRequest, getClassTypeRequest, removeClassTypeProductRequest, type ClassTypeProduct } from '@/features/classes/api'
+import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
@@ -49,6 +50,7 @@ const classTypeProductColumns = [
 ] as const
 
 export default function ClassTypePage() {
+  const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const { classTypeId = '' } = useParams()
   const [searchParams] = useSearchParams()
   const locationId = searchParams.get('locationId') ?? ''
@@ -271,16 +273,18 @@ export default function ClassTypePage() {
             label: 'Cancel session',
             variant: 'destructive' as const,
             onClick: async () => {
+              let cancellationMessage = ''
               const confirmed = await Modals.confirm({
                 title: 'Cancel this class session?',
-                content: 'All bookings will be cancelled. Members with an email address will be notified, and used contract credits will be returned.',
+                content: <CancelSessionConfirmation messageRef={cancellationMessageRef} />,
                 okText: 'Cancel session',
                 cancelText: 'Keep session',
                 okButtonProps: { variant: 'destructive' },
+                onOk: () => { cancellationMessage = cancellationMessageRef.current?.value.trim() ?? '' },
               })
               if (!confirmed) return
               try {
-                const result = await cancelClassSessionRequest(classSession.id, locationId)
+                const result = await cancelClassSessionRequest(classSession.id, locationId, cancellationMessage)
                 await Promise.all([
                   queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
                   queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.classType(classTypeId) }),

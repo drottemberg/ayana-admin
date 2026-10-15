@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -10,6 +10,7 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { classBookingColumns } from '@/features/classes/class-session-columns'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
+import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
@@ -25,6 +26,7 @@ function formatDate(value?: string | null, timeZone?: string | null) {
 export default function ClassSessionPage() {
   const { sessionId = '' } = useParams()
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const locationId = searchParams.get('locationId') ?? ''
@@ -39,16 +41,18 @@ export default function ClassSessionPage() {
 
   const cancelSession = async () => {
     if (!classSession) return
+    let cancellationMessage = ''
     const confirmed = await Modals.confirm({
       title: 'Cancel this class session?',
-      content: <p>All bookings will be cancelled. Members with an email address will be notified, and used contract credits will be returned.</p>,
+      content: <CancelSessionConfirmation messageRef={cancellationMessageRef} />,
       okText: 'Cancel session',
       cancelText: 'Keep session',
       okButtonProps: { variant: 'destructive' },
+      onOk: () => { cancellationMessage = cancellationMessageRef.current?.value.trim() ?? '' },
     })
     if (!confirmed) return
     try {
-      const result = await cancelClassSessionRequest(classSession.id, resolvedLocationId)
+      const result = await cancelClassSessionRequest(classSession.id, resolvedLocationId, cancellationMessage)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
         queryClient.invalidateQueries({ queryKey: [...classSessionsQueryKeys.detail(sessionId), 'bookings'] }),
