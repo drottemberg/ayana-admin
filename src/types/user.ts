@@ -44,6 +44,7 @@ export type User = {
   lastName: string
   email: string
   phone?: string
+  preferences?: Record<string, unknown> | null
   position?: string | null
   customerId?: string | null
   customer?: {

@@ -64,6 +64,21 @@ function getUserCustomersCount(user?: User) {
   return user?.customerMemberships?.length ?? user?.memberOrganizations?.length ?? 0
 }
 
+function preferenceLabel(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/^./, (character) => character.toLocaleUpperCase())
+}
+
+function preferenceValue(value: unknown): string {
+  if (value == null || value === '') return NO_VALUE_STR
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) return value.map(preferenceValue).join(', ') || NO_VALUE_STR
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
 async function getUserLocations(user: User): Promise<Location[]> {
   const memberships = user.customerMemberships ?? []
   const locationSets = await Promise.all(
@@ -145,6 +160,12 @@ function getUserDetailSections(
             }))
           : [{ label: 'Balance', value: '0 credits' }],
     }] : []),
+    {
+      title: 'Preferences',
+      fields: user?.preferences && Object.keys(user.preferences).length
+        ? Object.entries(user.preferences).map(([key, value]) => ({ label: preferenceLabel(key), value: preferenceValue(value) }))
+        : [{ label: 'Preferences', value: 'No preferences saved' }],
+    },
   ]
 }
 

@@ -32,6 +32,7 @@ type UserRecord = {
   lastName: string | null
   email: string | null
   phone?: string | null
+  preferences?: Record<string, unknown> | null
   role?: User['role'] | null
   position?: string | null
   permissions?: User['permissions'] | null
@@ -112,6 +113,7 @@ function toUser(user: UserRecord): User {
     lastName: user.lastName ?? '',
     email: user.email ?? '',
     phone: user.phone ?? undefined,
+    preferences: user.preferences ?? null,
     position: firstMember?.position ?? user.position ?? undefined,
     customerId: user.customerId ?? undefined,
     customer: user.customer ?? undefined,
