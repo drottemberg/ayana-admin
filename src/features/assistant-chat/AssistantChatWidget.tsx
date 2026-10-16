@@ -585,7 +585,7 @@ export function AssistantChatWidget() {
 
       <Button
         size="icon-lg"
-        className="pointer-events-auto fixed size-14 touch-none select-none rounded-full shadow-lg cursor-grab active:cursor-grabbing"
+        className="pointer-events-auto fixed size-14 touch-none rounded-full shadow-lg cursor-grab active:cursor-grabbing"
         aria-label={open ? 'Close assistant chat' : 'Open assistant chat'}
         aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight"
         aria-expanded={open}

@@ -15,6 +15,7 @@ export type ClassType = {
   duration: number
   type: ClassSessionType
   maxCapacity: number
+  minimumParticipants?: number | null
   creditCost: number | string
   resourceId?: string | null
   attachmentId?: string | null

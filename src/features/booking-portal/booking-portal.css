@@ -35,7 +35,7 @@
 .booking-login-card { display: grid; gap: 12px; margin: 18px 0; padding: 15px 16px; border: 1px solid var(--booking-line); border-radius: 15px; background: rgba(255,250,241,.85); }
 .booking-login-card > div { display: grid; gap: 5px; }.booking-login-card strong { font-size: 14px; }.booking-login-card span,.booking-login-card small { color: var(--booking-muted); font-size: 12px; line-height: 1.45; }
 .booking-login-card .booking-whatsapp-cta { margin-top: 0; }
-.booking-notice { margin: 14px 0; padding: 13px 15px; border: 1px solid #eac9b7; border-radius: 12px; color: #84351e; background: #fbebdf; font-size: 13px; line-height: 1.45; }
+.booking-notice { margin: 14px 0; padding: 13px 15px; border: 1px solid #eac9b7; border-radius: 12px; color: #84351e; background: #fbebdf; font-size: 13px; line-height: 1.45; white-space: pre-line; }
 .booking-class-products { display: grid; gap: 13px; margin: 18px 0 24px; padding: 18px; border: 1px solid var(--booking-line); border-radius: 18px; background: #fffaf1; }
 .booking-class-products-heading .booking-eyebrow { margin: 0 0 5px; }
 .booking-class-products-heading h2 { margin: 0; color: var(--booking-espresso); font-family: Georgia,serif; font-size: 22px; font-weight: 500; }
@@ -187,8 +187,15 @@
 .booking-session-description { margin: 0; font-family: 'DM Sans',sans-serif; font-size: 13px; font-style: normal; }
 .booking-conditions { display: flex; align-items: center; gap: 12px; margin: 0; padding: 9px 12px; border-radius: 12px; font-size: 12px; }
 .booking-conditions > span { color: var(--booking-muted); font-size: 19px; }
+.booking-session-terms { margin-top: 3px; color: var(--booking-muted); font-size: 11px; }
+.booking-session-terms summary { width: fit-content; color: var(--booking-clay); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.booking-session-terms ul,.booking-recap-terms { display: grid; gap: 4px; margin: 6px 0 0; padding-left: 17px; color: #655646; font-size: 11px; line-height: 1.45; }
+.booking-recap-terms { padding-top: 8px; border-top: 1px solid var(--booking-line); }
+.booking-upsell-terms { margin: 0; padding: 0 0 0 19px; }
 .booking-session-actions { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; }
 .booking-spots { align-self: center; color: var(--booking-muted); font-size: 12px; }
+.booking-spots-low { color: var(--booking-clay); font-weight: 700; }
+.booking-spots-full { color: #a83b20; font-weight: 800; }
 .booking-session-action { min-height: 49px; margin: 0; padding: 0 16px; border-radius: 15px; font-size: 13px; }
 .booking-session-actions > small { padding-left: 5px; color: var(--booking-clay); font-size: 12px; font-weight: 700; }
 .booking-session-list-grid .booking-session { grid-template-columns: 73px minmax(0,1fr); grid-template-rows: auto auto; gap: 12px; }

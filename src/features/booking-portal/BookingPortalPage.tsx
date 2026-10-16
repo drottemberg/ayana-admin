@@ -11,6 +11,7 @@ type ClassSession = {
   category?: string | null
   description?: string | null
   conditions?: string | null
+  minimumParticipants?: number | null
   duration: number
   creditCost: number
   startTime: string
@@ -45,6 +46,13 @@ type Schedule = {
     timezone: string
     whatsappNumber?: string | null
     paymentMethods?: { online: boolean; terminal: boolean }
+    cancellationPolicy: {
+      lateCancelWindowHours: number
+      lateCancelPenaltyCredits: number
+      lateCancelPenaltyAmount: number | null
+      noShowPenaltyCredits: number
+      noShowPenaltyAmount: number | null
+    }
   }
   sessions: ClassSession[]
 }
@@ -114,6 +122,25 @@ function readSession(customerSlug: string, locationSlug: string): MemberState | 
 
 function responseMessage(payload: { message?: string | string[] }, fallback: string) {
   return Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || fallback
+}
+
+function reservationTerms(session: Pick<ClassSession, 'minimumParticipants'>, policy: Schedule['location']['cancellationPolicy'], isFrench: boolean) {
+  const terms: string[] = []
+  const creditPenalty = policy.lateCancelPenaltyCredits
+  const latePenalty = [
+    creditPenalty > 0 ? `${creditPenalty} ${isFrench ? (creditPenalty === 1 ? 'crédit' : 'crédits') : (creditPenalty === 1 ? 'credit' : 'credits')}` : '',
+    policy.lateCancelPenaltyAmount != null && policy.lateCancelPenaltyAmount > 0 ? `${policy.lateCancelPenaltyAmount.toFixed(2)} €` : '',
+  ].filter(Boolean).join(isFrench ? ' et ' : ' and ')
+
+  terms.push(isFrench
+    ? `Annulation gratuite au moins ${policy.lateCancelWindowHours} h avant le cours${latePenalty ? `. En cas d’annulation moins de ${policy.lateCancelWindowHours} h avant, une pénalité de ${latePenalty} s’applique` : ''}.`
+    : `Cancel at least ${policy.lateCancelWindowHours} hours before class for free${latePenalty ? `. Cancelling less than ${policy.lateCancelWindowHours} hours before class incurs a ${latePenalty} late-cancellation penalty` : ''}.`)
+  if (session.minimumParticipants != null && session.minimumParticipants > 0) {
+    terms.push(isFrench
+      ? `Le studio peut annuler le cours s’il y a moins de ${session.minimumParticipants} participants.`
+      : `The studio may cancel the class if fewer than ${session.minimumParticipants} participants book.`)
+  }
+  return terms
 }
 
 function whatsappLink(phone: string | null | undefined, message: string): string | null {
@@ -477,11 +504,15 @@ function BookingPortalRoute() {
       } : current)
       const products = payload.status === 'CONFIRMED' ? payload.relatedProducts ?? [] : []
       const hasBookingUpsell = products.length > 0
+      const terms = payload.status === 'CONFIRMED' && schedule
+        ? reservationTerms(selected, schedule.location.cancellationPolicy, isFrench)
+        : []
+      const confirmationMessage = payload.status === 'WAITLISTED'
+        ? (isFrench ? 'Tu es sur la liste d’attente. La confirmation a été envoyée sur tes canaux liés.' : 'You are on the waitlist. A confirmation was sent to your linked channels.')
+        : (isFrench ? 'Réservation confirmée. La confirmation a été envoyée sur tes canaux liés.' : 'Booking confirmed. A confirmation was sent to your linked channels.')
       setNotice(hasBookingUpsell
         ? ''
-        : payload.status === 'WAITLISTED'
-          ? (isFrench ? 'Tu es sur la liste d’attente. La confirmation a été envoyée sur tes canaux liés.' : 'You are on the waitlist. A confirmation was sent to your linked channels.')
-          : (isFrench ? 'Réservation confirmée. La confirmation a été envoyée sur tes canaux liés.' : 'Booking confirmed. A confirmation was sent to your linked channels.'))
+        : [confirmationMessage, ...terms.map((term) => `• ${term}`)].join('\n'))
       setBookingUpsell(hasBookingUpsell
         ? { className: selected.name, products }
         : null)
@@ -664,6 +695,15 @@ function BookingPortalRoute() {
           {selectedDateSessions.map((session) => {
             const alreadyBooked = booked.has(session.id)
             const booking = member?.bookings.find((item) => item.sessionId === session.id)
+            const availabilityLabel = alreadyBooked
+              ? (isFrench ? 'Réservé·e' : 'Booked')
+              : session.isWaitlist || session.availableSpots <= 0
+                ? (isFrench ? 'Complet' : 'Full')
+                : session.availableSpots <= 2
+                  ? (isFrench
+                    ? `${session.availableSpots} ${session.availableSpots === 1 ? 'place restante' : 'places restantes'}`
+                    : `${session.availableSpots} ${session.availableSpots === 1 ? 'spot left' : 'spots left'}`)
+                  : null
             return <article className="booking-session" key={session.id}>
               <div className="booking-session-time"><strong>{session.localStartTime}</strong><span>{session.localEndTime}</span></div>
               <div className="booking-session-copy">
@@ -671,10 +711,14 @@ function BookingPortalRoute() {
                 <div className="booking-session-meta"><span>◷</span>{session.duration} min{session.coachName ? ` · ${session.coachName}` : ''}{session.category && <><i />{session.category}</>}</div>
                 {session.description && <p className="booking-session-description">{session.description}</p>}
                 {session.conditions && <p className="booking-conditions"><span aria-hidden="true">♧</span>{session.conditions}</p>}
+                {schedule?.location.cancellationPolicy && <details className="booking-session-terms">
+                  <summary>{isFrench ? 'Conditions d’annulation' : 'Cancellation conditions'}</summary>
+                  <ul>{reservationTerms(session, schedule.location.cancellationPolicy, isFrench).map((term) => <li key={term}>{term}</li>)}</ul>
+                </details>}
               </div>
               <div className="booking-session-actions">
-                <span className="booking-spots">♙ {alreadyBooked ? (isFrench ? 'Réservé·e' : 'Booked') : `${session.availableSpots} ${isFrench ? 'places' : 'spots'}`}</span>
-                <button type="button" className={`booking-session-action${alreadyBooked ? ' booking-manage-action' : ''}`} onClick={() => alreadyBooked && booking ? void openCancellation(session, booking.bookingId) : openBooking(session)}>{alreadyBooked ? (isFrench ? 'Gérer / annuler' : 'Manage / cancel') : session.isWaitlist ? (isFrench ? 'Liste d’attente' : 'Join waitlist') : (isFrench ? 'Réserver' : 'Book')}<span>→</span></button>
+                {availabilityLabel && <span className={`booking-spots${!alreadyBooked && (session.isWaitlist || session.availableSpots <= 0) ? ' booking-spots-full' : !alreadyBooked ? ' booking-spots-low' : ''}`}>{alreadyBooked ? '✓ ' : (session.isWaitlist || session.availableSpots <= 0) ? '• ' : '♙ '}{availabilityLabel}</span>}
+                <button type="button" className={`booking-session-action${alreadyBooked ? ' booking-manage-action' : ''}`} onClick={() => alreadyBooked && booking ? void openCancellation(session, booking.bookingId) : openBooking(session)}>{alreadyBooked ? (isFrench ? 'Gérer / annuler' : 'Manage / cancel') : session.isWaitlist || session.availableSpots <= 0 ? (isFrench ? 'Liste d’attente' : 'Join waitlist') : (isFrench ? 'Réserver' : 'Book')}<span>→</span></button>
                 <small>{session.creditCost} {isFrench ? 'crédit' : 'credit'}{session.creditCost === 1 ? '' : 's'}</small>
               </div>
             </article>
@@ -702,10 +746,11 @@ function BookingPortalRoute() {
       <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={submitting} onClick={() => setSelected(null)}>×</button>
       <p className="booking-eyebrow">{bookingUpsell ? (isFrench ? 'RÉSERVATION CONFIRMÉE' : 'BOOKING CONFIRMED') : selectedAction === 'cancel' ? (isFrench ? 'POLITIQUE D’ANNULATION' : 'CANCELLATION POLICY') : (isFrench ? 'RÉCAPITULATIF' : 'BOOKING SUMMARY')}</p>
       <h2 id="booking-confirm-title">{bookingUpsell ? (isFrench ? 'C’est réservé !' : 'You’re booked!') : selectedAction === 'cancel' ? (isFrench ? 'Annuler cette réservation ?' : 'Cancel this booking?') : (isFrench ? 'Confirmer ce cours ?' : 'Confirm this class?')}</h2>
-      <div className="booking-recap"><strong>{selected.name}</strong><span>{formatDate(selected.localDate)} · {selected.localStartTime}–{selected.localEndTime}</span><span>{schedule?.location.name}</span>{selectedAction === 'book' && <span>{selected.creditCost} {isFrench ? 'crédit(s)' : 'credit(s)'}</span>}{selected.description && <p className="booking-recap-description">{selected.description}</p>}{selected.conditions && <p>{selected.conditions}</p>}</div>
+      <div className="booking-recap"><strong>{selected.name}</strong><span>{formatDate(selected.localDate)} · {selected.localStartTime}–{selected.localEndTime}</span><span>{schedule?.location.name}</span>{selectedAction === 'book' && <span>{selected.creditCost} {isFrench ? 'crédit(s)' : 'credit(s)'}</span>}{selected.description && <p className="booking-recap-description">{selected.description}</p>}{selected.conditions && <p>{selected.conditions}</p>}{selectedAction === 'book' && schedule?.location.cancellationPolicy && <ul className="booking-recap-terms">{reservationTerms(selected, schedule.location.cancellationPolicy, isFrench).map((term) => <li key={term}>{term}</li>)}</ul>}</div>
       {member && selectedAction === 'book' && !member.identity.firstName?.trim() && <label className="booking-first-name">{isFrench ? 'Ton prénom' : 'Your first name'}<input autoComplete="given-name" maxLength={80} value={firstNameDraft} onChange={(event) => setFirstNameDraft(event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
       {bookingUpsell ? <>
         <p className="booking-upsell-confirmation">{isFrench ? 'La confirmation a été envoyée sur tes canaux liés. Pour ce cours, tu peux aussi apporter ces articles ou les acheter à la boutique du studio.' : 'Your confirmation was sent to your linked channels. You can bring these items for class or buy them from the studio shop.'}</p>
+        {schedule?.location.cancellationPolicy && <ul className="booking-recap-terms booking-upsell-terms">{reservationTerms(selected, schedule.location.cancellationPolicy, isFrench).map((term) => <li key={term}>{term}</li>)}</ul>}
         <section className="booking-class-products" aria-label={isFrench ? 'Produits associés au cours' : 'Products for this class'}>
           <div className="booking-class-products-heading">
             <p className="booking-eyebrow">{isFrench ? 'POUR TON COURS' : 'FOR YOUR CLASS'}</p>

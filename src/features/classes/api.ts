@@ -47,7 +47,17 @@ export type UpdateClassTypePayload = {
   type: ClassType['type']
   duration: number
   maxCapacity: number
+  minimumParticipants: number | null
   creditCost: number
+}
+
+export type CreateClassTypePayload = Omit<UpdateClassTypePayload, 'category' | 'description'> & {
+  category?: string
+  description?: string
+}
+
+export async function createClassTypeRequest(locationId: string, payload: CreateClassTypePayload) {
+  return apiClient.post<ClassType>('/class-types', payload, { headers: { 'x-org-id': locationId } })
 }
 
 export async function updateClassTypeRequest(classType: ClassType, payload: UpdateClassTypePayload) {

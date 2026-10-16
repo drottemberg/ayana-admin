@@ -9,6 +9,7 @@ import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { classTypesQueryKeys } from '@/features/classes/query-keys'
 import { ClassTypeService } from '@/features/classes/class-type-service'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import type { ClassType } from '@/types/class-type'
@@ -17,6 +18,7 @@ const statusOptions = ['ACTIVE', 'DISABLED']
 
 export default function ClassesPage() {
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const { session } = useConnect()
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
@@ -31,7 +33,11 @@ export default function ClassesPage() {
 
   return (
     <>
-      <PageHeader title="Classes" subtitle="Manage class types across customers and locations." />
+      <PageHeader
+        title="Classes"
+        subtitle="Manage class types across customers and locations."
+        primaryAction={session?.permissions.classes?.create ? { children: 'Create class', onClick: () => setIsCreateDrawerOpen(true) } : undefined}
+      />
       <section className="p-4 md:p-6">
         <DataTableAsync
           queryKey={[...classTypesQueryKeys.all, 'table']}
@@ -91,6 +97,7 @@ export default function ClassesPage() {
         open={Boolean(editingClassType)}
         onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
       />
+      <CreateClassTypeDrawer open={isCreateDrawerOpen} onOpenChange={setIsCreateDrawerOpen} />
     </>
   )
 }

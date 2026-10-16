@@ -54,6 +54,7 @@ import { getClassSessionColumns } from '@/features/classes/class-session-columns
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { ClassTypeService } from '@/features/classes/class-type-service'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { classTypesQueryKeys } from '@/features/classes/query-keys'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
@@ -221,6 +222,7 @@ export default function CustomerPage() {
   const [isCreatePricingOptionOpen, setIsCreatePricingOptionOpen] = useState(false)
   const [editingPricingOption, setEditingPricingOption] = useState<PricingOption | null>(null)
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [isCreateClassDrawerOpen, setIsCreateClassDrawerOpen] = useState(false)
   const [isCoachDrawerOpen, setIsCoachDrawerOpen] = useState(false)
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
@@ -557,6 +559,7 @@ export default function CustomerPage() {
                   id={`${MODULE_ANCHOR_PREFIX}-classes`}
                   title="Classes"
                   icon={EntityIcon.classes}
+                  action={session?.permissions.classes?.create ? { label: 'Create class', onClick: () => setIsCreateClassDrawerOpen(true) } : undefined}
                   viewAllTo={`/classes?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`}
                   queryKey={[...classTypesQueryKeys.customer(customer.id), 'module']}
                   loadData={(state: DataTableState<ClassType>) => getClassTypesRequest(state, { customerId: customer.id })}
@@ -750,6 +753,11 @@ export default function CustomerPage() {
         classType={editingClassType}
         open={Boolean(editingClassType)}
         onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
+      />
+      <CreateClassTypeDrawer
+        fixedCustomer={customer}
+        open={isCreateClassDrawerOpen}
+        onOpenChange={setIsCreateClassDrawerOpen}
       />
       <CoachProfileDrawer
         customerId={customer.id}

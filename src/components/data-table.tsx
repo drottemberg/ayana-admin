@@ -521,7 +521,6 @@ function BaseDataTable<TData extends Record<string, unknown>>({
               if (selectionMode === 'multiple') applySelectionDrag(row)
             }}
             aria-label="Select row"
-            className="select-none"
           />
         ),
         enableSorting: false,

@@ -1,5 +1,5 @@
 export type AiSupportIssueType = 'UNANSWERED' | 'TOOL_FAILURE' | 'INTERNAL_ERROR' | 'ITERATION_LIMIT'
-export type AiSupportIssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'DISMISSED'
+export type AiSupportIssueStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_FOR_USER' | 'RESOLVED' | 'DISMISSED'
 
 export type AiSupportIssue = {
   id: string
@@ -25,7 +25,7 @@ export type AiSupportIssue = {
 
 export type AiSupportIssueActivity = {
   id: string
-  type: 'NOTE' | 'STATUS_CHANGE' | 'ASSIGNMENT' | 'RESOLUTION'
+  type: 'NOTE' | 'STATUS_CHANGE' | 'ASSIGNMENT' | 'RESOLUTION' | 'MESSAGE_SENT' | 'CUSTOMER_REPLY'
   content: string | null
   fromValue: string | null
   toValue: string | null

@@ -38,6 +38,7 @@ export function ClassTypeEditDrawer({
   const [type, setType] = useState<ClassType['type']>('GROUP')
   const [duration, setDuration] = useState('')
   const [maxCapacity, setMaxCapacity] = useState('')
+  const [minimumParticipants, setMinimumParticipants] = useState('')
   const [creditCost, setCreditCost] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
@@ -50,6 +51,7 @@ export function ClassTypeEditDrawer({
     setType(classType.type)
     setDuration(String(classType.duration))
     setMaxCapacity(String(classType.maxCapacity))
+    setMinimumParticipants(classType.minimumParticipants == null ? '' : String(classType.minimumParticipants))
     setCreditCost(String(classType.creditCost))
   }, [open, classType])
 
@@ -65,10 +67,12 @@ export function ClassTypeEditDrawer({
       type,
       duration: Number(duration),
       maxCapacity: Number(maxCapacity),
+      minimumParticipants: minimumParticipants.trim() ? Number(minimumParticipants) : null,
       creditCost: Number(creditCost),
     }
     if (!payload.name || !Number.isInteger(payload.duration) || payload.duration < 1 ||
       !Number.isInteger(payload.maxCapacity) || payload.maxCapacity < 1 ||
+      (payload.minimumParticipants !== null && (!Number.isInteger(payload.minimumParticipants) || payload.minimumParticipants < 1 || payload.minimumParticipants > payload.maxCapacity)) ||
       !Number.isFinite(payload.creditCost) || payload.creditCost < 0) {
       toast.error('Check the class name, duration, capacity, and credit cost.')
       return
@@ -111,7 +115,8 @@ export function ClassTypeEditDrawer({
           </Field>
           <Field label="Duration (minutes)"><Input required type="number" min="1" step="1" value={duration} onChange={(event) => setDuration(event.target.value)} /></Field>
           <Field label="Maximum capacity"><Input required type="number" min="1" step="1" value={maxCapacity} onChange={(event) => setMaxCapacity(event.target.value)} /></Field>
-          <Field label="Credit cost"><Input required type="number" min="0" step="0.5" value={creditCost} onChange={(event) => setCreditCost(event.target.value)} /></Field>
+          <Field label="Minimum participants to hold class"><Input type="number" min="1" step="1" max={maxCapacity || undefined} value={minimumParticipants} onChange={(event) => setMinimumParticipants(event.target.value)} /><span className="text-xs text-muted-foreground">Leave empty if there is no minimum. The class may be cancelled if fewer members book.</span></Field>
+          <Field label="Credit cost"><Input required type="number" min="0" step="0.01" value={creditCost} onChange={(event) => setCreditCost(event.target.value)} /></Field>
         </div>
         <div className="flex justify-end gap-2 border-t border-border p-5">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>

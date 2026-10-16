@@ -30,6 +30,7 @@ import type { ClassSession, ClassType } from '@/types/class-type'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { ClassTypeService } from '@/features/classes/class-type-service'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { useConnect } from '@/features/app/use-connect'
 import { getClientContractsRequest } from '@/features/client-contracts/api'
 import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
@@ -116,6 +117,7 @@ function getSections(location?: Location, canEdit = false): DetailPanelSection[]
 export default function LocationPage() {
   const { locationId = '' } = useParams()
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [isCreateClassDrawerOpen, setIsCreateClassDrawerOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductLocationSettings | null>(null)
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
@@ -184,6 +186,7 @@ export default function LocationPage() {
           id="module-classes"
           title="Classes"
           icon={EntityIcon.classes}
+          action={session?.permissions.classes?.create ? { label: 'Create class', onClick: () => setIsCreateClassDrawerOpen(true) } : undefined}
           viewAllTo={`/classes?${new URLSearchParams({ filterLocationId: locationId }).toString()}`}
           queryKey={classTypesQueryKeys.location(locationId)}
           loadData={(state: DataTableState<ClassType>) => getClassTypesRequest(state, { locationId })}
@@ -269,6 +272,11 @@ export default function LocationPage() {
         open={Boolean(editingClassType)}
         onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
       />
+      {location && <CreateClassTypeDrawer
+        fixedLocation={{ id: location.id, name: location.name, parentId: location.parentId }}
+        open={isCreateClassDrawerOpen}
+        onOpenChange={setIsCreateClassDrawerOpen}
+      />}
       <ProductLocationSettingsDrawer
         product={editingProduct}
         locationId={locationId}

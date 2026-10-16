@@ -422,3 +422,10 @@ code {
     @apply text-[14px] leading-[18px] font-normal;
   }
 }
+
+/* Vaul disables selection on desktop drawers by default. Keep drawer text selectable. */
+@media (hover: hover) and (pointer: fine) {
+  [data-vaul-drawer] {
+    user-select: text !important;
+  }
+}

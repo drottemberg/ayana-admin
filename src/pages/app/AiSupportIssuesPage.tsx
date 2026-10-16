@@ -13,9 +13,10 @@ import { useConnect } from '@/features/app/use-connect'
 import { getAiSupportIssueRequest, getAiSupportIssuesRequest, updateAiSupportIssueRequest } from '@/features/ai-support-issues/api'
 import { aiSupportIssueQueryKeys } from '@/features/ai-support-issues/query-keys'
 import type { AiSupportIssue, AiSupportIssueStatus, AiSupportIssueType } from '@/features/ai-support-issues/types'
+import { getCustomersListRequest } from '@/features/customers/api'
 import { NO_VALUE_STR } from '@/constants'
 
-const statuses: AiSupportIssueStatus[] = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'DISMISSED']
+const statuses: AiSupportIssueStatus[] = ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_USER', 'RESOLVED', 'DISMISSED']
 const types: AiSupportIssueType[] = ['UNANSWERED', 'TOOL_FAILURE', 'INTERNAL_ERROR', 'ITERATION_LIMIT']
 
 export default function AiSupportIssuesPage() {
@@ -124,9 +125,9 @@ export default function AiSupportIssuesPage() {
         setSendResolutionEmail(false)
         setSendResolutionChannel(false)
         if (failed.length) {
-          toast.error(`Issue updated. Sent: ${sent.join(', ') || 'none'}. Failed: ${failed.map((delivery) => `${delivery.channel}: ${delivery.error}`).join('; ')}`)
+          toast.error(`Ticket updated. Sent: ${sent.join(', ') || 'none'}. Failed: ${failed.map((delivery) => `${delivery.channel}: ${delivery.error}`).join('; ')}`)
         } else {
-          toast.success(`Issue updated. Resolution message sent via ${sent.join(' and ')}.`)
+          toast.success(`Message sent via ${sent.join(' and ')}.`)
         }
       } else {
         toast.success('Support issue updated.')
@@ -150,11 +151,22 @@ export default function AiSupportIssuesPage() {
           tableKey="ai-support-issues.root"
           columns={columns}
           searchPlaceholder="Search summary, user, or issue ID"
-          searchColumns={['id', 'summary', 'userName', 'userEmail']}
+          searchColumns={['id', 'summary', 'userName', 'userEmail', 'customerName']}
           filters={[
             { id: 'status', label: 'Status', column: 'status', options: statuses, getValue: (row) => row.status },
             { id: 'type', label: 'Type', column: 'type', options: types, getValue: (row) => row.type },
             { id: 'appContext', label: 'Context', column: 'appContext', options: ['ADMIN', 'CUSTOMER', 'MEMBER'], getValue: (row) => row.appContext },
+            {
+              id: 'customerId',
+              label: 'Customer',
+              column: 'customerId',
+              selectionMode: 'single',
+              queryFn: async (search: string) => {
+                const customers = await getCustomersListRequest(undefined, search)
+                return { items: customers.map((customer) => ({ id: customer.id, label: customer.name })), total: customers.length }
+              },
+              getValue: (row) => row.customerId,
+            },
           ]}
           getRowCommands={(row) => [{ label: 'View details', onClick: () => setSelectedIssueId(row.id) }]}
           loadingMessage="Loading support issues..."
@@ -237,7 +249,7 @@ export default function AiSupportIssuesPage() {
                     <textarea className="min-h-20 rounded-md border border-input bg-background p-3 font-normal" value={note} onChange={(event) => setNote(event.target.value)} />
                   </label>
                   <fieldset className="space-y-3 rounded-md border p-3">
-                    <legend className="px-1 text-sm font-semibold">Message to the user</legend>
+                    <legend className="px-1 text-sm font-semibold">Email reply</legend>
                     <label className="grid gap-1.5 text-sm font-medium">
                       Custom message
                       <textarea className="min-h-24 rounded-md border border-input bg-background p-3 font-normal" value={resolutionMessage} onChange={(event) => setResolutionMessage(event.target.value)} placeholder="Write the message the user should receive..." />
@@ -248,13 +260,13 @@ export default function AiSupportIssuesPage() {
                         Email{issue.userEmail ? ` · ${issue.userEmail}` : ' · no email available'}
                       </label>
                       <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={sendResolutionChannel} disabled={!issue.channel || !issue.conversationId || saving} onChange={(event) => setSendResolutionChannel(event.currentTarget.checked)} />
-                        User channel{issue.channel ? ` · ${issue.channel}` : ' · unavailable'}
+                        <input type="checkbox" checked={sendResolutionChannel} disabled={!sendResolutionEmail || !issue.channel || !issue.conversationId || saving} onChange={(event) => setSendResolutionChannel(event.currentTarget.checked)} />
+                        Notify via {issue.channel ?? 'user channel'}{!issue.channel || !issue.conversationId ? ' · unavailable' : ''}
                       </label>
                     </div>
-                    {(sendResolutionEmail || sendResolutionChannel) && status !== 'RESOLVED' ? <p className="text-xs text-amber-700">Set the issue status to Resolved before sending the message.</p> : null}
+                    {sendResolutionEmail ? <p className="text-xs text-muted-foreground">The full answer is sent by email. The optional WhatsApp or Telegram message only tells the user that the email was sent and asks them to reply by email. Their reply is added to this ticket.</p> : null}
                   </fieldset>
-                  <Button disabled={saving || ((sendResolutionEmail || sendResolutionChannel) && (!resolutionMessage.trim() || status !== 'RESOLVED'))} onClick={() => void saveIssue({
+                  <Button disabled={saving || ((sendResolutionEmail || sendResolutionChannel) && !resolutionMessage.trim())} onClick={() => void saveIssue({
                     status,
                     resolution,
                     ...(note.trim() ? { note: note.trim() } : {}),
@@ -263,7 +275,7 @@ export default function AiSupportIssuesPage() {
                       sendResolutionEmail,
                       sendResolutionChannel,
                     } : {}),
-                  })}>{saving ? 'Saving...' : sendResolutionEmail || sendResolutionChannel ? 'Resolve and send message' : 'Save update'}</Button>
+                  })}>{saving ? 'Saving...' : sendResolutionEmail || sendResolutionChannel ? 'Send message' : 'Save update'}</Button>
                 </section>
 
                 <section className="space-y-3">
@@ -299,8 +311,8 @@ function JsonSection({ title, value }: { title: string; value: unknown }) {
 }
 
 function IssueStatusBadge({ status }: { status: AiSupportIssueStatus }) {
-  const variant = status === 'OPEN' ? 'destructive' : status === 'IN_PROGRESS' ? 'secondary' : 'outline'
-  return <Badge variant={variant}>{status.replace('_', ' ')}</Badge>
+  const variant = status === 'OPEN' ? 'destructive' : status === 'IN_PROGRESS' ? 'secondary' : status === 'WAITING_FOR_USER' ? 'default' : 'outline'
+  return <Badge variant={variant}>{status === 'WAITING_FOR_USER' ? 'WAITING FOR CUSTOMER' : status.replace('_', ' ')}</Badge>
 }
 
 function labelType(type: AiSupportIssueType) {
