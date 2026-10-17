@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
 import ayanaLogo from '@/assets/ayana-logo.png'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { validatePhone } from '@/lib/phone'
+import { createPublicAccessLink, type PublicAccessChannel } from '@/lib/public-access'
 import './booking-portal.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
@@ -45,6 +48,7 @@ type Schedule = {
     slug: string
     timezone: string
     whatsappNumber?: string | null
+    telegramBotUsername?: string | null
     paymentMethods?: { online: boolean; terminal: boolean }
     cancellationPolicy: {
       lateCancelWindowHours: number
@@ -100,6 +104,31 @@ function sessionKey(customerSlug: string, locationSlug: string) {
   return `ayana-booking-session:${customerSlug}:${locationSlug}`
 }
 
+type BookingGuestDraft = { firstName: string; phone: string; email: string }
+
+function guestDraftKey(customerSlug: string, locationSlug: string) {
+  return `ayana-booking-guest:${customerSlug}:${locationSlug}`
+}
+
+function readGuestDraft(customerSlug: string, locationSlug: string): BookingGuestDraft {
+  try {
+    const saved = localStorage.getItem(guestDraftKey(customerSlug, locationSlug))
+    if (saved) {
+      const draft = JSON.parse(saved) as Partial<BookingGuestDraft>
+      return {
+        firstName: typeof draft.firstName === 'string' ? draft.firstName : '',
+        phone: typeof draft.phone === 'string' ? draft.phone : '',
+        email: typeof draft.email === 'string' ? draft.email : '',
+      }
+    }
+  } catch { /* allow guest checkout when browser storage is unavailable */ }
+  return { firstName: '', phone: '', email: '' }
+}
+
+function saveGuestDraft(customerSlug: string, locationSlug: string, draft: BookingGuestDraft) {
+  try { localStorage.setItem(guestDraftKey(customerSlug, locationSlug), JSON.stringify(draft)) } catch { /* checkout remains usable without browser storage */ }
+}
+
 function browserLanguage(): 'fr' | 'en' {
   const preferred = navigator.languages?.[0] ?? navigator.language ?? 'fr'
   return /^fr(?:-|$)/i.test(preferred) ? 'fr' : 'en'
@@ -143,18 +172,15 @@ function reservationTerms(session: Pick<ClassSession, 'minimumParticipants'>, po
   return terms
 }
 
-function whatsappLink(phone: string | null | undefined, message: string): string | null {
-  const digits = (phone ?? '').replace(/\D/g, '').replace(/^00/, '')
-  if (digits.length < 8 || digits.length > 15) return null
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
-}
-
 function BookingPortalRoute() {
   const { customerSlug = '', locationSlug = '' } = useParams()
   const [searchParams] = useSearchParams()
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [member, setMember] = useState<MemberState | null>(null)
   const [firstNameDraft, setFirstNameDraft] = useState('')
+  const [guestFirstName, setGuestFirstName] = useState(() => readGuestDraft(customerSlug, locationSlug).firstName)
+  const [guestPhone, setGuestPhone] = useState(() => readGuestDraft(customerSlug, locationSlug).phone)
+  const [guestEmail, setGuestEmail] = useState(() => readGuestDraft(customerSlug, locationSlug).email)
   const [language, setLanguage] = useState<'fr' | 'en'>(readBookingLanguage)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -163,25 +189,48 @@ function BookingPortalRoute() {
   const [selectedAction, setSelectedAction] = useState<'book' | 'cancel'>('book')
   const [bookingError, setBookingError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [sessionFilter, setSessionFilter] = useState<'all' | 'booked'>('all')
-  const [classFilter, setClassFilter] = useState('all')
-  const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'midday' | 'evening'>('all')
-  const [selectedDate, setSelectedDate] = useState('')
-  const [sessionLayout, setSessionLayout] = useState<'list' | 'grid'>('list')
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'booked'>(() => searchParams.get('filter') === 'booked' ? 'booked' : 'all')
+  const [classFilter, setClassFilter] = useState(() => searchParams.get('class') ?? 'all')
+  const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'midday' | 'evening'>(() => {
+    const value = searchParams.get('time')
+    return value === 'morning' || value === 'midday' || value === 'evening' ? value : 'all'
+  })
+  const [selectedDate, setSelectedDate] = useState(() => searchParams.get('date') ?? '')
+  const [sessionLayout, setSessionLayout] = useState<'list' | 'grid'>(() => searchParams.get('layout') === 'grid' ? 'grid' : 'list')
   const [activeSection, setActiveSection] = useState<'planning' | 'offers'>(() => searchParams.get('section') === 'offers' ? 'offers' : 'planning')
   const [cancellationQuote, setCancellationQuote] = useState<CancellationQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [offers, setOffers] = useState<PricingOffer[]>([])
   const [offersLoading, setOffersLoading] = useState(false)
   const [offersError, setOffersError] = useState('')
+  const [offerCheckoutError, setOfferCheckoutError] = useState('')
+  const [offerToPurchase, setOfferToPurchase] = useState<PricingOffer | null>(null)
   const [forcedOfferFlow, setForcedOfferFlow] = useState(false)
-  const [checkoutUrls, setCheckoutUrls] = useState<Record<string, string>>({})
   const [offerPaymentNotices, setOfferPaymentNotices] = useState<Record<string, string>>({})
   const [purchasingOfferId, setPurchasingOfferId] = useState('')
   const offerPurchaseInFlight = useRef(false)
   const [bookingUpsell, setBookingUpsell] = useState<{ className: string; products: ClassProductOffer[] } | null>(null)
+  const [accessLoading, setAccessLoading] = useState<PublicAccessChannel | null>(null)
+  const [accessError, setAccessError] = useState('')
+  const restoredSession = useRef(false)
+  const restoredOffer = useRef(false)
   const handledPaymentReturn = useRef('')
   const isFrench = language === 'fr'
+
+  useEffect(() => {
+    const draft = readGuestDraft(customerSlug, locationSlug)
+    setGuestFirstName(draft.firstName)
+    setGuestPhone(draft.phone)
+    setGuestEmail(draft.email)
+  }, [customerSlug, locationSlug])
+
+  const updateGuestDraft = (field: keyof BookingGuestDraft, value: string) => {
+    const draft = { firstName: guestFirstName, phone: guestPhone, email: guestEmail, [field]: value }
+    setGuestFirstName(draft.firstName)
+    setGuestPhone(draft.phone)
+    setGuestEmail(draft.email)
+    saveGuestDraft(customerSlug, locationSlug, draft)
+  }
 
   const changeLanguage = (nextLanguage: 'fr' | 'en') => {
     setLanguage(nextLanguage)
@@ -199,9 +248,15 @@ function BookingPortalRoute() {
   useEffect(() => {
     let active = true
     const tokenFromUrl = searchParams.get('token')
+    const sessionTokenFromUrl = searchParams.get('session_token')
     if (tokenFromUrl) {
       const url = new URL(window.location.href)
       url.searchParams.delete('token')
+      url.searchParams.delete('session_token')
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+    } else if (sessionTokenFromUrl) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('session_token')
       window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
     }
 
@@ -220,7 +275,7 @@ function BookingPortalRoute() {
 
         const saved = tokenFromUrl ? null : readSession(customerSlug, locationSlug)
         const handoffToken = tokenFromUrl
-        const sessionToken = saved?.token
+        const sessionToken = sessionTokenFromUrl ?? saved?.token
         if (!handoffToken && !sessionToken) {
           if (active) setMember(null)
           return
@@ -293,10 +348,69 @@ function BookingPortalRoute() {
     if (sessionDates[nextIndex]) setSelectedDate(sessionDates[nextIndex])
   }
   const needsCredits = Boolean(selected && member && selectedAction === 'book' && !member.hasUnlimitedContract && (forcedOfferFlow || member.creditBalance < selected.creditCost))
-  const whatsappMessage = isFrench
-    ? `Connecte-moi au planning de ${schedule?.location.name ?? 'ce studio'}`
-    : `Connect me to the class schedule for ${schedule?.location.name ?? 'this studio'}`
-  const whatsappHref = whatsappLink(schedule?.location.whatsappNumber, whatsappMessage)
+  const openAccessLink = async (channel: PublicAccessChannel, state: Record<string, unknown>) => {
+    setAccessLoading(channel)
+    setAccessError('')
+    try {
+      const url = await createPublicAccessLink({
+        apiUrl: API_URL,
+        customerSlug,
+        locationSlug,
+        destination: 'BOOKING',
+        channel,
+        language,
+        state,
+      })
+      window.location.assign(url)
+    } catch (reason) {
+      setAccessError(reason instanceof Error ? reason.message : (isFrench ? 'Impossible de préparer le lien.' : 'Could not prepare the link.'))
+      setAccessLoading(null)
+    }
+  }
+  const accessState = (resume: 'page' | 'session' | 'offer' = 'page') => ({
+    section: activeSection,
+    date: selectedDate,
+    filter: sessionFilter,
+    className: classFilter,
+    time: timeFilter,
+    layout: sessionLayout,
+    ...(resume === 'session' && selected ? { resumeSession: selected.id } : {}),
+    ...(resume === 'offer' && offerToPurchase ? { resumeOffer: offerToPurchase.id } : {}),
+  })
+  const renderAccessButtons = (state: Record<string, unknown>, buttonClass: string) => <div className="booking-access-buttons">
+    {schedule?.location.whatsappNumber && <button type="button" className={buttonClass} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP', state)}>{accessLoading === 'WHATSAPP' ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Continuer avec WhatsApp' : 'Continue with WhatsApp')}<span>↗</span></button>}
+    {schedule?.location.telegramBotUsername && <button type="button" className={`${buttonClass} booking-telegram-cta`} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM', state)}>{accessLoading === 'TELEGRAM' ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Continuer avec Telegram' : 'Continue with Telegram')}<span>↗</span></button>}
+    {!schedule?.location.whatsappNumber && !schedule?.location.telegramBotUsername && <small>{isFrench ? 'Aucune messagerie n’est configurée pour ce studio.' : 'No messaging channel is configured for this studio.'}</small>}
+  </div>
+
+  useEffect(() => {
+    if (!schedule || restoredSession.current) return
+    const sessionId = searchParams.get('resumeSession')
+    if (!sessionId) return
+    const session = schedule.sessions.find((item) => item.id === sessionId)
+    if (!session) return
+    restoredSession.current = true
+    setActiveSection('planning')
+    setSelected(session)
+    setSelectedAction('book')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('resumeSession')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [schedule, searchParams])
+
+  useEffect(() => {
+    if (!offers.length || restoredOffer.current) return
+    const offerId = searchParams.get('resumeOffer')
+    if (!offerId) return
+    const offer = offers.find((item) => item.id === offerId)
+    if (!offer) return
+    restoredOffer.current = true
+    setActiveSection('offers')
+    setOfferToPurchase(offer)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('resumeOffer')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [offers, searchParams])
 
   useEffect(() => {
     const shouldLoadOffers = activeSection === 'offers' || Boolean(member && needsCredits && selectedAction === 'book')
@@ -426,42 +540,75 @@ function BookingPortalRoute() {
   }
 
   const purchaseOffer = async (pricingOptionId: string, paymentMethod: 'link' | 'terminal') => {
-    if (!member || offerPurchaseInFlight.current) return
-    if (!member.identity.firstName?.trim() && !firstNameDraft.trim()) {
-      setOffersError(isFrench ? 'Indique ton prénom avant d’acheter cette formule.' : 'Enter your first name before buying this plan.')
+    if (offerPurchaseInFlight.current) return
+    const firstName = member
+      ? member.identity.firstName?.trim() || firstNameDraft.trim()
+      : guestFirstName.trim()
+    if (!firstName) {
+      setOfferCheckoutError(isFrench ? 'Indique ton prénom pour continuer.' : 'Enter your first name to continue.')
+      return
+    }
+    if (!member && (validatePhone(guestPhone) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim()))) {
+      setOfferCheckoutError(isFrench ? 'Vérifie ton numéro de téléphone et ton e-mail.' : 'Check your phone number and email address.')
       return
     }
     offerPurchaseInFlight.current = true
     setPurchasingOfferId(pricingOptionId)
-    setOffersError('')
+    setOfferCheckoutError('')
     try {
       const url = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/offers/checkout`
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
-        body: JSON.stringify({ pricingOptionId, ...(selected?.id ? { sessionId: selected.id, sessionFilter } : {}), paymentMethod, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
+        headers: { 'content-type': 'application/json', ...(member?.token ? { authorization: `Bearer ${member.token}` } : {}) },
+        body: JSON.stringify({
+          pricingOptionId,
+          ...(selected?.id ? { sessionId: selected.id, sessionFilter } : {}),
+          paymentMethod,
+          language,
+          firstName,
+          ...(member ? {} : { phone: guestPhone, email: guestEmail.trim() }),
+        }),
       })
-      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; message?: string | string[] }
+      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; sessionToken?: string; message?: string | string[] }
       if (!response.ok) throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
       if (paymentMethod === 'link' && payload.checkoutUrl) {
-        setCheckoutUrls((current) => ({ ...current, [pricingOptionId]: payload.checkoutUrl! }))
+        window.location.assign(payload.checkoutUrl)
+        return
       } else if (paymentMethod === 'terminal' && payload.awaitingPayment) {
+        if (!member && payload.sessionToken) {
+          const meUrl = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/me`
+          const meResponse = await fetch(meUrl, { method: 'POST', headers: { authorization: `Bearer ${payload.sessionToken}` } })
+          const state = await meResponse.json().catch(() => ({})) as Partial<MemberState>
+          if (meResponse.ok && state.identity && typeof state.creditBalance === 'number') {
+            const nextMember = {
+              ...state,
+              token: payload.sessionToken,
+              hasUnlimitedContract: state.hasUnlimitedContract === true,
+              bookedSessionIds: state.bookedSessionIds ?? [],
+              bookings: state.bookings ?? [],
+            } as MemberState
+            setMember(nextMember)
+            setFirstNameDraft(nextMember.identity.firstName ?? '')
+            localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
+          }
+        }
         setOfferPaymentNotices((current) => ({
           ...current,
           [pricingOptionId]: isFrench
             ? 'Ta formule est enregistrée. À l’accueil, tu pourras lire et accepter ses conditions sur le terminal avant de payer. Les crédits seront ajoutés après validation du paiement.'
             : 'Your plan is saved. At reception, review and accept its terms on the reader before paying. Credits will be added after payment is confirmed.',
         }))
+        setOfferToPurchase(null)
       } else {
         throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
       }
-      if (!member.identity.firstName?.trim()) {
+      if (member && !member.identity.firstName?.trim()) {
         const updated = { ...member, identity: { ...member.identity, firstName: firstNameDraft.trim() } }
         setMember(updated)
         localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updated))
       }
     } catch (reason) {
-      setOffersError(reason instanceof Error ? reason.message : (isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
+      setOfferCheckoutError(reason instanceof Error ? reason.message : (isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
     } finally {
       offerPurchaseInFlight.current = false
       setPurchasingOfferId('')
@@ -584,9 +731,6 @@ function BookingPortalRoute() {
 
   const renderPricingOffer = (offer: PricingOffer, standalone = false) => {
     const price = new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: offer.currency || 'EUR' }).format(offer.price)
-    const whatsappOfferHref = whatsappLink(schedule?.location.whatsappNumber, isFrench
-      ? `Connecte-moi au planning de ${schedule?.location.name ?? 'ce studio'} pour acheter ${offer.name}.`
-      : `Connect me to the class schedule for ${schedule?.location.name ?? 'this studio'} to buy ${offer.name}.`)
     const creditsLabel = offer.creditsTotal != null
       ? `${offer.creditsTotal} ${isFrench ? 'crédits au total' : 'total credits'}`
       : offer.creditsPerPeriod != null
@@ -601,21 +745,7 @@ function BookingPortalRoute() {
       <small>{creditsLabel}{offer.validityDays ? ` · ${offer.validityDays} ${isFrench ? 'jours de validité' : 'days validity'}` : ''} · {billingLabel}{offer.minimumCommitmentMonths ? ` · ${offer.minimumCommitmentMonths} ${isFrench ? 'mois d’engagement minimum' : 'months minimum commitment'}` : ''}</small>
       {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
       {offer.billingInterval && offer.billingInterval !== 'ONCE' && schedule?.location.paymentMethods?.terminal && <small className="booking-terminal-consent-hint">{isFrench ? 'Sur place, tu confirmeras sur le terminal le prélèvement initial et les renouvellements automatiques.' : 'In person, you’ll confirm the initial payment and automatic renewals on the reader.'}</small>}
-      {!member
-        ? whatsappOfferHref
-          ? <a className="booking-offer-buy" href={whatsappOfferHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp pour acheter' : 'Connect with WhatsApp to buy'}<span>↗</span></a>
-          : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>
-        : checkoutUrls[offer.id]
-          ? <a className="booking-offer-buy" href={checkoutUrls[offer.id]}>{isFrench ? 'Continuer vers le paiement en ligne' : 'Continue to online payment'}<span>↗</span></a>
-          : offerPaymentNotices[offer.id] ? null
-            : <div className="booking-offer-payment-actions">
-              {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-offer-buy booking-offer-pay-online" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'link')}>
-                {purchasingOfferId === offer.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer en ligne' : 'Pay online')}<span>→</span>
-              </button>}
-              {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-offer-buy booking-offer-pay-in-person" disabled={purchasingOfferId === offer.id || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void purchaseOffer(offer.id, 'terminal')}>
-                {purchasingOfferId === offer.id ? (isFrench ? 'Enregistrement…' : 'Saving…') : (isFrench ? 'Payer sur place' : 'Pay in person')}<span>→</span>
-              </button>}
-            </div>}
+      {!offerPaymentNotices[offer.id] && <button type="button" className="booking-offer-buy" onClick={() => { setOfferToPurchase(offer); setOfferCheckoutError('') }}>{isFrench ? 'Acheter' : 'Buy'}<span>→</span></button>}
       {offerPaymentNotices[offer.id] && <p className="booking-offer-payment-notice" role="status">{offerPaymentNotices[offer.id]}</p>}
     </article>
   }
@@ -641,7 +771,7 @@ function BookingPortalRoute() {
           <div className="booking-member-identity"><span className="booking-avatar">{(member.identity.firstName?.[0] ?? member.identity.lastName?.[0] ?? 'A').toUpperCase()}</span><div><span>{isFrench ? 'Connecté·e' : 'Signed in'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ')}</strong></div></div>
           <div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (isFrench ? 'accès illimité' : 'unlimited') : (isFrench ? 'crédits' : 'credits')}</span></div><button type="button" className="booking-member-plans" onClick={() => setActiveSection('offers')}><span aria-hidden="true">▤</span>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}<b>→</b></button><button type="button" className="booking-logout" onClick={logout} aria-label={isFrench ? 'Se déconnecter' : 'Log out'} title={isFrench ? 'Se déconnecter' : 'Log out'}>↪</button></div>
         </section>
-        : <section className="booking-login-card"><div><strong>{isFrench ? 'Réserve avec ton compte Ayana' : 'Book with your Ayana account'}</strong><span>{isFrench ? 'Connecte-toi pour voir tes crédits et gérer tes réservations.' : 'Connect to see your credits and manage your bookings.'}</span></div>{whatsappHref ? <a className="booking-whatsapp-cta" href={whatsappHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp' : 'Connect with WhatsApp'}<span>↗</span></a> : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>}</section>}
+        : activeSection !== 'offers' && <section className="booking-login-card"><div><strong>{isFrench ? 'Retrouve ton compte Ayana' : 'Open your Ayana account'}</strong><span>{isFrench ? 'Reviens au planning avec tes réservations et tes crédits.' : 'Return to the schedule with your bookings and credits.'}</span></div><div>{renderAccessButtons(accessState(), 'booking-whatsapp-cta')}{accessError && <p className="booking-error" role="alert">{accessError}</p>}</div></section>}
       {notice && <div className="booking-notice" role="status">{notice}</div>}
 
       <nav className="booking-section-tabs" role="tablist" aria-label={isFrench ? 'Planning et formules' : 'Schedule and plans'}>
@@ -732,8 +862,6 @@ function BookingPortalRoute() {
           <h2>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}</h2>
           <p>{isFrench ? 'Choisis une formule pour profiter des cours de ce studio. Tes crédits seront associés à ton compte Ayana.' : 'Choose a plan for classes at this studio. Your credits will be added to your Ayana account.'}</p>
         </header>
-        {!member && <div className="booking-plans-signin">{isFrench ? 'Connecte-toi avec WhatsApp pour acheter une formule et retrouver tes crédits dans ton compte.' : 'Connect with WhatsApp to buy a plan and keep its credits in your account.'}</div>}
-        {member && !member.identity.firstName?.trim() && <label className="booking-first-name booking-plans-first-name">{isFrench ? 'Ton prénom est nécessaire avant l’achat' : 'Your first name is required before purchase'}<input autoComplete="given-name" maxLength={80} value={firstNameDraft} onChange={(event) => setFirstNameDraft(event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
         {offersLoading && <div className="booking-loading booking-plans-loading"><span className="booking-spinner" />{isFrench ? 'Chargement des formules…' : 'Loading plans…'}</div>}
         {!offersLoading && offers.length === 0 && !offersError && <div className="booking-empty booking-plans-empty"><h2>{isFrench ? 'Aucune formule disponible' : 'No plans available'}</h2><p>{isFrench ? 'Les formules disponibles à l’achat apparaîtront ici.' : 'Plans available to purchase will appear here.'}</p></div>}
         {offersError && <div className="booking-error" role="alert">{offersError}</div>}
@@ -741,6 +869,36 @@ function BookingPortalRoute() {
       </section>}
       <footer className="booking-footer">{isFrench ? 'AYANA FEELNESS CLUB · RÉSERVATION EN LIGNE' : 'AYANA FEELNESS CLUB · ONLINE BOOKING'}</footer>
     </>}
+
+    {offerToPurchase && <div className="booking-overlay" role="presentation" onClick={() => !purchasingOfferId && setOfferToPurchase(null)}><section className="booking-sheet booking-purchase-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-purchase-title" onClick={(event) => event.stopPropagation()}>
+      <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={Boolean(purchasingOfferId)} onClick={() => setOfferToPurchase(null)}>×</button>
+      <p className="booking-eyebrow">{isFrench ? 'TA COMMANDE' : 'YOUR ORDER'}</p>
+      <h2 id="booking-purchase-title">{isFrench ? 'Paiement de la formule' : 'Plan payment'}</h2>
+      <div className="booking-recap booking-purchase-summary">
+        <strong>{new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: offerToPurchase.currency || 'EUR' }).format(offerToPurchase.price)}</strong>
+        <b>{offerToPurchase.name}</b>
+        {offerToPurchase.description && <span>{offerToPurchase.description}</span>}
+        <span>{offerToPurchase.billingInterval && offerToPurchase.billingInterval !== 'ONCE' ? (isFrench ? `Abonnement · facturation ${offerToPurchase.billingInterval.toLowerCase()}` : `Membership · billed ${offerToPurchase.billingInterval.toLowerCase()}`) : (isFrench ? 'Paiement unique' : 'One-time payment')}{offerToPurchase.minimumCommitmentMonths ? ` · ${offerToPurchase.minimumCommitmentMonths} ${isFrench ? 'mois d’engagement minimum' : 'months minimum commitment'}` : ''}</span>
+      </div>
+      {!member ? <>
+        <p className="booking-purchase-explanation">{isFrench ? 'Connecte-toi avec WhatsApp pour retrouver ton compte, ou continue en invité avec tes coordonnées.' : 'Connect with WhatsApp to use your Ayana account, or continue as a guest with your contact details.'}</p>
+        {renderAccessButtons(accessState('offer'), 'booking-purchase-whatsapp')}
+        {accessError && <div className="booking-error" role="alert">{accessError}</div>}
+        <p className="booking-purchase-divider"><span>{isFrench ? 'ou continuer sans WhatsApp' : 'or continue without WhatsApp'}</span></p>
+      </> : <div className="booking-purchase-account"><span>{isFrench ? 'Compte Ayana connecté' : 'Ayana account connected'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ') || member.identity.email}</strong></div>}
+      {!member?.identity.firstName?.trim() && <label className="booking-first-name booking-purchase-field">{isFrench ? 'Prénom' : 'First name'}<input autoComplete="given-name" required maxLength={80} value={member ? firstNameDraft : guestFirstName} onChange={(event) => member ? setFirstNameDraft(event.target.value) : updateGuestDraft('firstName', event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
+      {!member && <PhoneInput label={isFrench ? 'Téléphone' : 'Phone number'} value={guestPhone} placeholder={isFrench ? 'Numéro de téléphone' : 'Phone number'} required nativeCountrySelector onValueChange={(value) => updateGuestDraft('phone', value)} />}
+      {!member && <label className="booking-first-name booking-purchase-field">{isFrench ? 'E-mail' : 'Email'}<input type="email" autoComplete="email" required maxLength={254} value={guestEmail} onChange={(event) => updateGuestDraft('email', event.target.value)} placeholder={isFrench ? 'adresse@exemple.com' : 'name@example.com'} /></label>}
+      {offerCheckoutError && <div className="booking-error" role="alert">{offerCheckoutError}</div>}
+      <div className="booking-purchase-actions">
+        {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId) || !(member?.identity.firstName?.trim() || firstNameDraft.trim() || guestFirstName.trim()) || (!member && (Boolean(validatePhone(guestPhone)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())))} onClick={() => void purchaseOffer(offerToPurchase.id, 'link')}>
+          {purchasingOfferId === offerToPurchase.id ? (isFrench ? 'Préparation du paiement…' : 'Preparing payment…') : (isFrench ? 'Payer en ligne par carte' : 'Pay online by card')}<span>→</span>
+        </button>}
+        {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-purchase-terminal" disabled={Boolean(purchasingOfferId) || !(member?.identity.firstName?.trim() || firstNameDraft.trim() || guestFirstName.trim()) || (!member && (Boolean(validatePhone(guestPhone)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())))} onClick={() => void purchaseOffer(offerToPurchase.id, 'terminal')}>
+          {purchasingOfferId === offerToPurchase.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer sur place par carte' : 'Pay in person by card')}<span>→</span>
+        </button>}
+      </div>
+    </section></div>}
 
     {selected && <div className="booking-overlay" role="presentation" onClick={() => !submitting && setSelected(null)}><section className="booking-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title" onClick={(event) => event.stopPropagation()}>
       <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={submitting} onClick={() => setSelected(null)}>×</button>
@@ -776,7 +934,7 @@ function BookingPortalRoute() {
             })}
           </div>
         </section>
-      </> : !member ? <div className="booking-auth-hint"><p>{isFrench ? 'Connecte-toi avec ton compte Ayana pour réserver ce cours.' : 'Sign in with your Ayana account to book this class.'}</p>{whatsappHref ? <a className="booking-whatsapp-cta" href={whatsappHref} target="_blank" rel="noreferrer">{isFrench ? 'Se connecter avec WhatsApp' : 'Connect with WhatsApp'}<span>↗</span></a> : <small>{isFrench ? 'WhatsApp n’est pas configuré pour ce studio.' : 'WhatsApp is not configured for this studio.'}</small>}</div>
+      </> : !member ? <div className="booking-auth-hint"><p>{isFrench ? 'Retrouve ton compte pour réserver ce cours.' : 'Open your account to book this class.'}</p>{renderAccessButtons(accessState('session'), 'booking-whatsapp-cta')}{accessError && <div className="booking-error" role="alert">{accessError}</div>}</div>
         : selectedAction === 'cancel' ? <div className="booking-cancellation-policy">
           {quoteLoading ? <p>{isFrench ? 'Vérification de la politique…' : 'Checking cancellation policy…'}</p> : cancellationQuote ? <>
             {cancellationQuote.isLate

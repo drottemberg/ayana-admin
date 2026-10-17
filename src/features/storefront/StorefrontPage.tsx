@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams }
 import ayanaLogo from '@/assets/ayana-logo.png'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { validatePhone } from '@/lib/phone'
+import { createPublicAccessLink, type PublicAccessChannel } from '@/lib/public-access'
 import './storefront.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
@@ -11,8 +12,9 @@ const CART_KEY = 'ayana-storefront-cart'
 type ProductOption = { id: string; name: string; price: number }
 type ModifierGroup = { id: string; name: string; required: boolean; minSelect: number; maxSelect: number; options: ProductOption[] }
 type Variant = { id: string; label: string; price: number; stock: number; available: boolean }
-type Product = { id: string; name: string; description?: string | null; category: string; imageUrl?: string | null; variants: Variant[]; modifierGroups: ModifierGroup[] }
-type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null }; currency: string; paymentMethods?: { online: boolean; terminal: boolean }; products: Product[] }
+type Product = { id: string; name: string; description?: string | null; categoryId?: string; category: string; imageUrl?: string | null; variants: Variant[]; modifierGroups: ModifierGroup[] }
+type PrefillChoice = { product: Product; variant?: Variant; options: Record<string, string[]>; quantity: number; missingOption: boolean }
+type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null; telegramBotUsername?: string | null }; currency: string; paymentMethods?: { online: boolean; terminal: boolean }; products: Product[] }
 type CartLine = { key: string; productId: string; name: string; variantId: string; variantLabel: string; unitPrice: number; quantity: number; modifierIds: string[]; modifierNames: string[]; modifierTotal: number }
 type Identity = { token?: string; firstName?: string; lastName?: string; email?: string; phone?: string }
 type StorefrontLanguage = 'fr' | 'en'
@@ -28,6 +30,25 @@ function readStorefrontLanguage(): StorefrontLanguage {
 
 function sessionKey(customerSlug: string, locationSlug: string) {
   return `ayana-storefront-session:${customerSlug}:${locationSlug}`
+}
+
+function guestDraftKey(customerSlug: string, locationSlug: string) {
+  return `ayana-storefront-guest:${customerSlug}:${locationSlug}`
+}
+
+function checkoutResumeKey(customerSlug: string, locationSlug: string) {
+  return `ayana-storefront-resume-checkout:${customerSlug}:${locationSlug}`
+}
+
+function readGuestDraft(customerSlug: string, locationSlug: string) {
+  try {
+    const draft = JSON.parse(localStorage.getItem(guestDraftKey(customerSlug, locationSlug)) ?? '{}') as { firstName?: unknown; phone?: unknown; email?: unknown }
+    return {
+      firstName: typeof draft.firstName === 'string' ? draft.firstName : '',
+      phone: typeof draft.phone === 'string' ? draft.phone : '',
+      email: typeof draft.email === 'string' ? draft.email : '',
+    }
+  } catch { return { firstName: '', phone: '', email: '' } }
 }
 
 function whatsappReturnKey(customerSlug: string, locationSlug: string) {
@@ -61,9 +82,14 @@ function StorefrontRoute() {
   const [whatsappReturnUrl, setWhatsappReturnUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [category, setCategory] = useState('Tout')
+  const [category, setCategory] = useState(() => searchParams.get('category') ?? 'Tout')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [variantId, setVariantId] = useState('')
+  const [selectedProductQuantity, setSelectedProductQuantity] = useState(1)
+  const [editingCartKey, setEditingCartKey] = useState<string | null>(null)
+  const [pendingPrefillItems, setPendingPrefillItems] = useState<PrefillChoice[]>([])
+  const [isPrefillSelection, setIsPrefillSelection] = useState(false)
+  const [prefillHadUnresolved, setPrefillHadUnresolved] = useState(false)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({})
   const [optionError, setOptionError] = useState('')
   const [cart, setCart] = useState<CartLine[]>(readCart)
@@ -72,12 +98,15 @@ function StorefrontRoute() {
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'terminal'>('online')
   const [terminalOrder, setTerminalOrder] = useState<{ shortCode?: string } | null>(null)
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
-  const [checkoutFirstName, setCheckoutFirstName] = useState(() => readIdentity(customerSlug, locationSlug).firstName ?? '')
-  const [checkoutPhone, setCheckoutPhone] = useState(() => readIdentity(customerSlug, locationSlug).phone ?? '')
-  const [checkoutEmail, setCheckoutEmail] = useState(() => readIdentity(customerSlug, locationSlug).email ?? '')
+  const [checkoutFirstName, setCheckoutFirstName] = useState(() => readIdentity(customerSlug, locationSlug).firstName ?? readGuestDraft(customerSlug, locationSlug).firstName)
+  const [checkoutPhone, setCheckoutPhone] = useState(() => readIdentity(customerSlug, locationSlug).phone ?? readGuestDraft(customerSlug, locationSlug).phone)
+  const [checkoutEmail, setCheckoutEmail] = useState(() => readIdentity(customerSlug, locationSlug).email ?? readGuestDraft(customerSlug, locationSlug).email)
   const handledProductLink = useRef('')
+  const handledCartLink = useRef('')
   const [submitting, setSubmitting] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
+  const [accessLoading, setAccessLoading] = useState<PublicAccessChannel | null>(null)
+  const [accessError, setAccessError] = useState('')
   const isFrench = language === 'fr'
   const tr = (fr: string, en: string) => isFrench ? fr : en
   const changeLanguage = (nextLanguage: StorefrontLanguage) => {
@@ -85,10 +114,37 @@ function StorefrontRoute() {
     try { localStorage.setItem(STORE_LANGUAGE_KEY, nextLanguage) } catch { /* language still changes for this visit */ }
   }
   const storeBasePath = location.pathname.startsWith('/store/') ? `/store/${customerSlug}/${locationSlug}` : `/${customerSlug}/${locationSlug}`
-  const whatsappMessage = isFrench
-    ? `Connecte-moi à la boutique pour commander à emporter chez ${catalog?.location.name ?? 'Ayana'}.`
-    : `Connect me to the shop to order takeaway from ${catalog?.location.name ?? 'Ayana'}.`
-  const whatsappHref = whatsappLink(catalog?.location.whatsappNumber, whatsappMessage)
+  const openAccessLink = async (channel: PublicAccessChannel) => {
+    setAccessLoading(channel)
+    setAccessError('')
+    const resumeCheckout = checkoutOpen
+    if (resumeCheckout) {
+      try { localStorage.setItem(checkoutResumeKey(customerSlug, locationSlug), String(Date.now())) } catch { /* the return URL also carries resumeCheckout */ }
+    }
+    try {
+      const url = await createPublicAccessLink({
+        apiUrl: API_URL,
+        customerSlug,
+        locationSlug,
+        destination: 'STORE',
+        channel,
+        language,
+        state: { category, resumeCheckout },
+      })
+      window.location.assign(url)
+    } catch (reason) {
+      if (resumeCheckout) {
+        try { localStorage.removeItem(checkoutResumeKey(customerSlug, locationSlug)) } catch { /* ignore unavailable storage */ }
+      }
+      setAccessError(reason instanceof Error ? reason.message : tr('Impossible de préparer le lien.', 'Could not prepare the link.'))
+      setAccessLoading(null)
+    }
+  }
+  const renderAccessButtons = (buttonClass: string) => <div className="store-access-buttons">
+    {catalog?.location.whatsappNumber && <button type="button" className={buttonClass} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP')}>{accessLoading === 'WHATSAPP' ? tr('Préparation…', 'Preparing…') : tr('Continuer avec WhatsApp', 'Continue with WhatsApp')} <span>↗</span></button>}
+    {catalog?.location.telegramBotUsername && <button type="button" className={`${buttonClass} store-telegram-login`} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM')}>{accessLoading === 'TELEGRAM' ? tr('Préparation…', 'Preparing…') : tr('Continuer avec Telegram', 'Continue with Telegram')} <span>↗</span></button>}
+    {!catalog?.location.whatsappNumber && !catalog?.location.telegramBotUsername && <small>{tr('Aucune messagerie n’est configurée pour cette boutique.', 'No messaging channel is configured for this shop.')}</small>}
+  </div>
   const orderCode = searchParams.get('code')?.trim()
   const trackOrderMessage = `${tr('Suivre ma commande', 'Track my order')}${orderCode ? ` ${orderCode}` : ''}`
   const trackOrderHref = whatsappLink(catalog?.location.whatsappNumber, trackOrderMessage)
@@ -103,11 +159,31 @@ function StorefrontRoute() {
     localStorage.setItem(CART_KEY, JSON.stringify(cart))
   }, [cart])
 
+  const updateGuestDraft = (field: 'firstName' | 'phone' | 'email', value: string) => {
+    const current = readGuestDraft(customerSlug, locationSlug)
+    const next = { ...current, [field]: value }
+    if (field === 'firstName') setCheckoutFirstName(value)
+    if (field === 'phone') setCheckoutPhone(value)
+    if (field === 'email') setCheckoutEmail(value)
+    try { localStorage.setItem(guestDraftKey(customerSlug, locationSlug), JSON.stringify(next)) } catch { /* checkout remains usable without browser storage */ }
+  }
+
+  useEffect(() => {
+    const savedIdentity = readIdentity(customerSlug, locationSlug)
+    const draft = readGuestDraft(customerSlug, locationSlug)
+    setIdentity(savedIdentity)
+    setCheckoutFirstName(savedIdentity.firstName ?? draft.firstName)
+    setCheckoutPhone(savedIdentity.phone ?? draft.phone)
+    setCheckoutEmail(savedIdentity.email ?? draft.email)
+    setCategory(searchParams.get('category') ?? 'Tout')
+  }, [customerSlug, locationSlug])
+
   useEffect(() => {
     if (!location.pathname.endsWith('/success')) return
     localStorage.removeItem(CART_KEY)
+    localStorage.removeItem(guestDraftKey(customerSlug, locationSlug))
     setCart([])
-  }, [location.pathname])
+  }, [customerSlug, location.pathname, locationSlug])
 
   useEffect(() => {
     let active = true
@@ -141,7 +217,27 @@ function StorefrontRoute() {
   useEffect(() => {
     const url = new URL(window.location.href)
     const token = url.searchParams.get('token') ?? new URLSearchParams(url.hash.replace(/^#/, '')).get('token')
-    if (!token) return
+    const resumeKey = checkoutResumeKey(customerSlug, locationSlug)
+    let resumeTimestamp = 0
+    try {
+      resumeTimestamp = Number(localStorage.getItem(resumeKey))
+      localStorage.removeItem(resumeKey)
+    } catch { /* use the resume flag in the access URL if storage is unavailable */ }
+    const hasRecentLocalResume = Number.isFinite(resumeTimestamp) && resumeTimestamp > 0 && Date.now() - resumeTimestamp <= 15 * 60 * 1000
+    const resumeCheckout = url.searchParams.get('resumeCheckout') === '1' || hasRecentLocalResume
+    const clearResumeCheckout = () => {
+      const currentUrl = new URL(window.location.href)
+      currentUrl.searchParams.delete('resumeCheckout')
+      window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
+    }
+    if (!token) {
+      if (resumeCheckout) {
+        setCheckoutOpen(true)
+        setCheckoutError('')
+        clearResumeCheckout()
+      }
+      return
+    }
     localStorage.removeItem(sessionKey(customerSlug, locationSlug))
     setIdentity({})
     url.searchParams.delete('token')
@@ -159,8 +255,17 @@ function StorefrontRoute() {
       setCheckoutFirstName(next.firstName ?? '')
       setCheckoutPhone(next.phone ?? '')
       setCheckoutEmail(next.email ?? '')
+      if (resumeCheckout) {
+        setCheckoutError('')
+        setCheckoutOpen(true)
+        clearResumeCheckout()
+      }
     }).catch((reason: unknown) => {
       setCheckoutError(reason instanceof Error ? reason.message : tr('Le lien personnalisé a expiré.', 'Your personal link has expired.'))
+      if (resumeCheckout) {
+        setCheckoutOpen(true)
+        clearResumeCheckout()
+      }
     })
   }, [customerSlug, isFrench, locationSlug])
 
@@ -184,9 +289,68 @@ function StorefrontRoute() {
 
   const openProduct = (product: Product) => {
     setSelectedProduct(product)
+    setEditingCartKey(null)
+    setIsPrefillSelection(false)
+    setPendingPrefillItems([])
+    setPrefillHadUnresolved(false)
     setVariantId(product.variants.find((item) => item.available)?.id ?? '')
+    setSelectedProductQuantity(1)
     setSelectedOptions({})
     setOptionError('')
+  }
+
+  const showPrefillChoice = (choice: PrefillChoice) => {
+    setSelectedProduct(choice.product)
+    const availableVariants = choice.product.variants.filter((item) => item.available)
+    setVariantId(choice.variant?.id ?? (availableVariants.length === 1 ? availableVariants[0].id : ''))
+    setSelectedProductQuantity(choice.quantity)
+    setSelectedOptions(choice.options)
+    setEditingCartKey(null)
+    setIsPrefillSelection(true)
+    setOptionError(choice.missingOption
+      ? tr('Une option demandée n’a pas été reconnue. Vérifie les choix ci-dessous.', 'A requested option could not be matched. Review the choices below.')
+      : '')
+  }
+
+  const skipPrefillChoice = () => {
+    const [next, ...remaining] = pendingPrefillItems
+    setPendingPrefillItems(remaining)
+    if (next) {
+      showPrefillChoice(next)
+      return
+    }
+    setSelectedProduct(null)
+    setIsPrefillSelection(false)
+    setCartOpen(true)
+    if (prefillHadUnresolved) setCheckoutError(tr('Un autre article demandé n’a pas été reconnu.', 'Another requested item could not be matched.'))
+    setPrefillHadUnresolved(false)
+  }
+
+  const editCartLine = (line: CartLine) => {
+    const product = catalog?.products.find((item) => item.id === line.productId)
+    if (!product) return
+    setSelectedProduct(product)
+    setVariantId(line.variantId)
+    setSelectedProductQuantity(line.quantity)
+    setEditingCartKey(line.key)
+    setSelectedOptions(Object.fromEntries(product.modifierGroups.map((group) => [
+      group.id,
+      group.options.filter((option) => line.modifierIds.includes(option.id)).map((option) => option.id),
+    ])))
+    setOptionError('')
+    setCartOpen(false)
+  }
+
+  const closeProduct = () => {
+    if (isPrefillSelection) {
+      skipPrefillChoice()
+      return
+    }
+    const returnToCart = editingCartKey !== null
+    setSelectedProduct(null)
+    setEditingCartKey(null)
+    setOptionError('')
+    if (returnToCart) setCartOpen(true)
   }
 
   useEffect(() => {
@@ -197,6 +361,111 @@ function StorefrontRoute() {
     if (product) openProduct(product)
     const url = new URL(window.location.href)
     url.searchParams.delete('productId')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [catalog, searchParams])
+
+  const normalizeCatalogLabel = (value: string) => value.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  useEffect(() => {
+    if (!catalog) return
+    const requestedCategoryId = searchParams.get('categoryId')
+    if (requestedCategoryId) {
+      const categoryProduct = catalog.products.find((product) => product.categoryId === requestedCategoryId)
+      if (categoryProduct) setCategory(categoryProduct.category)
+    }
+    const encodedCart = searchParams.get('cart')
+    const cartLinkKey = `${searchParams.get('token') ?? ''}:${encodedCart ?? ''}`
+    if (!encodedCart || handledCartLink.current === cartLinkKey) return
+    handledCartLink.current = cartLinkKey
+      let requested: Array<{ productId?: string; productName?: string; variantName?: string; modifierNames?: string[]; quantity?: number; isComplete?: boolean }> = []
+    try {
+      const parsed = JSON.parse(encodedCart)
+      if (Array.isArray(parsed)) requested = parsed.slice(0, 10)
+    } catch { /* ignore malformed public cart state */ }
+    const additions: CartLine[] = []
+    const incompleteItems: PrefillChoice[] = []
+    let unresolved = false
+    for (const item of requested) {
+      const name = normalizeCatalogLabel(String(item.productName ?? ''))
+      const product = item.productId
+        ? catalog.products.find((candidate) => candidate.id === item.productId)
+        : (() => {
+            const productMatches = catalog.products.filter((candidate) => {
+              const productName = normalizeCatalogLabel(candidate.name)
+              return productName === name || (name.length > 2 && (productName.includes(name) || name.includes(productName)))
+            })
+            return productMatches.length === 1 ? productMatches[0] : undefined
+          })()
+      if (!product) { unresolved = true; continue }
+      const availableVariants = product.variants.filter((variant) => variant.available)
+      const variantQuery = normalizeCatalogLabel(String(item.variantName ?? ''))
+      const variantMatches = variantQuery
+        ? availableVariants.filter((variant) => {
+            const label = normalizeCatalogLabel(variant.label)
+            return label === variantQuery || label.includes(variantQuery) || variantQuery.includes(label)
+          })
+        : availableVariants.length === 1 ? availableVariants : []
+      const variant = variantMatches.length === 1 ? variantMatches[0] : undefined
+      const quantity = Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0 ? Math.min(Number(item.quantity), 50) : 1
+      const selected: Record<string, string[]> = {}
+      let missingOption = false
+      for (const modifierName of Array.isArray(item.modifierNames) ? item.modifierNames : []) {
+        const modifierQuery = normalizeCatalogLabel(String(modifierName))
+        const matches = product.modifierGroups.flatMap((group) => group.options
+          .filter((option) => {
+            const label = normalizeCatalogLabel(option.name)
+            return label === modifierQuery || (modifierQuery.length > 2 && (label.includes(modifierQuery) || modifierQuery.includes(label)))
+          })
+          .map((option) => ({ group, option })))
+        if (matches.length === 1) {
+          const { group, option } = matches[0]
+          selected[group.id] = group.maxSelect === 1 ? [option.id] : [...(selected[group.id] ?? []), option.id].slice(0, group.maxSelect)
+        } else if (modifierQuery) missingOption = true
+      }
+      const hasRequiredChoice = product.modifierGroups.some((group) => (selected[group.id]?.length ?? 0) < group.minSelect)
+      const completeFromLink = typeof item.isComplete === 'boolean' ? item.isComplete : Boolean(variant && !missingOption && !hasRequiredChoice)
+      if (!completeFromLink || !variant || missingOption || hasRequiredChoice) {
+        incompleteItems.push({ product, variant, options: selected, quantity, missingOption })
+        continue
+      }
+      const modifierOptions = product.modifierGroups.flatMap((group) => group.options.filter((option) => selected[group.id]?.includes(option.id)))
+      const modifierIds = modifierOptions.map((option) => option.id).sort()
+      const modifierNames = modifierOptions.map((option) => option.name)
+      const modifierTotal = modifierOptions.reduce((sum, option) => sum + option.price, 0)
+      additions.push({
+        key: `${variant.id}:${modifierIds.join(',')}`, productId: product.id, name: product.name,
+        variantId: variant.id, variantLabel: variant.label, unitPrice: variant.price + modifierTotal,
+        quantity, modifierIds, modifierNames, modifierTotal,
+      })
+    }
+    if (additions.length) {
+      setCart((current) => {
+        const next = [...current]
+        for (const line of additions) {
+          const existing = next.find((candidate) => candidate.key === line.key)
+          if (existing) {
+            const index = next.findIndex((candidate) => candidate.key === line.key)
+            next[index] = { ...existing, quantity: existing.quantity + line.quantity }
+          }
+          else next.push(line)
+        }
+        return next
+      })
+    }
+    setPrefillHadUnresolved(unresolved)
+    if (additions.length && !incompleteItems.length && !unresolved) {
+      setCheckoutError('')
+      setCartOpen(true)
+    }
+    if (incompleteItems.length) {
+      setPendingPrefillItems(incompleteItems.slice(1))
+      showPrefillChoice(incompleteItems[0])
+    } else if (unresolved) {
+      setCheckoutError(tr('Un article demandé n’a pas pu être reconnu. Vérifie le catalogue avant le paiement.', 'A requested item could not be matched. Please check the catalog before checkout.'))
+      setCartOpen(true)
+    }
+    const url = new URL(window.location.href)
+    url.searchParams.delete('cart')
+    url.searchParams.delete('categoryId')
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
   }, [catalog, searchParams])
 
@@ -221,16 +490,41 @@ function StorefrontRoute() {
     const modifierNames = selectedModifierOptions.map((option) => option.name)
     const modifierTotal = selectedModifierOptions.reduce((sum, option) => sum + option.price, 0)
     const key = `${selectedVariant.id}:${modifierIds.join(',')}`
+    const updatedLine: CartLine = {
+      key, productId: selectedProduct.id, name: selectedProduct.name, variantId: selectedVariant.id,
+      variantLabel: selectedVariant.label, unitPrice: selectedVariant.price + modifierTotal,
+      quantity: selectedProductQuantity, modifierIds, modifierNames, modifierTotal,
+    }
     setCart((current) => {
+      if (editingCartKey) {
+        const editedIndex = current.findIndex((line) => line.key === editingCartKey)
+        const remaining = current.filter((line) => line.key !== editingCartKey)
+        const sameSelection = remaining.find((line) => line.key === key)
+        if (sameSelection) return remaining.map((line) => line.key === key ? { ...line, quantity: line.quantity + selectedProductQuantity } : line)
+        const insertionIndex = editedIndex < 0 ? remaining.length : Math.min(editedIndex, remaining.length)
+        return [...remaining.slice(0, insertionIndex), updatedLine, ...remaining.slice(insertionIndex)]
+      }
       const existing = current.find((line) => line.key === key)
-      if (existing) return current.map((line) => line.key === key ? { ...line, quantity: line.quantity + 1 } : line)
-      return [...current, {
-        key, productId: selectedProduct.id, name: selectedProduct.name, variantId: selectedVariant.id,
-        variantLabel: selectedVariant.label, unitPrice: selectedVariant.price + modifierTotal,
-        quantity: 1, modifierIds, modifierNames, modifierTotal,
-      }]
+      if (existing) return current.map((line) => line.key === key ? { ...line, quantity: line.quantity + selectedProductQuantity } : line)
+      return [...current, updatedLine]
     })
-    setSelectedProduct(null)
+    if (isPrefillSelection) {
+      const [next, ...remaining] = pendingPrefillItems
+      setPendingPrefillItems(remaining)
+      if (next) {
+        showPrefillChoice(next)
+      } else {
+        setSelectedProduct(null)
+        setIsPrefillSelection(false)
+        setCartOpen(true)
+        if (prefillHadUnresolved) setCheckoutError(tr('Un autre article demandé n’a pas été reconnu.', 'Another requested item could not be matched.'))
+        setPrefillHadUnresolved(false)
+      }
+    } else {
+      setSelectedProduct(null)
+      setEditingCartKey(null)
+      if (editingCartKey) setCartOpen(true)
+    }
   }
 
   const updateQuantity = (key: string, delta: number) => setCart((current) => current
@@ -241,10 +535,11 @@ function StorefrontRoute() {
     setCheckoutError('')
     setPaymentMethod('online')
     const savedIdentity = readIdentity(customerSlug, locationSlug)
+    const guestDraft = readGuestDraft(customerSlug, locationSlug)
     setIdentity(savedIdentity)
-    setCheckoutFirstName(savedIdentity.firstName ?? '')
-    setCheckoutPhone(savedIdentity.phone ?? '')
-    setCheckoutEmail(savedIdentity.email ?? '')
+    setCheckoutFirstName(savedIdentity.firstName ?? guestDraft.firstName)
+    setCheckoutPhone(savedIdentity.phone ?? guestDraft.phone)
+    setCheckoutEmail(savedIdentity.email ?? guestDraft.email)
     setCheckoutOpen(true)
     setCartOpen(false)
   }
@@ -289,6 +584,7 @@ function StorefrontRoute() {
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
       if (terminalQueued) {
         setCart([])
+        localStorage.removeItem(guestDraftKey(customerSlug, locationSlug))
         setCheckoutOpen(false)
         setTerminalOrder({ shortCode: payload.shortCode })
         setSubmitting(false)
@@ -335,7 +631,7 @@ function StorefrontRoute() {
       </section>
       {identity.token
         ? <section className="store-account-card"><div><span>{tr('Connecté·e', 'Signed in')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div><button type="button" className="store-account-logout" onClick={logout} aria-label={tr('Se déconnecter', 'Log out')} title={tr('Se déconnecter', 'Log out')}>↪</button></section>
-        : whatsappHref && <section className="store-account-card store-account-login"><div><strong>{tr('Commande avec ton compte Ayana', 'Order with your Ayana account')}</strong></div><a className="store-login-cta" href={whatsappHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp', 'Connect with WhatsApp')} <span>↗</span></a></section>}
+        : <section className="store-account-card store-account-login"><div><strong>{tr('Commande avec ton compte Ayana', 'Order with your Ayana account')}</strong></div>{renderAccessButtons('store-login-cta')}{accessError && <p className="store-form-error" role="alert">{accessError}</p>}</section>}
       {checkoutError && !checkoutOpen && <div className="store-notice">{checkoutError}</div>}
       <nav className="store-categories" aria-label={tr('Catégories', 'Categories')}>
         {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item === 'Tout' ? tr('Tout', 'All') : item}</button>)}
@@ -355,17 +651,19 @@ function StorefrontRoute() {
 
       {totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>{tr('Voir mon panier', 'View my cart')} <small>{totalCount} {tr(totalCount > 1 ? 'articles' : 'article', totalCount > 1 ? 'items' : 'item')}</small></span><b>{money(total, currency, language)}　→</b></button>}
 
-      {selectedProduct && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedProduct(null) }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
-        <button className="sheet-close" onClick={() => setSelectedProduct(null)} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
+      {selectedProduct && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProduct() }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
+        <button className="sheet-close" onClick={closeProduct} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
+        <label className="product-quantity-field">{tr('Quantité', 'Quantity')}<input type="number" min={1} max={50} step={1} value={selectedProductQuantity} onChange={(event) => setSelectedProductQuantity(Math.max(1, Math.min(50, Math.floor(Number(event.target.value) || 1))))} /></label>
         {selectedProduct.variants.length > 1 && <fieldset className="option-section"><legend>{tr('Choisis ton format', 'Choose a size')}</legend>{selectedProduct.variants.map((variant) => <button type="button" key={variant.id} disabled={!variant.available} onClick={() => setVariantId(variant.id)} className={`option-choice ${variantId === variant.id ? 'chosen' : ''}`}><span>{variant.label}</span><b>{variant.available ? money(variant.price, currency, language) : tr('Épuisé', 'Sold out')}</b></button>)}</fieldset>}
         {selectedProduct.modifierGroups.map((group) => <fieldset className="option-section" key={group.id}><legend>{group.name}{group.required || group.minSelect > 0 ? <small> · {tr('obligatoire', 'required')}</small> : <small> · {tr('au choix', 'optional')}</small>}</legend>{group.options.map((option) => <button type="button" key={option.id} className={`option-choice ${(selectedOptions[group.id] ?? []).includes(option.id) ? 'chosen' : ''}`} onClick={() => toggleOption(group, option)}><span>{option.name}</span><b>{option.price ? `+ ${money(option.price, currency, language)}` : tr('Inclus', 'Included')}</b></button>)}</fieldset>)}
-        {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>{tr('Ajouter au panier', 'Add to cart')}</span><b>{money(selectedUnitPrice, currency, language)}</b></button>
+        {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>{tr(editingCartKey ? 'Enregistrer les modifications' : 'Ajouter au panier', editingCartKey ? 'Save changes' : 'Add to cart')}</span><b>{money(selectedUnitPrice * selectedProductQuantity, currency, language)}</b></button>
+        {isPrefillSelection && <button type="button" className="store-text-button prefill-skip" onClick={skipPrefillChoice}>{tr('Ignorer cet article', 'Skip this item')}</button>}
       </section></div>}
 
       {cartOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={tr('Ton panier', 'Your cart')}>
         <button className="sheet-close" onClick={() => setCartOpen(false)} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{tr('Ta sélection', 'Your selection')}</p><h2>{tr('Ton panier', 'Your cart')}</h2>
         {!cart.length ? <div className="store-empty"><p>{tr('Ton panier est vide.', 'Your cart is empty.')}</p><button className="store-text-button" onClick={() => setCartOpen(false)}>{tr('Continuer mes achats', 'Continue shopping')}</button></div> : <>
-          <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><div><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><b>{money(line.unitPrice * line.quantity, currency, language)}</b></div><div className="quantity-picker"><button onClick={() => updateQuantity(line.key, -1)} aria-label={tr('Retirer un article', 'Remove one item')}>−</button><span>{line.quantity}</span><button onClick={() => updateQuantity(line.key, 1)} aria-label={tr('Ajouter un article', 'Add one item')}>＋</button></div></article>)}</div>
+          <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><div className="cart-line-info"><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><button className="cart-line-edit" type="button" onClick={() => editCartLine(line)}>{tr('Modifier les options', 'Edit options')}</button><b>{money(line.unitPrice * line.quantity, currency, language)}</b></div><div className="quantity-picker"><button onClick={() => updateQuantity(line.key, -1)} aria-label={tr('Retirer un article', 'Remove one item')}>−</button><span>{line.quantity}</span><button onClick={() => updateQuantity(line.key, 1)} aria-label={tr('Ajouter un article', 'Add one item')}>＋</button></div></article>)}</div>
           <div className="cart-total"><span>{tr('Total', 'Total')}</span><b>{money(total, currency, language)}</b></div><p className="cart-note">{tr(`Le retrait se fait au Feelness Bar de ${catalog.location.name}.`, `Pickup is at the Feelness Bar in ${catalog.location.name}.`)}</p><button className="store-primary" onClick={startCheckout}>{tr('Continuer', 'Continue')} <span>→</span></button>
         </>}
       </section></div>}
@@ -386,16 +684,15 @@ function StorefrontRoute() {
         {checkoutError && <p className="store-form-error">{checkoutError}</p>}
         {!identity.token ? <>
           <h2>{tr('Comment veux-tu continuer ?', 'How would you like to continue?')}</h2>
-          <p className="sheet-description">{tr('Connecte-toi avec WhatsApp pour retrouver ton compte, ou commande en invité avec tes coordonnées.', 'Connect with WhatsApp to use your Ayana account, or continue as a guest with your contact details.')}</p>
-          {whatsappHref
-            ? <a className="store-primary store-whatsapp-login" href={whatsappHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp', 'Connect with WhatsApp')} <span>↗</span></a>
-            : null}
+          <p className="sheet-description">{tr('Connecte-toi pour retrouver ton compte, ou commande en invité avec tes coordonnées.', 'Sign in to use your Ayana account, or continue as a guest with your contact details.')}</p>
+          {renderAccessButtons('store-primary store-whatsapp-login')}
+          {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
-          <p className="checkout-divider"><span>{tr('ou commander sans WhatsApp', 'or continue without WhatsApp')}</span></p>
+          <p className="checkout-divider"><span>{tr('ou commander en invité', 'or continue as a guest')}</span></p>
           <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
-            <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => setCheckoutFirstName(event.target.value)} /></label>
-            <PhoneInput label={tr('Téléphone', 'Phone number')} value={checkoutPhone} placeholder={tr('Numéro de téléphone', 'Phone number')} required nativeCountrySelector onValueChange={setCheckoutPhone} />
-            <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required maxLength={254} value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} /></label>
+            <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => updateGuestDraft('firstName', event.target.value)} /></label>
+            <PhoneInput label={tr('Téléphone', 'Phone number')} value={checkoutPhone} placeholder={tr('Numéro de téléphone', 'Phone number')} required nativeCountrySelector onValueChange={(value) => updateGuestDraft('phone', value)} />
+            <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required maxLength={254} value={checkoutEmail} onChange={(event) => updateGuestDraft('email', event.target.value)} /></label>
           <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
           </form>
           {!terminalAvailable && <p className="secure-note">{tr('Le panier reste enregistré si tu reviens après la connexion.', 'Your cart is saved if you return after signing in.')}</p>}
