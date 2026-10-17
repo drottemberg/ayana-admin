@@ -9,9 +9,12 @@ import { PageHeader } from '@/components/ui/page-header'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { classBookingColumns } from '@/features/classes/class-session-columns'
+import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
+import { cancelBookingWithChoice, getBookingRowActions, rebookClientForSession } from '@/features/bookings/booking-row-actions'
+import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
-import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { useConnect } from '@/features/app/use-connect'
@@ -26,6 +29,7 @@ function formatDate(value?: string | null, timeZone?: string | null) {
 export default function ClassSessionPage() {
   const { sessionId = '' } = useParams()
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [isAddBookingOpen, setIsAddBookingOpen] = useState(false)
   const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
@@ -38,6 +42,12 @@ export default function ClassSessionPage() {
   })
   const classSession = data as ClassSession | undefined
   const resolvedLocationId = classSession?.organizationId ?? locationId
+
+  const invalidateBookingViews = async () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: [...classSessionsQueryKeys.detail(sessionId), 'bookings'] }),
+  ])
 
   const cancelSession = async () => {
     if (!classSession) return
@@ -60,6 +70,20 @@ export default function ClassSessionPage() {
       toast.success(`Session cancelled. ${result.bookingCount} booking(s) cancelled; ${result.creditsReturned} credit(s) returned.`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not cancel the class session.')
+    }
+  }
+
+  const resumeSession = async () => {
+    if (!classSession) return
+    try {
+      await resumeClassSessionRequest(classSession.id, resolvedLocationId)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.detail(sessionId) }),
+      ])
+      toast.success('Session resumed. It will stay active through its schedule pause window.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not resume the session.')
     }
   }
 
@@ -90,8 +114,10 @@ export default function ClassSessionPage() {
       title: classSession?.className ?? 'Class session',
       subtitle: formatDate(classSession?.startTime, classSession?.timezone),
       backTo: '/class-sessions',
-      primaryAction: classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
-        ? { children: 'Edit session', onClick: () => setIsEditOpen(true) }
+      primaryAction: classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
+        ? { children: 'Resume session', onClick: resumeSession }
+        : classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
+          ? { children: 'Edit session', onClick: () => setIsEditOpen(true) }
         : undefined,
       secondaryAction: (classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
         ? { children: 'Cancel session', variant: 'destructive', onClick: cancelSession }
@@ -104,6 +130,11 @@ export default function ClassSessionPage() {
       id="module-bookings"
       title="Bookings"
       icon={EntityIcon.users}
+      action={classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
+        ? { label: 'Resume session', onClick: resumeSession }
+        : classSession?.status === 'SCHEDULED' && appSession?.permissions.bookings?.create
+          ? { label: 'Add booking', onClick: () => setIsAddBookingOpen(true) }
+          : undefined}
       queryKey={[...classSessionsQueryKeys.detail(sessionId), 'bookings']}
       loadData={async (state) => {
         const rows = await getClassBookingsRequest(resolvedLocationId, sessionId)
@@ -112,6 +143,27 @@ export default function ClassSessionPage() {
       }}
       tableKey={`class-sessions.detail.bookings.${sessionId}`}
       columns={classBookingColumns}
+      getRowCommands={(booking) => getBookingRowActions({
+        status: booking.status,
+        canEdit: Boolean(appSession?.permissions.bookings?.edit),
+        canCreate: Boolean(appSession?.permissions.bookings?.create),
+        onCancel: () => { void cancelBookingWithChoice(booking.id, resolvedLocationId, invalidateBookingViews) },
+        onRebook: () => {
+          if (!classSession?.customerId) {
+            toast.error('Could not determine the customer for this class session.')
+            return
+          }
+          const clientName = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.email || booking.userId
+          void rebookClientForSession({
+            customerId: classSession.customerId,
+            locationId: resolvedLocationId,
+            sessionId: classSession.id,
+            userId: booking.userId,
+            clientName,
+            invalidate: invalidateBookingViews,
+          })
+        },
+      })}
       loadingMessage="Loading bookings..."
       emptyMessage="No bookings for this session."
       errorMessage="Failed to load bookings."
@@ -124,6 +176,11 @@ export default function ClassSessionPage() {
       timeZone={classSession?.timezone ?? 'Europe/Paris'}
       open={isEditOpen}
       onOpenChange={setIsEditOpen}
+    />
+    <CreateManualBookingDrawer
+      open={isAddBookingOpen}
+      onOpenChange={setIsAddBookingOpen}
+      initialSession={classSession ?? null}
     />
   </DetailPageLayout>
 }

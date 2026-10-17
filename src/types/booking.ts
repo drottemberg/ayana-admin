@@ -8,6 +8,27 @@ export type BookingPerson = {
   phone?: string | null
 }
 
+export type ManualBookingRecipient = {
+  id: string
+  firstName?: string | null
+  lastName?: string | null
+  email?: string | null
+  phone?: string | null
+}
+
+export type BookingCancellationQuote = {
+  bookingId: string
+  isLate: boolean
+  lateCancelWindowHours: number
+  penaltyCredits: number
+  penaltyAmount: number
+  currency: string
+  creditsToReturn: number
+  classCreditCost: number
+  canApplyPenalty: boolean
+  isWaitlisted: boolean
+}
+
 export type BookingOrganization = { id: string; name: string }
 
 export type Booking = {

@@ -271,7 +271,7 @@ export function GiftCreditsDrawer({
             ) : (
               <MultiselectInputAsync<User>
                 label="Recipients"
-                placeholder={!effectiveCustomerId ? 'Select a customer first' : 'Search clients by name, email or phone'}
+                placeholder={!effectiveCustomerId ? 'Select a customer first' : 'Search users by name, email or phone'}
                 queryKey={['client-credit-wallet-recipients', effectiveCustomerId]}
                 queryFn={userQuery}
                 getOption={userOption}
@@ -282,7 +282,7 @@ export function GiftCreditsDrawer({
                 disabled={!effectiveCustomerId}
                 loadingMessage="Searching users..."
                 errorMessage="Failed to search users."
-                emptyMessage="No customer members found."
+                emptyMessage="No users found."
                 container={containerRef}
               />
             )}

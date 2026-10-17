@@ -15,7 +15,7 @@ import { useConnect } from '@/features/app/use-connect'
 import type { ClassSession } from '@/types/class-type'
 import type { Customer } from '@/types/customer'
 import type { Location } from '@/types/location'
-import type { User } from '@/types/user'
+import type { ManualBookingRecipient } from '@/types/booking'
 
 function sessionLabel(session: ClassSession) {
   const startsAt = new Intl.DateTimeFormat(undefined, {
@@ -27,17 +27,20 @@ function sessionLabel(session: ClassSession) {
   return `${session.className ?? 'Class'} · ${startsAt}${capacity}`
 }
 
-function userLabel(user: User) {
+function userLabel(user: ManualBookingRecipient) {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-  return `${name || user.email || user.id} · ${user.email}`
+  const contact = [user.phone, user.email].filter(Boolean).join(' · ')
+  return name ? `${name}${contact ? ` · ${contact}` : ''}` : contact || user.id
 }
 
 export function CreateManualBookingDrawer({
   open,
   onOpenChange,
+  initialSession,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialSession?: ClassSession | null
 }) {
   const queryClient = useQueryClient()
   const { session } = useConnect()
@@ -51,22 +54,28 @@ export function CreateManualBookingDrawer({
   const [sessionId, setSessionId] = useState('')
   const [classSession, setClassSession] = useState<ClassSession>()
   const [userId, setUserId] = useState('')
-  const [recipient, setRecipient] = useState<User>()
+  const [recipient, setRecipient] = useState<ManualBookingRecipient>()
 
   useEffect(() => {
     if (!open) return
     const fixedCustomer = !isAdminContext && currentCustomer
       ? { id: currentCustomer.id, name: currentCustomer.name } as Customer
       : undefined
-    setCustomerId(fixedCustomer?.id ?? '')
-    setCustomer(fixedCustomer)
-    setLocationId('')
-    setLocation(undefined)
-    setSessionId('')
-    setClassSession(undefined)
+    const sessionCustomer = initialSession?.customerId
+      ? { id: initialSession.customerId, name: initialSession.customerName ?? initialSession.customerId } as Customer
+      : undefined
+    const initialLocation = initialSession
+      ? { id: initialSession.organizationId, name: initialSession.locationName ?? initialSession.organizationId } as Location
+      : undefined
+    setCustomerId(fixedCustomer?.id ?? sessionCustomer?.id ?? '')
+    setCustomer(fixedCustomer ?? sessionCustomer)
+    setLocationId(initialLocation?.id ?? '')
+    setLocation(initialLocation)
+    setSessionId(initialSession?.id ?? '')
+    setClassSession(initialSession ?? undefined)
     setUserId('')
     setRecipient(undefined)
-  }, [open, isAdminContext, currentCustomerId, currentCustomer?.name])
+  }, [open, isAdminContext, currentCustomerId, currentCustomer?.name, initialSession])
 
   const create = useMutation({
     mutationFn: () => createManualBookingRequest({ customerId, locationId, userId, sessionId }),
@@ -76,9 +85,10 @@ export function CreateManualBookingDrawer({
         queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
       ])
       if (booking.status === 'WAITLISTED') {
-        toast.success('Client added to the waitlist. No booking confirmation email was sent.')
+        toast.success('Client added to the waitlist. A confirmation is being sent to their linked channels.')
       } else {
-        toast.success(`Booking confirmed. Confirmation email is being sent to ${recipient?.email}.`)
+        const delivery = recipient?.email ? `${recipient.email} and linked channels` : 'their linked channels'
+        toast.success(`Booking confirmed. Confirmation is being sent to ${delivery}.`)
       }
       onOpenChange(false)
     },
@@ -99,13 +109,18 @@ export function CreateManualBookingDrawer({
       open={open}
       onOpenChange={onOpenChange}
       title="Create manual booking"
-      description="Create a booking for a client. Confirmed bookings use the client's credits and send a confirmation email."
+      description="Create a booking for a client. Confirmed bookings use available credits and send confirmation by email when available, plus linked messaging channels."
       contentClassName="sm:max-w-xl"
     >
       {({ containerRef }) => (
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            {isAdminContext ? (
+            {isAdminContext && initialSession ? (
+              <div className="grid gap-1.5 text-sm font-medium">
+                <span>Customer</span>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 font-normal">{initialSession.customerName ?? customer?.name ?? 'Current customer'}</div>
+              </div>
+            ) : isAdminContext ? (
               <SelectInputAsync<Customer>
                 label="Customer"
                 placeholder="Search customers"
@@ -133,48 +148,63 @@ export function CreateManualBookingDrawer({
               </div>
             )}
 
-            <SelectInputAsync<Location>
-              label="Location"
-              placeholder={customerId ? 'Search locations' : 'Select a customer first'}
-              queryKey={['manual-booking-locations', customerId]}
-              queryFn={async (search) => {
-                if (!customerId) return []
-                const locations = await getAllLocationsForCustomerRequest(customerId)
-                const query = search.trim().toLocaleLowerCase()
-                return locations.filter((item) => !query || item.name.toLocaleLowerCase().includes(query))
-              }}
-              getOption={(item) => ({ value: item.id, label: item.name })}
-              selectedItems={location ? [location] : []}
-              value={locationId}
-              onValueChange={(value) => {
-                setLocationId(String(value))
-                setSessionId('')
-                setClassSession(undefined)
-                setUserId('')
-                setRecipient(undefined)
-              }}
-              onSelectedItemsChange={(items) => setLocation(items[0])}
-              disabled={!customerId}
-              container={containerRef}
-            />
+            {initialSession ? (
+              <>
+                <div className="grid gap-1.5 text-sm font-medium">
+                  <span>Location</span>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 font-normal">{initialSession.locationName ?? location?.name ?? initialSession.organizationId}</div>
+                </div>
+                <div className="grid gap-1.5 text-sm font-medium">
+                  <span>Class session</span>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 font-normal">{sessionLabel(initialSession)}</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <SelectInputAsync<Location>
+                  label="Location"
+                  placeholder={customerId ? 'Search locations' : 'Select a customer first'}
+                  queryKey={['manual-booking-locations', customerId]}
+                  queryFn={async (search) => {
+                    if (!customerId) return []
+                    const locations = await getAllLocationsForCustomerRequest(customerId)
+                    const query = search.trim().toLocaleLowerCase()
+                    return locations.filter((item) => !query || item.name.toLocaleLowerCase().includes(query))
+                  }}
+                  getOption={(item) => ({ value: item.id, label: item.name })}
+                  selectedItems={location ? [location] : []}
+                  value={locationId}
+                  onValueChange={(value) => {
+                    setLocationId(String(value))
+                    setSessionId('')
+                    setClassSession(undefined)
+                    setUserId('')
+                    setRecipient(undefined)
+                  }}
+                  onSelectedItemsChange={(items) => setLocation(items[0])}
+                  disabled={!customerId}
+                  container={containerRef}
+                />
 
-            <SelectInputAsync<ClassSession>
-              label="Class session"
-              placeholder={locationId ? 'Search upcoming sessions' : 'Select a location first'}
-              queryKey={['manual-booking-sessions', locationId]}
-              queryFn={(search) => locationId ? searchUpcomingBookableSessionsRequest(locationId, search) : Promise.resolve([])}
-              getOption={(item) => ({ value: item.id, label: sessionLabel(item) })}
-              selectedItems={classSession ? [classSession] : []}
-              value={sessionId}
-              onValueChange={(value) => setSessionId(String(value))}
-              onSelectedItemsChange={(items) => setClassSession(items[0])}
-              disabled={!locationId}
-              container={containerRef}
-            />
+                <SelectInputAsync<ClassSession>
+                  label="Class session"
+                  placeholder={locationId ? 'Search upcoming sessions' : 'Select a location first'}
+                  queryKey={['manual-booking-sessions', locationId]}
+                  queryFn={(search) => locationId ? searchUpcomingBookableSessionsRequest(locationId, search) : Promise.resolve([])}
+                  getOption={(item) => ({ value: item.id, label: sessionLabel(item) })}
+                  selectedItems={classSession ? [classSession] : []}
+                  value={sessionId}
+                  onValueChange={(value) => setSessionId(String(value))}
+                  onSelectedItemsChange={(items) => setClassSession(items[0])}
+                  disabled={!locationId}
+                  container={containerRef}
+                />
+              </>
+            )}
 
-            <SelectInputAsync<User>
+            <SelectInputAsync<ManualBookingRecipient>
               label="Client"
-              placeholder={locationId ? 'Search by name, email or phone' : 'Select a location first'}
+              placeholder={locationId ? 'Search by name, phone or email' : 'Select a location first'}
               queryKey={['manual-booking-clients', customerId, locationId]}
               queryFn={(search) => customerId && locationId
                 ? searchManualBookingRecipientsRequest(customerId, locationId, search)
@@ -185,7 +215,7 @@ export function CreateManualBookingDrawer({
               onValueChange={(value) => setUserId(String(value))}
               onSelectedItemsChange={(items) => setRecipient(items[0])}
               disabled={!locationId}
-              emptyMessage="No customer-linked clients with an email address found."
+              emptyMessage="No clients linked to this customer were found."
               container={containerRef}
             />
 

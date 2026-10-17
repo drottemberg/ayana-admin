@@ -11,6 +11,9 @@ import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import type { Booking } from '@/types/booking'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
+import { cancelBookingWithChoice, getBookingRowActions, rebookClientForSession } from '@/features/bookings/booking-row-actions'
+import { classSessionsQueryKeys } from '@/features/classes/query-keys'
+import { useQueryClient } from '@tanstack/react-query'
 
 const statuses = ['CONFIRMED', 'WAITLISTED', 'ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED']
 
@@ -18,10 +21,16 @@ export default function BookingsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [searchParams] = useSearchParams()
   const { session } = useConnect()
+  const queryClient = useQueryClient()
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
   const columns = useMemo(() => getBookingColumns({ showCustomer: isAdminContext }), [isAdminContext])
   const canCreateBooking = Boolean(session?.permissions.bookings?.create)
+  const canEditBooking = Boolean(session?.permissions.bookings?.edit)
+  const invalidateBookingViews = async () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+  ])
   const initialFilters = {
     ...(isAdminContext && searchParams.get('filterCustomerId') ? { customerId: [searchParams.get('filterCustomerId')!] } : {}),
     ...(searchParams.get('filterLocationId') ? { locationId: [searchParams.get('filterLocationId')!] } : {}),
@@ -42,6 +51,23 @@ export default function BookingsPage() {
         tableKey="bookings.root"
         initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
         columns={columns}
+        getRowCommands={(booking) => getBookingRowActions({
+          status: booking.status,
+          canEdit: canEditBooking,
+          canCreate: canCreateBooking,
+          onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
+          onRebook: () => {
+            const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
+            void rebookClientForSession({
+              customerId: booking.customer.id,
+              locationId: booking.location.id,
+              sessionId: booking.sessionId,
+              userId: booking.userId,
+              clientName,
+              invalidate: invalidateBookingViews,
+            })
+          },
+        })}
         disabledSelection
         searchPlaceholder="Search by member, class, location or booking ID"
         searchColumns={['id']}

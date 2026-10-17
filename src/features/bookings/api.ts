@@ -2,8 +2,7 @@ import type { DataTableAsyncResult, DataTableState } from '@/components/data-tab
 import type { ApiListResult } from '@/lib/api-types'
 import { toApiListDto, toDataTableResult } from '@/lib/api-types'
 import { apiClient } from '@/lib/api-client'
-import type { Booking, BookingManagementDetails } from '@/types/booking'
-import type { User } from '@/types/user'
+import type { Booking, BookingCancellationQuote, BookingManagementDetails, ManualBookingRecipient } from '@/types/booking'
 
 export const bookingsListConfig = {
   url: '/bookings/list',
@@ -21,9 +20,24 @@ export function getBookingManagementDetailsRequest(bookingId: string) {
 }
 
 export async function searchManualBookingRecipientsRequest(customerId: string, locationId: string, search: string) {
-  return apiClient.post<User[]>(
+  return apiClient.post<ManualBookingRecipient[]>(
     '/bookings/manage/recipients',
     { customerId, locationId, search: search.trim() || undefined },
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
+export function getBookingCancellationQuoteRequest(bookingId: string, locationId: string) {
+  return apiClient.get<BookingCancellationQuote>(
+    `/bookings/manage/${encodeURIComponent(bookingId)}/cancellation-quote`,
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
+export function cancelBookingForManagementRequest(bookingId: string, locationId: string, applyPenalty: boolean) {
+  return apiClient.patch<Booking>(
+    `/bookings/manage/${encodeURIComponent(bookingId)}/cancel`,
+    { applyPenalty },
     { headers: { 'x-org-id': locationId } },
   )
 }

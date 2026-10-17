@@ -7,7 +7,7 @@ import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getClassSessionColumns } from '@/features/classes/class-session-columns'
-import { cancelClassSessionRequest, getClassCategoryOptions, getClassSessionsRequest, getClassTypeLocationOptions } from '@/features/classes/api'
+import { cancelClassSessionRequest, getClassCategoryOptions, getClassSessionsRequest, getClassTypeLocationOptions, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
@@ -28,9 +28,17 @@ function getDateRangeFilters(dateRange?: DateRangeValue) {
   return { from: from.toISOString(), to: to.toISOString() }
 }
 
-function readDateFilter(params: URLSearchParams): 'all' | 'upcoming' | 'range' {
+function getTodayDateRange(): DateRangeValue {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return { from: `${year}-${month}-${day}` }
+}
+
+function readDateFilter(params: URLSearchParams): 'all' | 'today' | 'upcoming' | 'range' {
   const value = params.get('dateMode')
-  return value === 'all' || value === 'range' || value === 'upcoming' ? value : 'upcoming'
+  return value === 'all' || value === 'today' || value === 'range' || value === 'upcoming' ? value : 'upcoming'
 }
 
 function readDateRange(params: URLSearchParams): DateRangeValue | undefined {
@@ -51,6 +59,7 @@ export default function ClassSessionsPage() {
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
+  const canResumeSessions = Boolean(session?.permissions.classSessions?.edit)
   const searchParamsString = searchParams.toString()
 
   useEffect(() => {
@@ -60,7 +69,7 @@ export default function ClassSessionsPage() {
     setSearchParams(params, { replace: true })
   }, [searchParamsString, setSearchParams])
 
-  function updateDateFilter(mode: 'all' | 'upcoming' | 'range', range?: DateRangeValue) {
+  function updateDateFilter(mode: 'all' | 'today' | 'upcoming' | 'range', range?: DateRangeValue) {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('dateMode', mode)
     if (mode === 'range' && range?.from) {
@@ -101,7 +110,9 @@ export default function ClassSessionsPage() {
               ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
               ...(dateFilter === 'upcoming'
                 ? { from: new Date().toISOString() }
-                : dateFilter === 'range'
+                : dateFilter === 'today'
+                  ? getDateRangeFilters(getTodayDateRange())
+                  : dateFilter === 'range'
                   ? getDateRangeFilters(dateRange)
                   : {}),
             },
@@ -138,6 +149,18 @@ export default function ClassSessionsPage() {
                 }
               },
             }] : []),
+            ...(canResumeSessions && item.status === 'PAUSED' ? [{
+              label: 'Resume session',
+              onClick: async () => {
+                try {
+                  await resumeClassSessionRequest(item.id, item.locationId ?? item.organizationId)
+                  await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
+                  toast.success('Session resumed. It will stay active through its schedule pause window.')
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Could not resume the session.')
+                }
+              },
+            }] : []),
           ]}
           disabledSelection
           searchPlaceholder="Search by class, session, or coach"
@@ -146,13 +169,14 @@ export default function ClassSessionsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={dateFilter}
-                onValueChange={(value) => updateDateFilter(value as 'all' | 'upcoming' | 'range')}
+                onValueChange={(value) => updateDateFilter(value as 'all' | 'today' | 'upcoming' | 'range')}
               >
                 <SelectTrigger className="h-9 w-[160px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All dates</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
                   <SelectItem value="upcoming">Upcoming</SelectItem>
                   <SelectItem value="range">Date range</SelectItem>
                 </SelectContent>
