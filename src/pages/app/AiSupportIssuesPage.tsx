@@ -38,6 +38,16 @@ export default function AiSupportIssuesPage() {
   })
   const issue = issueQuery.data
 
+  const quickSetIssueStatus = async (issueId: string, nextStatus: 'RESOLVED' | 'DISMISSED') => {
+    try {
+      await updateAiSupportIssueRequest(issueId, { status: nextStatus })
+      await queryClient.invalidateQueries({ queryKey: aiSupportIssueQueryKeys.all })
+      toast.success(nextStatus === 'RESOLVED' ? 'Issue resolved.' : 'Issue dismissed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the issue.')
+    }
+  }
+
   useEffect(() => {
     if (!issue) return
     setStatus(issue.status)
@@ -71,7 +81,10 @@ export default function AiSupportIssuesPage() {
     {
       accessorKey: 'summary',
       header: 'Summary',
-      cell: ({ row }) => <span className="line-clamp-2 min-w-52">{row.original.summary}</span>,
+      size: 220,
+      minSize: 160,
+      maxSize: 260,
+      cell: ({ row }) => <span className="block max-w-56 whitespace-normal break-words line-clamp-3">{row.original.summary}</span>,
     },
     {
       accessorKey: 'userName',
@@ -105,7 +118,32 @@ export default function AiSupportIssuesPage() {
       header: 'Channel',
       cell: ({ row }) => `${row.original.channel ?? 'UNKNOWN'} · ${row.original.appContext}`,
     },
-  ], [])
+    {
+      id: 'quickActions',
+      header: 'Quick actions',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={row.original.status === 'RESOLVED'}
+            onClick={() => void quickSetIssueStatus(row.original.id, 'RESOLVED')}
+          >
+            Resolved
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={row.original.status === 'DISMISSED'}
+            onClick={() => void quickSetIssueStatus(row.original.id, 'DISMISSED')}
+          >
+            Dismissed
+          </Button>
+        </div>
+      ),
+    },
+  ], [queryClient])
 
   const saveIssue = async (patch: Parameters<typeof updateAiSupportIssueRequest>[1]) => {
     if (!selectedIssueId) return

@@ -82,6 +82,7 @@ export default function MessagesPage() {
   const [selectedBroadcastId, setSelectedBroadcastId] = useState(searchParams.get('campaignId') ?? '')
   const [failedDeliveries, setFailedDeliveries] = useState<BroadcastAudienceResult['failed']>([])
   const [deliveryWarnings, setDeliveryWarnings] = useState<BroadcastAudienceResult['warnings']>([])
+  const [suppressedDeliveryCount, setSuppressedDeliveryCount] = useState(0)
   const queryClient = useQueryClient()
 
   const canSend = Boolean(session?.permissions.customers?.edit)
@@ -166,6 +167,7 @@ export default function MessagesPage() {
       try { sessionStorage.removeItem(CAMPAIGN_KEY_STORAGE) } catch { /* Ignore unavailable session storage. */ }
       setFailedDeliveries(result.failed)
       setDeliveryWarnings(result.warnings ?? [])
+      setSuppressedDeliveryCount(result.suppressed?.length ?? 0)
       void queryClient.invalidateQueries({ queryKey: ['customer-broadcast', 'campaigns'] })
       if (result.inProgress) {
         toast.info('This campaign is already being processed. No duplicate messages were sent.')
@@ -252,6 +254,7 @@ export default function MessagesPage() {
     setSelectedRecipientIds([])
     setFailedDeliveries([])
     setDeliveryWarnings([])
+    setSuppressedDeliveryCount(0)
     setSendWhatsappTemplate(false)
     setWhatsappTemplateName('')
     setWhatsappTemplateLanguage('')
@@ -386,6 +389,7 @@ export default function MessagesPage() {
     }
     setFailedDeliveries([])
     setDeliveryWarnings([])
+    setSuppressedDeliveryCount(0)
     sendMutation.mutate()
   }
 
@@ -783,6 +787,11 @@ export default function MessagesPage() {
                   {deliveryWarnings.map((warning) => <p key={`${warning.recipientId}-${warning.channel}`} className="text-muted-foreground">{warning.userName} · {warning.channel}: {warning.warning}</p>)}
                 </div>
               ) : null}
+              {suppressedDeliveryCount ? (
+                <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  {suppressedDeliveryCount} delivery(ies) were skipped because the recipient opted out of bulk campaigns. Transactional messages are unaffected.
+                </p>
+              ) : null}
               <div className="flex justify-end border-t border-border pt-3">
                 <Button
                   onClick={handleSend}
@@ -836,6 +845,7 @@ function CampaignDetailPage({
       { label: 'Recipients', value: detail.total },
       { label: 'Accepted', value: sentCount },
       { label: 'Failed', value: detail.counts.FAILED ?? 0 },
+      { label: 'Suppressed', value: detail.counts.SUPPRESSED ?? 0 },
       { label: 'Channels', value: (detail.filters?.channels ?? []).map(channelLabel).join(', ') || 'All channels' },
       ...(detail.filters?.whatsappTemplate ? [{ label: 'WhatsApp template', value: `${detail.filters.whatsappTemplate.name} (${detail.filters.whatsappTemplate.language})` }] : []),
     ],
@@ -963,12 +973,12 @@ function channelLabel(channel: BroadcastChannel) {
 }
 
 function StatusCounts({ counts }: { counts: Record<string, number> }) {
-  const labels = ['SENT', 'DELIVERED', 'READ', 'FAILED', 'PENDING'].filter((status) => counts[status])
+  const labels = ['SENT', 'DELIVERED', 'READ', 'FAILED', 'PENDING', 'SUPPRESSED'].filter((status) => counts[status])
   return <span className="flex flex-wrap gap-1.5">{labels.map((status) => <Badge key={status} variant={status === 'FAILED' ? 'destructive' : 'outline'}>{counts[status]} {statusLabel(status)}</Badge>)}</span>
 }
 
 function statusLabel(status: string) {
-  return ({ PENDING: 'Pending', SENT: 'Accepted', DELIVERED: 'Delivered', READ: 'Read', FAILED: 'Failed' } as Record<string, string>)[status] ?? status
+  return ({ PENDING: 'Pending', SENT: 'Accepted', DELIVERED: 'Delivered', READ: 'Read', FAILED: 'Failed', SUPPRESSED: 'Opted out' } as Record<string, string>)[status] ?? status
 }
 
 function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRecipient; checked: boolean; onToggle: () => void }) {

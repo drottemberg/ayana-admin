@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import {
   DetailPageLayout,
@@ -12,6 +13,7 @@ import {
 } from '@/components/app/detail-page-layout'
 import { type DataTableAsyncResult, type DataTableState } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
@@ -22,7 +24,7 @@ import { OrganizationService } from '@/features/organizations/organization-servi
 import { getAllLocationsForCustomerRequest, getLocationRequest } from '@/features/locations/api'
 import { locationColumns } from '@/features/locations/location-columns'
 import { locationsQueryKeys } from '@/features/locations/query-keys'
-import { getUserRequest } from '@/features/users/api'
+import { getUserMarketingPreferencesRequest, getUserRequest, updateUserMarketingPreferenceRequest } from '@/features/users/api'
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
@@ -178,6 +180,10 @@ export default function UserPage() {
   const [grantCreditsOpen, setGrantCreditsOpen] = useState(false)
   const [walletAdjustmentOpen, setWalletAdjustmentOpen] = useState(false)
   const [contractToRemoveCredits, setContractToRemoveCredits] = useState<ClientContract | null>(null)
+  const currentCustomerId = session?.currentOrganization?.id
+  const currentCustomerName = session?.currentOrganization?.name
+  const isAdminContext = getAppMode() === 'admin'
+  const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
   const {
     data: user,
     isError,
@@ -209,10 +215,8 @@ export default function UserPage() {
           { key: 'orders', label: 'Orders' },
         ]
       : []),
+    ...(canManageMarketingPreferences ? [{ key: 'marketing-messages', label: 'Marketing messages' }] : []),
   ]
-  const currentCustomerId = session?.currentOrganization?.id
-  const currentCustomerName = session?.currentOrganization?.name
-  const isAdminContext = getAppMode() === 'admin'
 
   if (isError && !user) {
     return (
@@ -347,6 +351,54 @@ export default function UserPage() {
         loadingMessage="Loading orders..."
         emptyMessage="No orders found."
       /> : null}
+      {canManageMarketingPreferences && user ? <MarketingMessagesModule userId={userId} /> : null}
     </DetailPageLayout>
+  )
+}
+
+function MarketingMessagesModule({ userId }: { userId: string }) {
+  const queryClient = useQueryClient()
+  const queryKey = [...usersQueryKeys.detail(userId), 'marketing-preferences'] as const
+  const preferences = useQuery({ queryKey, queryFn: () => getUserMarketingPreferencesRequest(userId) })
+  const updatePreference = useMutation({
+    mutationFn: (input: { customerId: string; optedOut: boolean }) => updateUserMarketingPreferenceRequest(userId, input),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey }),
+    onError: () => toast.error('Could not update the marketing message preference.'),
+  })
+
+  return (
+    <Card id={`${MODULE_ANCHOR_PREFIX}-marketing-messages`} className="scroll-mt-20">
+      <CardHeader>
+        <CardTitle>Marketing messages</CardTitle>
+        <CardDescription>
+          Opting out stops bulk campaigns for that customer. Transactional messages such as booking and order updates remain enabled.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {preferences.isLoading ? <p className="text-muted-foreground">Loading customer preferences…</p> : null}
+        {preferences.isError ? <p className="text-destructive">Could not load marketing preferences.</p> : null}
+        {!preferences.isLoading && !preferences.isError && !preferences.data?.items.length ? (
+          <p className="text-muted-foreground">No customer messaging history found for this user.</p>
+        ) : null}
+        {preferences.data?.items.map((preference) => (
+          <label key={preference.customerId} className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border p-4">
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{preference.customerName}</span>
+              <span className="block text-muted-foreground">
+                {preference.optedOut ? 'Excluded from bulk campaigns' : 'Included in eligible bulk campaigns'}
+              </span>
+            </span>
+            <input
+              aria-label={`Opt out of bulk campaigns from ${preference.customerName}`}
+              type="checkbox"
+              className="size-5 shrink-0 accent-primary"
+              checked={preference.optedOut}
+              disabled={updatePreference.isPending}
+              onChange={(event) => updatePreference.mutate({ customerId: preference.customerId, optedOut: event.currentTarget.checked })}
+            />
+          </label>
+        ))}
+      </CardContent>
+    </Card>
   )
 }

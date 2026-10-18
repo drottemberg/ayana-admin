@@ -79,6 +79,11 @@ export type BroadcastSendResult = {
     channel: BroadcastRecipient['channel']
     warning: string
   }>
+  suppressed: Array<{
+    recipientId: string
+    userName: string
+    channel: BroadcastRecipient['channel'] | 'EMAIL'
+  }>
   failed: Array<{
     recipientId: string
     userName: string
@@ -117,7 +122,7 @@ export type BroadcastDelivery = Record<string, unknown> & {
     recipientName: string
     destination: string
     channel: 'WHATSAPP' | 'TELEGRAM' | 'EMAIL'
-    status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'
+    status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'SUPPRESSED'
     error: string | null
     sentAt: string | null
     deliveredAt: string | null
