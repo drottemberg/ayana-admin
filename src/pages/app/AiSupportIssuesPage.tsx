@@ -230,7 +230,15 @@ export default function AiSupportIssuesPage() {
               getValue: (row) => row.customerId,
             },
           ]}
-          getRowCommands={(row) => [{ label: 'View details', onClick: () => openIssue(row.id) }]}
+          getRowCommands={(row) => [
+            ...(row.status !== 'RESOLVED'
+              ? [{ label: 'Resolve', onClick: () => void quickSetIssueStatus(row.id, 'RESOLVED') }]
+              : []),
+            ...(row.status !== 'DISMISSED'
+              ? [{ label: 'Dismiss', onClick: () => void quickSetIssueStatus(row.id, 'DISMISSED') }]
+              : []),
+            { label: 'View details', onClick: () => openIssue(row.id) },
+          ]}
           loadingMessage="Loading support issues..."
           emptyMessage="No AI support issues found."
           errorMessage="Could not load AI support issues."

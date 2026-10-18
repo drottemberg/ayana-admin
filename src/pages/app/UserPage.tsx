@@ -55,7 +55,7 @@ import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
-import { getAiSupportIssuesRequest } from '@/features/ai-support-issues/api'
+import { getAiSupportIssuesRequest, updateAiSupportIssueRequest } from '@/features/ai-support-issues/api'
 import { aiSupportIssueQueryKeys } from '@/features/ai-support-issues/query-keys'
 import type { AiSupportIssue } from '@/features/ai-support-issues/types'
 
@@ -189,6 +189,7 @@ function getUserDetailSections(
 export default function UserPage() {
   const { userId = '' } = useParams()
   const { session } = useConnect()
+  const queryClient = useQueryClient()
   const permissions = session?.permissions.users
   const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
   const [contractsToGrant, setContractsToGrant] = useState<ClientContract[]>([])
@@ -200,6 +201,15 @@ export default function UserPage() {
   const isAdminContext = getAppMode() === 'admin'
   const canViewAiSupportIssues = Boolean(isAdminContext && ['SUPPORT', 'ADMIN', 'SUPER_ADMIN'].includes(session?.user.staffRole ?? ''))
   const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
+  const setAiSupportIssueStatus = async (issue: AiSupportIssue, status: 'RESOLVED' | 'DISMISSED') => {
+    try {
+      await updateAiSupportIssueRequest(issue.id, { status })
+      await queryClient.invalidateQueries({ queryKey: aiSupportIssueQueryKeys.all })
+      toast.success(status === 'RESOLVED' ? 'Issue resolved.' : 'Issue dismissed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the issue.')
+    }
+  }
   const {
     data: user,
     isError,
@@ -363,6 +373,10 @@ export default function UserPage() {
         loadData={(state: DataTableState<AiSupportIssue>) => getAiSupportIssuesRequest(state, { userId })}
         tableKey={`ai-support-issues.user.${userId}`}
         columns={aiSupportIssueColumns}
+        getRowCommands={(issue) => [
+          ...(issue.status !== 'RESOLVED' ? [{ label: 'Resolve', onClick: () => void setAiSupportIssueStatus(issue, 'RESOLVED') }] : []),
+          ...(issue.status !== 'DISMISSED' ? [{ label: 'Dismiss', onClick: () => void setAiSupportIssueStatus(issue, 'DISMISSED') }] : []),
+        ]}
         pageSize={5}
         showPagination
         loadingMessage="Loading AI support issues..."
