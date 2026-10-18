@@ -142,32 +142,7 @@ export default function AiSupportIssuesPage() {
       header: 'Channel',
       cell: ({ row }) => `${row.original.channel ?? 'UNKNOWN'} · ${row.original.appContext}`,
     },
-    {
-      id: 'quickActions',
-      header: 'Quick actions',
-      enableSorting: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={row.original.status === 'RESOLVED'}
-            onClick={() => void quickSetIssueStatus(row.original.id, 'RESOLVED')}
-          >
-            Resolved
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={row.original.status === 'DISMISSED'}
-            onClick={() => void quickSetIssueStatus(row.original.id, 'DISMISSED')}
-          >
-            Dismissed
-          </Button>
-        </div>
-      ),
-    },
-  ], [queryClient])
+  ], [])
 
   const saveIssue = async (patch: Parameters<typeof updateAiSupportIssueRequest>[1]) => {
     if (!selectedIssueId) return

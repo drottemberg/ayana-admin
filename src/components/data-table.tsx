@@ -1162,14 +1162,24 @@ export function DataTableAsync<TData extends Record<string, unknown>>({
   errorMessage = 'Failed to load data.',
   ...props
 }: DataTableAsyncProps<TData>) {
+  const [searchParams] = useSearchParams()
+  const searchParamsString = searchParams.toString()
+  const shouldSyncQueryParams = props.syncQueryParams ?? Boolean(props.tableKey?.endsWith('.root'))
+  const initialQueryState = React.useMemo(() => {
+    const currentSearchParams = new URLSearchParams(searchParamsString)
+    return shouldSyncQueryParams && hasTableQueryParams(currentSearchParams)
+      ? parseTableQueryParams<TData>(currentSearchParams)
+      : undefined
+  }, [searchParamsString, shouldSyncQueryParams])
   const initialTableState = React.useMemo(
     () =>
       getInitialDataTableState<TData>({
         tableKey: props.tableKey,
         pageSize: props.pageSize,
         initialFilters: props.initialFilters,
+        queryState: initialQueryState,
       }),
-    [props.initialFilters, props.pageSize, props.tableKey],
+    [initialQueryState, props.initialFilters, props.pageSize, props.tableKey],
   )
   const [tableState, setTableState] = React.useState<DataTableState<TData>>(initialTableState)
   const handleStateChange = React.useCallback((nextState: DataTableState<TData>) => {
