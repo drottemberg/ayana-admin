@@ -529,7 +529,7 @@ export default function ProductPage() {
           }
           tableKey="products.detail.modules.orders"
           columns={getOrderColumns({ showCustomer: false })}
-          getRowCommands={(order) => OrderService.getRowActions(order, canManageOrders)}
+          getRowCommands={(order) => OrderService.getRowActions(order, canManageOrders, canManageOrders)}
           loadingMessage="Loading product orders..."
           emptyMessage="No orders contain this product."
           refetchOnMount={false}

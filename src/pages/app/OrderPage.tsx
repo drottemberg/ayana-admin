@@ -14,6 +14,8 @@ import { NO_VALUE_STR } from '@/constants'
 import { useConnect } from '@/features/app/use-connect'
 import { queryClient } from '@/lib/query-client'
 import { toast } from 'sonner'
+import NiceModal from '@ebay/nice-modal-react'
+import { OrderRefundDialog } from '@/features/orders/components/OrderRefundDialog'
 
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : NO_VALUE_STR
 
@@ -94,6 +96,7 @@ export default function OrderPage() {
     order.type === 'PRODUCT' &&
     ['RECEIVED', 'PREPARING', 'READY'].includes(order.status),
   )
+  const canRefund = Boolean(session?.permissions.orders?.edit && order.paymentStatus === 'PAID')
   const alreadyRefunded = transactions
     .filter((transaction) => transaction.type === 'REFUND' && transaction.status === 'SUCCEEDED')
     .reduce((total, transaction) => total + Number(transaction.amount), 0)
@@ -188,7 +191,10 @@ export default function OrderPage() {
     </Card>
 
     <Card id="module-financial-history" className="border border-border p-0 ring-0">
-      <CardHeader className="border-b p-5"><CardTitle>Financial history</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between border-b p-5">
+        <CardTitle>Financial history</CardTitle>
+        {canRefund ? <Button variant="outline" onClick={() => void NiceModal.show(OrderRefundDialog, { order })}>Refund…</Button> : null}
+      </CardHeader>
       <CardContent className="p-0">
         {transactions.length ? <ol className="divide-y">
           {transactions.map((entry) => <li key={entry.id} className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">

@@ -173,6 +173,19 @@ export function cancelOrderRequest(orderId: string, input: CancelOrderInput) {
   return apiClient.post<Order>(`/orders/${orderId}/cancel`, input)
 }
 
+export type RefundOrderInput = {
+  refundMode: 'PARTIAL' | 'FULL'
+  refundAmount?: number
+  reason?: string
+  requestKey: string
+}
+
+export function refundOrderRequest(orderId: string, input: RefundOrderInput) {
+  return apiClient.post<{ success: boolean; orderId: string; refundAmount: number; refundStatus: string; paymentStatus: string; currency: string }>(
+    `/orders/${orderId}/refund`, input,
+  )
+}
+
 export function getOrderManagementDetailsRequest(orderId: string) {
   return apiClient.get<OrderManagementDetails>(`/orders/manage/${orderId}`)
 }

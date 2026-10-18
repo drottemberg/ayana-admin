@@ -29,6 +29,7 @@ export const EntityIcon = {
   pricingOptions: Coins01Icon,
   classes: Calendar01Icon,
   issues: Alert02Icon,
+  aiSupportIssues: Alert02Icon,
   commandLogs: CommandIcon,
   data: ChartLineData01Icon,
   planograms: Camera01Icon,

@@ -7,8 +7,9 @@ const baseUrl = '/ai-support-issues'
 
 export async function getAiSupportIssuesRequest(
   state: DataTableState<AiSupportIssue>,
+  filters?: Record<string, unknown>,
 ): Promise<DataTableAsyncResult<AiSupportIssue>> {
-  const result = await apiClient.post<ApiListResult<AiSupportIssue>>(`${baseUrl}/list`, toApiListDto(state))
+  const result = await apiClient.post<ApiListResult<AiSupportIssue>>(`${baseUrl}/list`, toApiListDto(state, filters))
   return toDataTableResult(result)
 }
 

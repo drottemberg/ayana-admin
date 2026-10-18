@@ -262,7 +262,7 @@ export default function LocationPage() {
           loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { locationId })}
           tableKey={`locations.detail.modules.orders.${locationId}`}
           columns={getOrderColumns({ showLocation: false })}
-          getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit))}
+          getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit), Boolean(session?.permissions.orders?.edit))}
           loadingMessage="Loading orders..."
           emptyMessage="No orders found for this location."
         /> : null}

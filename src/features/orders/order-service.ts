@@ -1,9 +1,11 @@
 import { toast } from 'sonner'
+import NiceModal from '@ebay/nice-modal-react'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { queryClient } from '@/lib/query-client'
 import type { Order, OrderStatus } from '@/types/order'
 import { setOrderStatusRequest } from './api'
 import { ordersQueryKeys } from './query-keys'
+import { OrderRefundDialog } from './components/OrderRefundDialog'
 
 const nextStatuses: Partial<Record<OrderStatus, { label: string; status: OrderStatus }[]>> = {
   RECEIVED: [{ label: 'Start preparing', status: 'PREPARING' }],
@@ -20,13 +22,18 @@ export const OrderService = {
       toast.error(error instanceof Error ? error.message : 'Could not update order status.')
     }
   },
-  getRowActions(order: Order, canManage: boolean): DropdownActionItem[] {
-    if (!canManage || order.type !== 'PRODUCT') return []
-    const actions = order.status === 'READY'
+  getRowActions(order: Order, canManage: boolean, canRefund = false): DropdownActionItem[] {
+    const actions = canManage && order.type === 'PRODUCT' ? (order.status === 'READY'
       ? order.deliveryType === 'DELIVERY'
         ? [{ label: 'Mark delivered', status: 'DELIVERED' as OrderStatus }]
         : [{ label: 'Mark picked up', status: 'PICKED_UP' as OrderStatus }]
-      : nextStatuses[order.status] ?? []
-    return actions.map(({ label, status }) => ({ label, onClick: () => void this.setStatus(order, status) }))
+      : nextStatuses[order.status] ?? []) : []
+    return [
+      ...actions.map(({ label, status }) => ({ label, onClick: () => void this.setStatus(order, status) })),
+      ...(canRefund && order.paymentStatus === 'PAID' ? [{
+        label: 'Refund…',
+        onClick: () => void NiceModal.show(OrderRefundDialog, { order }),
+      }] : []),
+    ]
   },
 }

@@ -37,6 +37,7 @@ export default function OrdersPage() {
   }
   const productId = searchParams.get('filterProductId')
   const canEditOrders = Boolean(session?.permissions.orders?.edit)
+  const canRefundOrders = Boolean(session?.permissions.orders?.edit)
   const canCancelOrders = Boolean(session?.permissions.orders?.delete)
 
   const openCancellation = (order: Order) => {
@@ -103,7 +104,7 @@ export default function OrdersPage() {
           { id: 'locationId', label: 'Location', column: 'location' as const, selectionMode: 'single' as const, queryFn: getOrderLocationOptions, getValue: (order: Order) => order.location.id },
         ]}
         getRowCommands={(order) => [
-          ...OrderService.getRowActions(order, canEditOrders),
+          ...OrderService.getRowActions(order, canEditOrders, canRefundOrders),
           ...(canCancelOrders && order.type === 'PRODUCT' && ['RECEIVED', 'PREPARING', 'READY'].includes(order.status)
             ? [{ label: 'Cancel / refund…', variant: 'destructive' as const, onClick: () => openCancellation(order) }]
             : []),

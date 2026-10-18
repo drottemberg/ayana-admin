@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
+import type { ColumnDef } from '@tanstack/react-table'
 import { toast } from 'sonner'
 
 import {
@@ -13,6 +14,7 @@ import {
 } from '@/components/app/detail-page-layout'
 import { type DataTableAsyncResult, type DataTableState } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
@@ -53,8 +55,21 @@ import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
+import { getAiSupportIssuesRequest } from '@/features/ai-support-issues/api'
+import { aiSupportIssueQueryKeys } from '@/features/ai-support-issues/query-keys'
+import type { AiSupportIssue } from '@/features/ai-support-issues/types'
 
 const MODULE_ANCHOR_PREFIX = 'module'
+
+const aiSupportIssueColumns: ColumnDef<AiSupportIssue>[] = [
+  { accessorKey: 'createdAt', header: 'Created', cell: ({ row }) => formatDateTime(row.original.createdAt) },
+  { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.status.replaceAll('_', ' ')}</Badge> },
+  {
+    accessorKey: 'summary',
+    header: 'Summary',
+    cell: ({ row }) => <Link className="block max-w-72 whitespace-normal break-words underline-offset-2 hover:underline" to={`/ai-support-issues?issueId=${encodeURIComponent(row.original.id)}`}>{row.original.summary}</Link>,
+  },
+]
 
 function makeViewAllTo(path: string, userId: string) {
   const params = new URLSearchParams({ userId })
@@ -183,6 +198,7 @@ export default function UserPage() {
   const currentCustomerId = session?.currentOrganization?.id
   const currentCustomerName = session?.currentOrganization?.name
   const isAdminContext = getAppMode() === 'admin'
+  const canViewAiSupportIssues = Boolean(isAdminContext && ['SUPPORT', 'ADMIN', 'SUPER_ADMIN'].includes(session?.user.staffRole ?? ''))
   const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
   const {
     data: user,
@@ -216,6 +232,7 @@ export default function UserPage() {
         ]
       : []),
     ...(canManageMarketingPreferences ? [{ key: 'marketing-messages', label: 'Marketing messages' }] : []),
+    ...(canViewAiSupportIssues ? [{ key: 'ai-support-issues', label: 'AI support issues' }] : []),
   ]
 
   if (isError && !user) {
@@ -338,6 +355,20 @@ export default function UserPage() {
         emptyMessage="No bookings found."
         errorMessage="Failed to load bookings."
       /> : null}
+      {canViewAiSupportIssues ? <RelatedEntityModule
+        id={`${MODULE_ANCHOR_PREFIX}-ai-support-issues`}
+        title="AI support issues"
+        icon={EntityIcon.aiSupportIssues}
+        queryKey={[...aiSupportIssueQueryKeys.all, 'user', userId]}
+        loadData={(state: DataTableState<AiSupportIssue>) => getAiSupportIssuesRequest(state, { userId })}
+        tableKey={`ai-support-issues.user.${userId}`}
+        columns={aiSupportIssueColumns}
+        pageSize={5}
+        showPagination
+        loadingMessage="Loading AI support issues..."
+        emptyMessage="No AI support issues found for this user."
+        errorMessage="Failed to load AI support issues."
+      /> : null}
       {canManageOrdersAndContracts ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-orders`}
         title="Orders"
@@ -347,7 +378,7 @@ export default function UserPage() {
         loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { userId })}
         tableKey={`orders.user.${userId}`}
         columns={getOrderColumns({ showUser: false })}
-        getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit))}
+        getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit), Boolean(session?.permissions.orders?.edit))}
         loadingMessage="Loading orders..."
         emptyMessage="No orders found."
       /> : null}

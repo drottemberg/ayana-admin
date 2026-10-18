@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
@@ -20,7 +20,8 @@ const statuses: AiSupportIssueStatus[] = ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_US
 const types: AiSupportIssueType[] = ['UNANSWERED', 'TOOL_FAILURE', 'INTERNAL_ERROR', 'ITERATION_LIMIT']
 
 export default function AiSupportIssuesPage() {
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(() => searchParams.get('issueId'))
   const [status, setStatus] = useState<AiSupportIssueStatus>('OPEN')
   const [note, setNote] = useState('')
   const [resolution, setResolution] = useState('')
@@ -30,6 +31,29 @@ export default function AiSupportIssuesPage() {
   const [saving, setSaving] = useState(false)
   const queryClient = useQueryClient()
   const { session } = useConnect()
+
+  const openIssue = (issueId: string) => {
+    setSelectedIssueId(issueId)
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.set('issueId', issueId)
+      return next
+    })
+  }
+  const closeIssue = () => {
+    setSelectedIssueId(null)
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.delete('issueId')
+      return next
+    })
+  }
+
+  useEffect(() => {
+    const issueId = searchParams.get('issueId')
+    if (issueId && issueId !== selectedIssueId) setSelectedIssueId(issueId)
+    if (!issueId && selectedIssueId) setSelectedIssueId(null)
+  }, [searchParams, selectedIssueId])
 
   const issueQuery = useQuery({
     queryKey: selectedIssueId ? aiSupportIssueQueryKeys.detail(selectedIssueId) : [...aiSupportIssueQueryKeys.all, 'no-selection'],
@@ -206,14 +230,14 @@ export default function AiSupportIssuesPage() {
               getValue: (row) => row.customerId,
             },
           ]}
-          getRowCommands={(row) => [{ label: 'View details', onClick: () => setSelectedIssueId(row.id) }]}
+          getRowCommands={(row) => [{ label: 'View details', onClick: () => openIssue(row.id) }]}
           loadingMessage="Loading support issues..."
           emptyMessage="No AI support issues found."
           errorMessage="Could not load AI support issues."
         />
       </section>
 
-      <Drawer open={Boolean(selectedIssueId)} onOpenChange={(open) => { if (!open && !saving) setSelectedIssueId(null) }} direction="right">
+      <Drawer open={Boolean(selectedIssueId)} onOpenChange={(open) => { if (!open && !saving) closeIssue() }} direction="right">
         <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-xl">
           <DrawerHeader className="border-b px-6 pb-4">
             <DrawerTitle>{issue?.summary ?? 'AI support issue'}</DrawerTitle>
