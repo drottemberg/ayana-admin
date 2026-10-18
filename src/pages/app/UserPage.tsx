@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -14,12 +14,13 @@ import {
 } from '@/components/app/detail-page-layout'
 import { type DataTableAsyncResult, type DataTableState } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
+import { SelectInput } from '@/components/ui/select-input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
-import { getCustomersRequest } from '@/features/customers/api'
+import { getCustomersListRequest, getCustomersRequest } from '@/features/customers/api'
 import { customerColumns } from '@/features/customers/customer-columns'
 import { customersQueryKeys } from '@/features/customers/query-keys'
 import { OrganizationService } from '@/features/organizations/organization-service'
@@ -396,20 +397,48 @@ export default function UserPage() {
         loadingMessage="Loading orders..."
         emptyMessage="No orders found."
       /> : null}
-      {canManageMarketingPreferences && user ? <MarketingMessagesModule userId={userId} /> : null}
+      {canManageMarketingPreferences && user ? (
+        <MarketingMessagesModule userId={userId} isAdminContext={isAdminContext} currentCustomerId={currentCustomerId} />
+      ) : null}
     </DetailPageLayout>
   )
 }
 
-function MarketingMessagesModule({ userId }: { userId: string }) {
+function MarketingMessagesModule({
+  userId,
+  isAdminContext,
+  currentCustomerId,
+}: {
+  userId: string
+  isAdminContext: boolean
+  currentCustomerId?: string
+}) {
   const queryClient = useQueryClient()
+  const [selectedCustomerId, setSelectedCustomerId] = useState(currentCustomerId ?? '')
   const queryKey = [...usersQueryKeys.detail(userId), 'marketing-preferences'] as const
   const preferences = useQuery({ queryKey, queryFn: () => getUserMarketingPreferencesRequest(userId) })
+  const customers = useQuery({
+    queryKey: [...customersQueryKeys.all, 'marketing-opt-out-picker'],
+    queryFn: () => getCustomersListRequest(),
+    enabled: isAdminContext,
+  })
   const updatePreference = useMutation({
     mutationFn: (input: { customerId: string; optedOut: boolean }) => updateUserMarketingPreferenceRequest(userId, input),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey }),
     onError: () => toast.error('Could not update the marketing message preference.'),
   })
+  const optOutSelectedCustomer = useMutation({
+    mutationFn: () => updateUserMarketingPreferenceRequest(userId, { customerId: selectedCustomerId, optedOut: true }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey })
+      toast.success('User opted out of bulk campaigns for this customer.')
+    },
+    onError: () => toast.error('Could not opt this user out of bulk campaigns.'),
+  })
+
+  useEffect(() => {
+    if (currentCustomerId) setSelectedCustomerId(currentCustomerId)
+  }, [currentCustomerId])
 
   return (
     <Card id={`${MODULE_ANCHOR_PREFIX}-marketing-messages`} className="scroll-mt-20">
@@ -420,6 +449,33 @@ function MarketingMessagesModule({ userId }: { userId: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {isAdminContext ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <SelectInput
+                aria-label="Customer for marketing opt-out"
+                placeholder="Select customer"
+                searchable
+                items={(customers.data ?? []).map((customer) => ({ value: customer.id, label: customer.name }))}
+                isLoading={customers.isLoading}
+                emptyMessage={customers.isError ? 'Failed to load customers.' : 'No customers found.'}
+                value={selectedCustomerId || undefined}
+                onValueChange={(value) => setSelectedCustomerId(String(value ?? ''))}
+              />
+            </div>
+            <Button
+              variant="outline"
+              disabled={
+                !selectedCustomerId ||
+                optOutSelectedCustomer.isPending ||
+                preferences.data?.items.find((item) => item.customerId === selectedCustomerId)?.optedOut === true
+              }
+              onClick={() => optOutSelectedCustomer.mutate()}
+            >
+              Opt out
+            </Button>
+          </div>
+        ) : null}
         {preferences.isLoading ? <p className="text-muted-foreground">Loading customer preferences…</p> : null}
         {preferences.isError ? <p className="text-destructive">Could not load marketing preferences.</p> : null}
         {!preferences.isLoading && !preferences.isError && !preferences.data?.items.length ? (
