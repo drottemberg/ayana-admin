@@ -656,7 +656,7 @@ export default function CustomerPage() {
                 loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { customerId: customer.id })}
                 tableKey="customers.detail.modules.orders"
                 columns={getOrderColumns({ showCustomer: false })}
-                getRowCommands={(order) => OrderService.getRowActions(order, Boolean(permissions?.edit), Boolean(session?.permissions.orders?.edit))}
+                getRowCommands={(order) => OrderService.getRowActions(order, Boolean(permissions?.edit), Boolean(session?.permissions.orders?.edit || session?.permissions.orders?.delete))}
                 loadingMessage="Loading orders..."
                 emptyMessage="No orders found."
                 refetchOnMount={false}

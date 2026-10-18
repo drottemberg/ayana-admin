@@ -378,7 +378,7 @@ export default function UserPage() {
         loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { userId })}
         tableKey={`orders.user.${userId}`}
         columns={getOrderColumns({ showUser: false })}
-        getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit), Boolean(session?.permissions.orders?.edit))}
+        getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit), Boolean(session?.permissions.orders?.edit || session?.permissions.orders?.delete))}
         loadingMessage="Loading orders..."
         emptyMessage="No orders found."
       /> : null}

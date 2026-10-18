@@ -37,7 +37,7 @@ export default function OrdersPage() {
   }
   const productId = searchParams.get('filterProductId')
   const canEditOrders = Boolean(session?.permissions.orders?.edit)
-  const canRefundOrders = Boolean(session?.permissions.orders?.edit)
+  const canRefundOrders = Boolean(session?.permissions.orders?.edit || session?.permissions.orders?.delete)
   const canCancelOrders = Boolean(session?.permissions.orders?.delete)
 
   const openCancellation = (order: Order) => {

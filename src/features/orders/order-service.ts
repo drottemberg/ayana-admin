@@ -31,7 +31,7 @@ export const OrderService = {
     return [
       ...actions.map(({ label, status }) => ({ label, onClick: () => void this.setStatus(order, status) })),
       ...(canRefund && order.paymentStatus === 'PAID' ? [{
-        label: 'Refund…',
+        label: 'Refund payment…',
         onClick: () => void NiceModal.show(OrderRefundDialog, { order }),
       }] : []),
     ]

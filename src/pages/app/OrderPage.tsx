@@ -96,7 +96,7 @@ export default function OrderPage() {
     order.type === 'PRODUCT' &&
     ['RECEIVED', 'PREPARING', 'READY'].includes(order.status),
   )
-  const canRefund = Boolean(session?.permissions.orders?.edit && order.paymentStatus === 'PAID')
+  const canRefund = Boolean((session?.permissions.orders?.edit || session?.permissions.orders?.delete) && order.paymentStatus === 'PAID')
   const alreadyRefunded = transactions
     .filter((transaction) => transaction.type === 'REFUND' && transaction.status === 'SUCCEEDED')
     .reduce((total, transaction) => total + Number(transaction.amount), 0)
@@ -142,6 +142,7 @@ export default function OrderPage() {
     subtitle: order.id,
     backTo: '/orders',
     ...(canCancel ? { primaryAction: { children: 'Cancel / refund…', variant: 'destructive' as const, onClick: openCancellation } } : {}),
+    ...(canRefund ? { secondaryAction: { children: 'Refund payment', onClick: () => void NiceModal.show(OrderRefundDialog, { order }) } } : {}),
   }
 
   return <>
@@ -193,7 +194,6 @@ export default function OrderPage() {
     <Card id="module-financial-history" className="border border-border p-0 ring-0">
       <CardHeader className="flex flex-row items-center justify-between border-b p-5">
         <CardTitle>Financial history</CardTitle>
-        {canRefund ? <Button variant="outline" onClick={() => void NiceModal.show(OrderRefundDialog, { order })}>Refund…</Button> : null}
       </CardHeader>
       <CardContent className="p-0">
         {transactions.length ? <ol className="divide-y">
