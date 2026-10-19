@@ -88,6 +88,25 @@
 .payment-choice-terminal:hover { background: #394b31; }
 .payment-choice-terminal strong { font-size: 14px; }
 .payment-choice-terminal > span { flex: 0 0 auto; font-size: 20px; }
+
+.success-follow-card { display: grid; gap: 12px; width: min(100%, 540px); margin: 12px 0; padding: 20px; border: 1px solid var(--store-line); border-radius: 18px; background: #fffaf1; text-align: left; }
+.success-follow-card h2 { margin: 0; color: var(--store-espresso); font-family: Georgia,serif; font-size: 22px; font-weight: 500; }
+.success-follow-card > p { margin: 0; }
+.success-contact-form { display: grid; gap: 11px; }
+.success-contact-form label { display: grid; gap: 5px; color: #65594e; font-size: 12px; font-weight: 700; }
+.success-contact-form input { width: 100%; height: 44px; box-sizing: border-box; padding: 0 11px; border: 1px solid #ddcbb5; border-radius: 9px; outline: none; color: var(--store-espresso); background: #fffdf9; font: inherit; font-size: 14px; }
+.success-contact-form input:focus { border-color: var(--store-clay); box-shadow: 0 0 0 3px rgba(166,56,28,.12); }
+.success-contact-form small { color: var(--store-muted); font-size: 11px; }
+.success-contact-submit,.success-connect button { min-height: 46px; padding: 0 14px; border: 0; border-radius: 10px; color: #fff; background: var(--store-clay); font: inherit; font-size: 13px; font-weight: 700; }
+.success-contact-submit:disabled,.success-connect button:disabled { cursor: wait; opacity: .65; }
+.success-contact-saved { margin: 0; color: var(--store-sage); font-size: 13px; }
+.success-connect { display: grid; gap: 9px; padding-top: 12px; border-top: 1px solid var(--store-line); }
+.success-connect > span { color: var(--store-muted); font-size: 12px; text-align: center; }
+.success-connect .store-access-buttons { grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); }
+.success-connect button { text-align: center; }
+.success-connect .success-connect-telegram { background: #2479a8; }
+.success-follow-connected { text-align: center; }
+.success-follow-connected strong { color: var(--store-clay); }
 .payment-choice-terminal:disabled { opacity: .6; }
 .terminal-payment-sheet { text-align: center; }
 .terminal-payment-sheet .store-eyebrow { margin-top: 15px; }

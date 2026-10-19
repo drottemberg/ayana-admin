@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import ayanaLogo from '@/assets/ayana-logo.png'
-import { PhoneInput } from '@/components/ui/phone-input'
-import { validatePhone } from '@/lib/phone'
 import { createPublicAccessLink, type PublicAccessChannel } from '@/lib/public-access'
 import './storefront.css'
 
@@ -42,13 +40,13 @@ function checkoutResumeKey(customerSlug: string, locationSlug: string) {
 
 function readGuestDraft(customerSlug: string, locationSlug: string) {
   try {
-    const draft = JSON.parse(localStorage.getItem(guestDraftKey(customerSlug, locationSlug)) ?? '{}') as { firstName?: unknown; phone?: unknown; email?: unknown }
+    const draft = JSON.parse(localStorage.getItem(guestDraftKey(customerSlug, locationSlug)) ?? '{}') as { firstName?: unknown; email?: unknown; phone?: unknown }
     return {
       firstName: typeof draft.firstName === 'string' ? draft.firstName : '',
-      phone: typeof draft.phone === 'string' ? draft.phone : '',
       email: typeof draft.email === 'string' ? draft.email : '',
+      phone: typeof draft.phone === 'string' ? draft.phone : '',
     }
-  } catch { return { firstName: '', phone: '', email: '' } }
+  } catch { return { firstName: '', email: '', phone: '' } }
 }
 
 function whatsappReturnKey(customerSlug: string, locationSlug: string) {
@@ -99,8 +97,14 @@ function StorefrontRoute() {
   const [terminalOrder, setTerminalOrder] = useState<{ shortCode?: string } | null>(null)
   const [identity, setIdentity] = useState<Identity>(() => readIdentity(customerSlug, locationSlug))
   const [checkoutFirstName, setCheckoutFirstName] = useState(() => readIdentity(customerSlug, locationSlug).firstName ?? readGuestDraft(customerSlug, locationSlug).firstName)
-  const [checkoutPhone, setCheckoutPhone] = useState(() => readIdentity(customerSlug, locationSlug).phone ?? readGuestDraft(customerSlug, locationSlug).phone)
-  const [checkoutEmail, setCheckoutEmail] = useState(() => readIdentity(customerSlug, locationSlug).email ?? readGuestDraft(customerSlug, locationSlug).email)
+  const [successContact, setSuccessContact] = useState(() => {
+    const saved = readIdentity(customerSlug, locationSlug)
+    const draft = readGuestDraft(customerSlug, locationSlug)
+    return { firstName: saved.firstName ?? draft.firstName, email: saved.email ?? draft.email, phone: saved.phone ?? draft.phone }
+  })
+  const [successContactLoading, setSuccessContactLoading] = useState(false)
+  const [successContactSaved, setSuccessContactSaved] = useState(false)
+  const [successContactError, setSuccessContactError] = useState('')
   const handledProductLink = useRef('')
   const handledCartLink = useRef('')
   const [submitting, setSubmitting] = useState(false)
@@ -114,7 +118,7 @@ function StorefrontRoute() {
     try { localStorage.setItem(STORE_LANGUAGE_KEY, nextLanguage) } catch { /* language still changes for this visit */ }
   }
   const storeBasePath = location.pathname.startsWith('/store/') ? `/store/${customerSlug}/${locationSlug}` : `/${customerSlug}/${locationSlug}`
-  const openAccessLink = async (channel: PublicAccessChannel) => {
+  const openAccessLink = async (channel: PublicAccessChannel, extraState: Record<string, unknown> = {}) => {
     setAccessLoading(channel)
     setAccessError('')
     const resumeCheckout = checkoutOpen
@@ -129,7 +133,7 @@ function StorefrontRoute() {
         destination: 'STORE',
         channel,
         language,
-        state: { category, resumeCheckout },
+        state: { category, resumeCheckout, ...extraState },
       })
       window.location.assign(url)
     } catch (reason) {
@@ -146,8 +150,8 @@ function StorefrontRoute() {
     {!catalog?.location.whatsappNumber && !catalog?.location.telegramBotUsername && <small>{tr('Aucune messagerie n’est configurée pour cette boutique.', 'No messaging channel is configured for this shop.')}</small>}
   </div>
   const orderCode = searchParams.get('code')?.trim()
-  const trackOrderMessage = `${tr('Suivre ma commande', 'Track my order')}${orderCode ? ` ${orderCode}` : ''}`
-  const trackOrderHref = whatsappLink(catalog?.location.whatsappNumber, trackOrderMessage)
+  const successOrderId = searchParams.get('orderId')?.trim() ?? ''
+  const successSessionId = searchParams.get('session_id')?.trim() ?? searchParams.get('sessionId')?.trim() ?? ''
 
   const logout = () => {
     try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory identity even if storage is unavailable */ }
@@ -159,12 +163,10 @@ function StorefrontRoute() {
     localStorage.setItem(CART_KEY, JSON.stringify(cart))
   }, [cart])
 
-  const updateGuestDraft = (field: 'firstName' | 'phone' | 'email', value: string) => {
+  const updateGuestDraft = (value: string) => {
     const current = readGuestDraft(customerSlug, locationSlug)
-    const next = { ...current, [field]: value }
-    if (field === 'firstName') setCheckoutFirstName(value)
-    if (field === 'phone') setCheckoutPhone(value)
-    if (field === 'email') setCheckoutEmail(value)
+    const next = { ...current, firstName: value }
+    setCheckoutFirstName(value)
     try { localStorage.setItem(guestDraftKey(customerSlug, locationSlug), JSON.stringify(next)) } catch { /* checkout remains usable without browser storage */ }
   }
 
@@ -173,8 +175,6 @@ function StorefrontRoute() {
     const draft = readGuestDraft(customerSlug, locationSlug)
     setIdentity(savedIdentity)
     setCheckoutFirstName(savedIdentity.firstName ?? draft.firstName)
-    setCheckoutPhone(savedIdentity.phone ?? draft.phone)
-    setCheckoutEmail(savedIdentity.email ?? draft.email)
     setCategory(searchParams.get('category') ?? 'Tout')
   }, [customerSlug, locationSlug])
 
@@ -184,6 +184,27 @@ function StorefrontRoute() {
     localStorage.removeItem(guestDraftKey(customerSlug, locationSlug))
     setCart([])
   }, [customerSlug, location.pathname, locationSlug])
+
+  useEffect(() => {
+    if (!location.pathname.endsWith('/success') || !successOrderId || !successSessionId) return
+    let active = true
+    fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/success-details?${new URLSearchParams({ orderId: successOrderId, sessionId: successSessionId })}`)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({})) as { firstName?: string; email?: string; phone?: string; message?: string | string[] }
+        if (!response.ok) throw new Error(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || tr('Impossible de charger tes coordonnées.', 'Could not load your contact details.'))
+        return payload
+      })
+      .then((details) => {
+        if (!active) return
+        setSuccessContact((current) => ({
+          firstName: details.firstName || current.firstName,
+          email: details.email || current.email,
+          phone: details.phone || current.phone,
+        }))
+      })
+      .catch((reason: unknown) => { if (active) setSuccessContactError(reason instanceof Error ? reason.message : tr('Impossible de charger tes coordonnées.', 'Could not load your contact details.')) })
+    return () => { active = false }
+  }, [customerSlug, location.pathname, locationSlug, successOrderId, successSessionId, isFrench])
 
   useEffect(() => {
     let active = true
@@ -246,15 +267,13 @@ function StorefrontRoute() {
     fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/session`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }),
     }).then(async (response) => {
-      if (!response.ok) throw new Error(tr('Le lien personnalisé a expiré. Tu peux poursuivre avec tes coordonnées.', 'Your personal link has expired. You can continue with your contact details.'))
+      if (!response.ok) throw new Error(tr('Le lien personnalisé a expiré. Tu peux poursuivre ta commande en invité.', 'Your personal link has expired. You can continue as a guest.'))
       return await response.json() as { storeToken: string; identity: Omit<Identity, 'token'> }
     }).then((session) => {
       const next = { ...session.identity, token: session.storeToken }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(next))
       setIdentity(next)
       setCheckoutFirstName(next.firstName ?? '')
-      setCheckoutPhone(next.phone ?? '')
-      setCheckoutEmail(next.email ?? '')
       if (resumeCheckout) {
         setCheckoutError('')
         setCheckoutOpen(true)
@@ -538,8 +557,6 @@ function StorefrontRoute() {
     const guestDraft = readGuestDraft(customerSlug, locationSlug)
     setIdentity(savedIdentity)
     setCheckoutFirstName(savedIdentity.firstName ?? guestDraft.firstName)
-    setCheckoutPhone(savedIdentity.phone ?? guestDraft.phone)
-    setCheckoutEmail(savedIdentity.email ?? guestDraft.email)
     setCheckoutOpen(true)
     setCartOpen(false)
   }
@@ -552,10 +569,6 @@ function StorefrontRoute() {
       setCheckoutError(tr('Indique ton prénom pour continuer.', 'Enter your first name to continue.'))
       return
     }
-    if (!identity.token && validatePhone(checkoutPhone)) {
-      setCheckoutError(tr('Entre un numéro de téléphone valide avec son indicatif.', 'Enter a valid phone number with its country code.'))
-      return
-    }
     setSubmitting(true)
     try {
       const response = await fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/checkout`, {
@@ -563,7 +576,7 @@ function StorefrontRoute() {
         body: JSON.stringify({
           ...(identity.token
             ? { token: identity.token, ...(!identity.firstName?.trim() ? { firstName: checkoutFirstName.trim() } : {}) }
-            : { firstName: checkoutFirstName.trim(), phone: checkoutPhone, email: checkoutEmail.trim() }),
+            : { firstName: checkoutFirstName.trim() }),
           paymentMethod: selectedMethod,
           language,
           items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity, modifierIds: line.modifierIds })),
@@ -576,9 +589,8 @@ function StorefrontRoute() {
         throw new Error(message || tr('Impossible de préparer le paiement. Vérifie le panier et réessaie.', 'Could not prepare payment. Check your cart and try again.'))
       }
       const nextIdentity = {
-        ...identity,
+        ...(identity.token ? identity : {}),
         firstName: identity.firstName?.trim() || checkoutFirstName.trim(),
-        ...(!identity.token ? { phone: checkoutPhone, email: checkoutEmail.trim() } : {}),
         ...(payload.storeToken ?? identity.token ? { token: payload.storeToken ?? identity.token } : { token: undefined }),
       }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
@@ -613,8 +625,45 @@ function StorefrontRoute() {
     void submitCheckout(event, requestedMethod === 'terminal' ? 'terminal' : 'online')
   }
 
+  const saveSuccessContact = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSuccessContactError('')
+    setSuccessContactSaved(false)
+    setSuccessContactLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/success-contact`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          orderId: successOrderId,
+          sessionId: successSessionId,
+          firstName: successContact.firstName.trim(),
+          ...(successContact.email.trim() ? { email: successContact.email.trim() } : {}),
+          ...(successContact.phone.trim() ? { phone: successContact.phone.trim() } : {}),
+        }),
+      })
+      const payload = await response.json().catch(() => ({})) as { identity?: { firstName?: string; email?: string; phone?: string }; message?: string | string[] }
+      if (!response.ok) throw new Error(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || tr('Impossible d’enregistrer tes coordonnées.', 'Could not save your contact details.'))
+      const saved = payload.identity ?? successContact
+      setSuccessContact({ firstName: saved.firstName ?? '', email: saved.email ?? '', phone: saved.phone ?? '' })
+      setSuccessContactSaved(true)
+      const nextIdentity = { ...identity, firstName: saved.firstName, email: saved.email, phone: saved.phone }
+      setIdentity(nextIdentity)
+      try {
+        localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
+        localStorage.setItem(guestDraftKey(customerSlug, locationSlug), JSON.stringify(saved))
+      } catch { /* the contact is saved on the account even if browser storage is unavailable */ }
+    } catch (reason) {
+      setSuccessContactError(reason instanceof Error ? reason.message : tr('Une erreur est survenue.', 'Something went wrong.'))
+    } finally {
+      setSuccessContactLoading(false)
+    }
+  }
+
   if (location.pathname.endsWith('/success')) {
-    return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">{tr('Commande Ayana', 'Ayana order')}</p><h1>{tr('Merci pour ta commande !', 'Thank you for your order!')}</h1><p>{whatsappReturnUrl ? tr('Ton paiement est en cours de confirmation. Tu retournes sur WhatsApp pour retrouver ta conversation avec Ayana.', 'Your payment is being confirmed. You are returning to WhatsApp to continue your conversation with Ayana.') : tr('Ton paiement est en cours de confirmation. Tu peux fermer cette page ou retourner à la boutique.', 'Your payment is being confirmed. You can close this page or return to the shop.')}</p>{orderCode && <strong className="success-code">{orderCode}</strong>}{trackOrderHref && <a className="store-primary" href={trackOrderHref} target="_blank" rel="noreferrer">{tr('Se connecter avec WhatsApp pour suivre ma commande', 'Connect with WhatsApp to follow my order')} <span>↗</span></a>}{whatsappReturnUrl && <a className="store-secondary-link" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} ↗</a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a></section></main>
+    return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">{tr('Commande Ayana', 'Ayana order')}</p><h1>{tr('Merci pour ta commande !', 'Thank you for your order!')}</h1><p>{whatsappReturnUrl ? tr('Ton paiement est confirmé. Tu retournes sur WhatsApp pour retrouver ta conversation avec Ayana.', 'Your payment is confirmed. You are returning to WhatsApp to continue your conversation with Ayana.') : tr('Ton paiement est confirmé.', 'Your payment is confirmed.')}</p>{orderCode && <strong className="success-code">{orderCode}</strong>}
+      {successOrderId && successSessionId && !identity.token && <section className="success-follow-card"><h2>{tr('Suivre ta commande', 'Follow your order')}</h2><p>{tr('Enregistre tes coordonnées ou connecte-toi à ta messagerie pour retrouver ta commande avec Ayana.', 'Save your contact details or connect your messaging account to follow your order with Ayana.')}</p><form className="success-contact-form" onSubmit={(event) => void saveSuccessContact(event)}><label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required value={successContact.firstName} onChange={(event) => setSuccessContact((current) => ({ ...current, firstName: event.target.value }))} /></label><label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required={!successContact.phone.trim()} value={successContact.email} onChange={(event) => setSuccessContact((current) => ({ ...current, email: event.target.value }))} /></label><label>{tr('Téléphone', 'Phone')}<input type="tel" autoComplete="tel" placeholder="+33 6 12 34 56 78" pattern="\\+[1-9][0-9]{7,14}" required={!successContact.email.trim()} value={successContact.phone} onChange={(event) => setSuccessContact((current) => ({ ...current, phone: event.target.value }))} /></label><small>{tr('Renseigne au moins un e-mail ou un téléphone.', 'Enter at least an email address or phone number.')}</small><button className="success-contact-submit" type="submit" disabled={successContactLoading}>{successContactLoading ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer mes coordonnées', 'Save my details')}</button>{successContactSaved && <p className="success-contact-saved" role="status">{tr('C’est enregistré. Ta commande est associée à ces coordonnées.', 'Saved. Your order is linked to these contact details.')}</p>}{successContactError && <p className="store-form-error" role="alert">{successContactError}</p>}</form><div className="success-connect"><span>{tr('Ou connecte-toi avec', 'Or connect with')}</span><div className="store-access-buttons">{catalog?.location.whatsappNumber && <button type="button" className="success-connect-whatsapp" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP', { orderId: successOrderId, sessionId: successSessionId, code: orderCode, returnToSuccess: true })}>{accessLoading === 'WHATSAPP' ? tr('Préparation…', 'Preparing…') : tr('WhatsApp', 'WhatsApp')} ↗</button>}{catalog?.location.telegramBotUsername && <button type="button" className="success-connect-telegram" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM', { orderId: successOrderId, sessionId: successSessionId, code: orderCode, returnToSuccess: true })}>{accessLoading === 'TELEGRAM' ? tr('Préparation…', 'Preparing…') : tr('Telegram', 'Telegram')} ↗</button>}{!catalog?.location.whatsappNumber && !catalog?.location.telegramBotUsername && <small>{tr('Aucune messagerie n’est configurée pour cette boutique.', 'No messaging channel is configured for this shop.')}</small>}</div></div></section>}
+      {identity.token && <section className="success-follow-card success-follow-connected"><h2>{tr('Tu es connecté·e', 'You’re connected')}</h2><p>{tr('Ta commande est associée à ton compte Ayana.', 'Your order is linked to your Ayana account.')}</p><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email || identity.phone}</strong></section>}
+      {accessError && <p className="store-form-error" role="alert">{accessError}</p>}{whatsappReturnUrl && <a className="store-secondary-link" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} ↗</a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a></section></main>
   }
 
   if (loading) return <main className="ayana-store"><div className="store-loading"><span className="store-spinner" />{tr('Ouverture de la boutique…', 'Opening the shop…')}</div></main>
@@ -684,15 +733,13 @@ function StorefrontRoute() {
         {checkoutError && <p className="store-form-error">{checkoutError}</p>}
         {!identity.token ? <>
           <h2>{tr('Comment veux-tu continuer ?', 'How would you like to continue?')}</h2>
-          <p className="sheet-description">{tr('Connecte-toi pour retrouver ton compte, ou commande en invité avec tes coordonnées.', 'Sign in to use your Ayana account, or continue as a guest with your contact details.')}</p>
+          <p className="sheet-description">{tr('Connecte-toi pour retrouver ton compte, ou commande en invité. Si tu paies en ligne, Stripe te demandera l’e-mail du reçu.', 'Sign in to use your Ayana account, or continue as a guest. If you pay online, Stripe will ask for an email for the receipt.')}</p>
           {renderAccessButtons('store-primary store-whatsapp-login')}
           {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
           <p className="checkout-divider"><span>{tr('ou commander en invité', 'or continue as a guest')}</span></p>
           <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
-            <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => updateGuestDraft('firstName', event.target.value)} /></label>
-            <PhoneInput label={tr('Téléphone', 'Phone number')} value={checkoutPhone} placeholder={tr('Numéro de téléphone', 'Phone number')} required nativeCountrySelector onValueChange={(value) => updateGuestDraft('phone', value)} />
-            <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required maxLength={254} value={checkoutEmail} onChange={(event) => updateGuestDraft('email', event.target.value)} /></label>
+            <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => updateGuestDraft(event.target.value)} /></label>
           <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
           </form>
           {!terminalAvailable && <p className="secure-note">{tr('Le panier reste enregistré si tu reviens après la connexion.', 'Your cart is saved if you return after signing in.')}</p>}
