@@ -422,6 +422,10 @@
 .booking-flow-nav { display: none; }
 
 @media (max-width: 699px) {
+  /* Keep iOS Safari from zooming the page when a form control receives focus. */
+  .ayana-booking input,
+  .ayana-booking select,
+  .ayana-booking textarea { font-size: 16px !important; }
   .booking-flow-overlay { align-items: stretch; padding: 0; background: var(--booking-paper); }
   .booking-flow-panel { width: 100%; height: 100dvh; min-height: 100dvh; max-height: 100dvh; padding: calc(12px + env(safe-area-inset-top)) 20px calc(22px + env(safe-area-inset-bottom)); border-radius: 0; box-shadow: none; align-content: start; }
   .booking-flow-nav { display: flex; align-items: center; justify-content: space-between; min-height: 42px; margin: -2px 0 9px; }

@@ -115,3 +115,10 @@
 .terminal-order-code { display: grid; gap: 4px; margin-top: 20px; padding: 13px; border: 1px dashed var(--store-clay); border-radius: 12px; }
 .terminal-order-code span { color: var(--store-muted); font-size: 11px; }
 .terminal-order-code strong { color: var(--store-clay); font-size: 21px; letter-spacing: .15em; }
+
+@media (max-width: 699px) {
+  /* Keep iOS Safari from zooming the page when a form control receives focus. */
+  .ayana-store input,
+  .ayana-store select,
+  .ayana-store textarea { font-size: 16px !important; }
+}
