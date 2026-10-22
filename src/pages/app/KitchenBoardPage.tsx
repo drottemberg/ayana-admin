@@ -153,7 +153,7 @@ function KitchenCard({
   const isDelivery = order.deliveryType === 'DELIVERY'
   const customerLabel = order.customerFirstName || order.customerLastName
     ? `${order.customerFirstName ?? ''} ${order.customerLastName ?? ''}`.trim()
-    : (language === 'fr' ? 'Client invité' : 'Guest customer')
+    : order.guestName || (language === 'fr' ? 'Client invité' : 'Guest customer')
 
   return (
     <article ref={setNodeRef} style={style} className={`kitchen-card kitchen-card-${order.status.toLowerCase()}${isAwaitingPayment ? ' kitchen-card-awaiting-payment' : ''}`}>
@@ -980,7 +980,7 @@ export default function KitchenBoardPage() {
                     <span>{tr('Client', 'Customer')}</span>
                     {orderDetails.order.customer?.id
                       ? <Link className="kitchen-detail-customer-link" to={`/users/${orderDetails.order.customer.id}`}>{`${orderDetails.order.customer.firstName ?? ''} ${orderDetails.order.customer.lastName ?? ''}`.trim() || orderDetails.order.customer.email || tr('Profil client', 'Customer profile')} ↗</Link>
-                      : <strong>{tr('Client invité', 'Guest customer')}</strong>}
+                      : <strong>{orderDetails.order.guestName || tr('Client invité', 'Guest customer')}</strong>}
                     {orderDetails.order.customer?.email && <small>{tr('E-mail', 'Email')}: {orderDetails.order.customer.email}</small>}
                     {orderDetails.order.customer?.phone && <small>{tr('Téléphone', 'Phone')}: {orderDetails.order.customer.phone}</small>}
                   </div>

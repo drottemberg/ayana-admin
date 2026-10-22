@@ -55,7 +55,7 @@ function getSections(details?: OrderManagementDetails): DetailPanelSection[] {
         label: 'User',
         value: order?.user
           ? <Link to={`/users/${order.user.id}`} className="underline-offset-2 hover:underline">{[order.user.firstName, order.user.lastName].filter(Boolean).join(' ') || order.user.email || order.user.id}</Link>
-          : NO_VALUE_STR,
+          : order?.guestName ? `Guest · ${order.guestName}` : NO_VALUE_STR,
       },
     ],
   }]

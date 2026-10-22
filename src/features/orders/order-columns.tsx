@@ -37,7 +37,7 @@ export function getOrderColumns(options: { showCustomer?: boolean; showLocation?
         ? <Link to={`/users/${row.original.user.id}`} className="underline-offset-2 hover:underline">
             {[row.original.user.firstName, row.original.user.lastName].filter(Boolean).join(' ') || row.original.user.email || row.original.user.id}
           </Link>
-        : NO_VALUE_STR,
+        : row.original.guestName ? `Guest · ${row.original.guestName}` : NO_VALUE_STR,
     } as ColumnDef<Order>]),
     ...(options.showLocation === false ? [] : [{
       id: 'locationName', header: 'Location',

@@ -6,6 +6,7 @@ export type Order = {
   id: string
   organizationId: string
   userId?: string | null
+  guestName?: string | null
   type: OrderType
   source: string
   status: OrderStatus

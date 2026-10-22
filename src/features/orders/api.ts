@@ -39,6 +39,7 @@ export type KitchenOrder = {
   tableNumber?: string | null
   customerFirstName?: string | null
   customerLastName?: string | null
+  guestName?: string | null
   canSendPickupReminder?: boolean
   total?: number | null
   paymentStatus?: string | null
@@ -72,6 +73,7 @@ export type KitchenOrderDetail = {
     createdAt: string
     note?: string | null
     tableNumber?: string | null
+    guestName?: string | null
     customer: { id: string; firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null } | null
     location: { id: string; name: string }
   }
