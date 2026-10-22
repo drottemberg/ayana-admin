@@ -14,6 +14,7 @@ import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBooki
 import { cancelBookingWithChoice, getBookingRowActions, rebookClientForSession } from '@/features/bookings/booking-row-actions'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
+import { getCoachFilterOptionsRequest } from '@/features/coaches/api'
 
 const statuses = ['CONFIRMED', 'WAITLISTED', 'ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED']
 
@@ -34,6 +35,7 @@ export default function BookingsPage() {
   const initialFilters = {
     ...(isAdminContext && searchParams.get('filterCustomerId') ? { customerId: [searchParams.get('filterCustomerId')!] } : {}),
     ...(searchParams.get('filterLocationId') ? { locationId: [searchParams.get('filterLocationId')!] } : {}),
+    ...(searchParams.get('filterCoachId') ? { coachId: [searchParams.get('filterCoachId')!] } : {}),
     ...(searchParams.get('userId') ? { userId: [searchParams.get('userId')!] } : {}),
   }
 
@@ -86,6 +88,14 @@ export default function BookingsPage() {
             queryFn: getOrderLocationOptions,
             getValue: (booking: Booking) => booking.location.id,
           },
+          ...(session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
+            ? []
+            : [{
+                id: 'coachId', label: 'Coach', column: 'coachId' as const,
+                selectionMode: 'single' as const,
+                queryFn: getCoachFilterOptionsRequest,
+                getValue: (booking: Booking) => booking.coachId,
+              }]),
         ]}
         loadingMessage="Loading bookings..."
         emptyMessage="No bookings found."

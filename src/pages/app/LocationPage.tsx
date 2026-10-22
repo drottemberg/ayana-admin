@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 
 import {
@@ -22,7 +23,7 @@ import { getPricingOptionsRequest } from '@/features/pricing-options/api'
 import { getPricingOptionColumns } from '@/features/pricing-options/pricing-option-columns'
 import { pricingOptionsQueryKeys } from '@/features/pricing-options/query-keys'
 import type { PricingOption } from '@/types/pricing-option'
-import { getClassTypesRequest, getClassSessionsRequest } from '@/features/classes/api'
+import { getClassTypesRequest, getClassSessionsRequest, getLocationCoachesRequest } from '@/features/classes/api'
 import { getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
@@ -30,6 +31,7 @@ import type { ClassSession, ClassType } from '@/types/class-type'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { ClassTypeService } from '@/features/classes/class-type-service'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { useConnect } from '@/features/app/use-connect'
 import { getClientContractsRequest } from '@/features/client-contracts/api'
@@ -53,8 +55,13 @@ import { getAccessDeviceOrganization, getAccessDevicesRequest, type AccessDevice
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
 import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
+import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
+import { coachColumns } from '@/features/coaches/coach-columns'
+import { getCoachProfilesRequest } from '@/features/coaches/api'
+import { coachesQueryKeys } from '@/features/coaches/query-keys'
+import type { CoachProfile } from '@/features/coaches/types'
 
-function getSections(location?: Location, canEdit = false): DetailPanelSection[] {
+function getSections(location?: Location, canEdit = false, defaultCoachName?: string): DetailPanelSection[] {
   return [
     {
       title: 'Details',
@@ -86,7 +93,13 @@ function getSections(location?: Location, canEdit = false): DetailPanelSection[]
           label: 'Customer',
           value: location?.customerName && location.parentId
             ? <Link to={`/customers/${location.parentId}`} className="underline-offset-2 hover:underline">{location.customerName}</Link>
-            : location?.customerName ?? location?.parentId ?? NO_VALUE_STR,
+            : location?.customerName ?? (location?.parentId ? 'Customer' : NO_VALUE_STR),
+        },
+        {
+          label: 'Default coach',
+          value: location?.defaultCoachId
+            ? <Link to={`/users/${location.defaultCoachId}`} className="underline-offset-2 hover:underline">{defaultCoachName || 'Instructor'}</Link>
+            : NO_VALUE_STR,
         },
         {
           label: 'Address',
@@ -117,23 +130,27 @@ function getSections(location?: Location, canEdit = false): DetailPanelSection[]
 export default function LocationPage() {
   const { locationId = '' } = useParams()
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [editingClassSession, setEditingClassSession] = useState<ClassSession | null>(null)
   const [isCreateClassDrawerOpen, setIsCreateClassDrawerOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<ProductLocationSettings | null>(null)
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
+  const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
   const { session } = useConnect()
+  const canViewCoaches = Boolean(session?.permissions.coaches?.view)
   const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
   const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
   const modules = useMemo(() => [
     { key: 'pricing-options', label: 'Pricing options' },
     { key: 'classes', label: 'Classes' },
+    ...(canViewCoaches ? [{ key: 'coaches', label: 'Coaches' }] : []),
     { key: 'class-sessions', label: 'Class sessions' },
     { key: 'devices', label: 'Devices' },
     ...(canManageOrdersAndContracts ? [{ key: 'products', label: 'Products' }] : []),
     ...(canManageOrdersAndContracts
       ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }]
       : []),
-  ], [canManageOrdersAndContracts])
+  ], [canManageOrdersAndContracts, canViewCoaches])
   const {
     data: location,
     isError,
@@ -142,6 +159,11 @@ export default function LocationPage() {
     queryKey: locationsQueryKeys.detail(locationId),
     queryFn: () => getLocationRequest(locationId),
     enabled: Boolean(locationId),
+  })
+  const defaultCoachQuery = useQuery({
+    queryKey: ['coaches', 'location', locationId, 'location-default-details'],
+    queryFn: () => getLocationCoachesRequest(locationId),
+    enabled: Boolean(location?.defaultCoachId && session?.permissions.coaches?.view),
   })
 
   if (isError || (!isLoading && !location)) {
@@ -166,7 +188,11 @@ export default function LocationPage() {
           backTo: '/locations',
         }}
         modules={modules}
-        aside={<DetailSidePanel sections={getSections(location, canEditLocation)} isLoading={isLoading} />}
+        aside={<DetailSidePanel sections={getSections(
+          location,
+          canEditLocation,
+          defaultCoachQuery.data?.find((coach) => coach.userId === location?.defaultCoachId)?.coachName,
+        )} isLoading={isLoading} />}
       >
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
           {isLoading ? 'Loading location...' : location?.description || 'No description.'}
@@ -208,9 +234,27 @@ export default function LocationPage() {
           loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(state, { locationId })}
           tableKey={`locations.detail.modules.class-sessions.${locationId}`}
           columns={getClassSessionColumns()}
+          getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
+            ? [{ label: 'Edit session', onClick: () => setEditingClassSession(classSession) }]
+            : []}
           loadingMessage="Loading class sessions..."
           emptyMessage="No class sessions found for this location."
         />
+        {canViewCoaches && location?.parentId ? <RelatedEntityModule
+          id="module-coaches"
+          title="Coaches"
+          icon={EntityIcon.classes}
+          queryKey={[...coachesQueryKeys.location(locationId), 'module']}
+          loadData={(state: DataTableState<CoachProfile>) => getCoachProfilesRequest(location.parentId!, state, locationId)}
+          tableKey={`locations.detail.modules.coaches.${locationId}`}
+          columns={coachColumns}
+          getRowCommands={(coach) => session?.permissions.coaches?.edit
+            ? [{ label: 'Edit profile', onClick: () => setEditingCoachProfile(coach) }]
+            : []}
+          loadingMessage="Loading coaches..."
+          emptyMessage="No coaches assigned to this location."
+          errorMessage="Could not load coaches."
+        /> : null}
         <RelatedEntityModule
           id="module-devices"
           title="Devices"
@@ -272,6 +316,20 @@ export default function LocationPage() {
         open={Boolean(editingClassType)}
         onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
       />
+      {editingClassSession ? <ClassSessionEditDrawer
+        session={editingClassSession}
+        locationId={locationId}
+        timeZone={editingClassSession.timezone}
+        open
+        onOpenChange={(open) => { if (!open) setEditingClassSession(null) }}
+      /> : null}
+      {location?.parentId ? <CoachProfileDrawer
+        customerId={location.parentId}
+        customerName={location.customerName}
+        profile={editingCoachProfile}
+        open={Boolean(editingCoachProfile)}
+        onOpenChange={(open) => { if (!open) setEditingCoachProfile(null) }}
+      /> : null}
       {location && <CreateClassTypeDrawer
         fixedLocation={{ id: location.id, name: location.name, parentId: location.parentId }}
         open={isCreateClassDrawerOpen}

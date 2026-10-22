@@ -12,7 +12,7 @@ type ModifierGroup = { id: string; name: string; required: boolean; minSelect: n
 type Variant = { id: string; label: string; price: number; stock: number; available: boolean }
 type Product = { id: string; name: string; description?: string | null; categoryId?: string; category: string; imageUrl?: string | null; variants: Variant[]; modifierGroups: ModifierGroup[] }
 type PrefillChoice = { product: Product; variant?: Variant; options: Record<string, string[]>; quantity: number; missingOption: boolean }
-type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null; telegramBotUsername?: string | null }; currency: string; paymentMethods?: { online: boolean; terminal: boolean }; products: Product[] }
+type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null; telegramBotUsername?: string | null }; currency: string; acceptsProductOrders?: boolean; paymentMethods?: { online: boolean; terminal: boolean }; products: Product[] }
 type CartLine = { key: string; productId: string; name: string; variantId: string; variantLabel: string; unitPrice: number; quantity: number; modifierIds: string[]; modifierNames: string[]; modifierTotal: number }
 type Identity = { token?: string; firstName?: string; lastName?: string; email?: string; phone?: string }
 type StorefrontLanguage = 'fr' | 'en'
@@ -307,6 +307,7 @@ function StorefrontRoute() {
   const terminalAvailable = catalog?.paymentMethods?.terminal === true
 
   const openProduct = (product: Product) => {
+    if (catalog?.acceptsProductOrders === false) return
     setSelectedProduct(product)
     setEditingCartKey(null)
     setIsPrefillSelection(false)
@@ -502,6 +503,7 @@ function StorefrontRoute() {
   }
 
   const addSelectedProduct = () => {
+    if (catalog?.acceptsProductOrders === false) return
     if (!selectedProduct || !selectedVariant?.available) return
     const missing = selectedProduct.modifierGroups.find((group) => (selectedOptions[group.id]?.length ?? 0) < group.minSelect)
     if (missing) { setOptionError(`Choisis une option pour « ${missing.name} ».`); return }
@@ -551,6 +553,10 @@ function StorefrontRoute() {
     .filter((line) => line.quantity > 0))
 
   const startCheckout = () => {
+    if (catalog?.acceptsProductOrders === false) {
+      setCheckoutError(tr('La commande de produits est momentanément indisponible dans ce studio.', 'Product ordering is temporarily unavailable at this location.'))
+      return
+    }
     setCheckoutError('')
     setPaymentMethod('online')
     const savedIdentity = readIdentity(customerSlug, locationSlug)
@@ -563,6 +569,10 @@ function StorefrontRoute() {
 
   const submitCheckout = async (event: React.FormEvent<HTMLFormElement>, selectedMethod: 'online' | 'terminal' = 'online') => {
     event.preventDefault()
+    if (catalog?.acceptsProductOrders === false) {
+      setCheckoutError(tr('La commande de produits est momentanément indisponible dans ce studio.', 'Product ordering is temporarily unavailable at this location.'))
+      return
+    }
     setPaymentMethod(selectedMethod)
     setCheckoutError('')
     if (!identity.firstName?.trim() && !checkoutFirstName.trim()) {
@@ -671,13 +681,14 @@ function StorefrontRoute() {
 
   return (
     <main className="ayana-store">
-      <header className="store-topbar"><a className="ayana-logo-link" href={storeBasePath}><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></a><LanguageSelector language={language} onChange={changeLanguage} /><button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label={tr('Ouvrir le panier', 'Open cart')}>{tr('Panier', 'Cart')} <b>{totalCount}</b></button></header>
+      <header className="store-topbar"><a className="ayana-logo-link" href={storeBasePath}><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></a><LanguageSelector language={language} onChange={changeLanguage} />{catalog.acceptsProductOrders !== false && <button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label={tr('Ouvrir le panier', 'Open cart')}>{tr('Panier', 'Cart')} <b>{totalCount}</b></button>}</header>
       <section className="store-hero">
         <p className="store-eyebrow">{catalog.location.name}</p>
         <h1>{isFrench ? <>Un peu de douceur,<br /><em>à emporter.</em></> : <>A little something<br /><em>to take away.</em></>}</h1>
         <p>{tr('Café, matcha et essentiels Ayana. Choisis, personnalise, puis règle ta commande en toute simplicité.', 'Coffee, matcha and Ayana essentials. Choose your items, customise them, then check out with ease.')}</p>
         <span className="hero-sun" aria-hidden="true">✳</span>
       </section>
+      {catalog.acceptsProductOrders === false && <div className="store-notice" role="status">{tr('La boutique ne prend pas de commandes à emporter pour le moment. Réessaie un peu plus tard.', 'The shop is not taking pickup orders right now. Please try again later.')}</div>}
       {identity.token
         ? <section className="store-account-card"><div><span>{tr('Connecté·e', 'Signed in')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div><button type="button" className="store-account-logout" onClick={logout} aria-label={tr('Se déconnecter', 'Log out')} title={tr('Se déconnecter', 'Log out')}>↪</button></section>
         : <section className="store-account-card store-account-login"><div><strong>{tr('Commande avec ton compte Ayana', 'Order with your Ayana account')}</strong></div>{renderAccessButtons('store-login-cta')}{accessError && <p className="store-form-error" role="alert">{accessError}</p>}</section>}
@@ -689,7 +700,7 @@ function StorefrontRoute() {
         {visibleProducts.map((product, index) => {
           const availablePrices = product.variants.filter((variant) => variant.available).map((variant) => variant.price)
           const startPrice = availablePrices.length ? Math.min(...availablePrices) : Number.POSITIVE_INFINITY
-          return <button className="store-product" key={product.id} onClick={() => openProduct(product)}>
+          return <button className="store-product" key={product.id} disabled={catalog.acceptsProductOrders === false} onClick={() => openProduct(product)}>
             <span className={`product-art art-${index % 4}`}>{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <span>{product.category.toLowerCase().includes('good') ? '✳' : '◌'}</span>}</span>
             <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}<span className="product-buy">{Number.isFinite(startPrice) ? `${tr('À partir de', 'From')} ${money(startPrice, currency, language)}` : tr('Indisponible', 'Unavailable')} <b aria-hidden="true">＋</b></span></span>
           </button>
@@ -698,7 +709,7 @@ function StorefrontRoute() {
       </section>
       <footer className="store-footer"><span>AYANA FEELNESS CLUB</span><span>{catalog.location.name}</span></footer>
 
-      {totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>{tr('Voir mon panier', 'View my cart')} <small>{totalCount} {tr(totalCount > 1 ? 'articles' : 'article', totalCount > 1 ? 'items' : 'item')}</small></span><b>{money(total, currency, language)}　→</b></button>}
+      {catalog.acceptsProductOrders !== false && totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>{tr('Voir mon panier', 'View my cart')} <small>{totalCount} {tr(totalCount > 1 ? 'articles' : 'article', totalCount > 1 ? 'items' : 'item')}</small></span><b>{money(total, currency, language)}　→</b></button>}
 
       {selectedProduct && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProduct() }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
         <button className="sheet-close" onClick={closeProduct} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}

@@ -14,11 +14,11 @@ import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
 import { ClassTypeProductDrawer } from '@/features/classes/ClassTypeProductDrawer'
 import { ClassScheduleCreateDrawer } from '@/features/classes/ClassScheduleCreateDrawer'
 import { ClassScheduleEditDrawer } from '@/features/classes/ClassScheduleEditDrawer'
+import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { classScheduleColumns, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeProductsRequest, getClassTypeRequest, removeClassTypeProductRequest, type ClassTypeProduct } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
-import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { Modals } from '@/providers/modal'
@@ -57,12 +57,12 @@ export default function ClassTypePage() {
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<ClassSchedule | null>(null)
+  const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
   const [isClassProductDrawerOpen, setIsClassProductDrawerOpen] = useState(false)
   const [editingClassProduct, setEditingClassProduct] = useState<ClassTypeProduct | null>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session } = useConnect()
-  const isAdminContext = getAppMode() === 'admin'
   const { data: classType, isLoading, isError } = useDetailQuery({
     queryKey: [...classTypesQueryKeys.all, 'detail', classTypeId, locationId],
     queryFn: () => getClassTypeRequest(classTypeId, locationId),
@@ -82,8 +82,8 @@ export default function ClassTypePage() {
       { label: 'Duration', value: classType ? `${classType.duration} min` : NO_VALUE_STR },
       { label: 'Capacity', value: classType?.maxCapacity ?? NO_VALUE_STR },
       { label: 'Credits per booking', value: classType ? Number(classType.creditCost) : NO_VALUE_STR },
-      ...(isAdminContext ? [{ label: 'Customer', value: classType?.customerId && classType.customerName ? <Link to={`/customers/${classType.customerId}`} className="underline-offset-2 hover:underline">{classType.customerName}</Link> : classType?.customerName ?? NO_VALUE_STR }] : []),
-      { label: 'Location', value: classType?.locationId ? <Link to={`/locations/${classType.locationId}`} className="underline-offset-2 hover:underline">{classType.locationName || classType.locationId}</Link> : classType?.locationName ?? NO_VALUE_STR },
+      { label: 'Customer', value: classType?.customerId ? <Link to={`/customers/${classType.customerId}`} className="underline-offset-2 hover:underline">{classType.customerName || classType.customerId}</Link> : NO_VALUE_STR },
+      { label: 'Location scope', value: classType?.locationId ? <><Link to={`/locations/${classType.locationId}`} className="underline-offset-2 hover:underline">{classType.locationName || classType.locationId}</Link><span className="text-muted-foreground"> · This location only</span></> : NO_VALUE_STR },
     ],
   }]
 
@@ -93,6 +93,7 @@ export default function ClassTypePage() {
 
   const canEditClass = Boolean(session?.permissions.classes?.edit)
   const canEditSchedule = Boolean(session?.permissions.classSchedules?.edit)
+  const canEditSession = Boolean(session?.permissions.classSessions?.edit)
   const canDeleteSchedule = Boolean(session?.permissions.classSchedules?.delete)
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
   const editableClassType = classType ? { ...classType, locationId: classType.locationId || classType.organizationId } : null
@@ -270,6 +271,7 @@ export default function ClassTypePage() {
         columns={getClassSessionColumns() as never}
         getRowCommands={(classSession) => [
           { label: 'View session', onClick: () => navigate(`/class-sessions/${classSession.id}?locationId=${encodeURIComponent(locationId)}`) },
+          ...(canEditSession && classSession.status === 'SCHEDULED' ? [{ label: 'Edit session', onClick: () => setEditingSession(classSession) }] : []),
           ...(canCancelSessions && (classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') ? [{
             label: 'Cancel session',
             variant: 'destructive' as const,
@@ -306,6 +308,13 @@ export default function ClassTypePage() {
     <ClassTypeEditDrawer classType={editingClassType} open={Boolean(editingClassType)} onOpenChange={(open) => { if (!open) setEditingClassType(null) }} />
     <ClassScheduleCreateDrawer classType={editableClassType} open={isScheduleDrawerOpen} onOpenChange={setIsScheduleDrawerOpen} />
     <ClassScheduleEditDrawer schedule={editingSchedule} classType={editableClassType} locationId={locationId} open={Boolean(editingSchedule)} onOpenChange={(open) => { if (!open) setEditingSchedule(null) }} />
+    {editingSession ? <ClassSessionEditDrawer
+      session={editingSession}
+      locationId={locationId}
+      timeZone={editingSession.timezone}
+      open
+      onOpenChange={(open) => { if (!open) setEditingSession(null) }}
+    /> : null}
     <ClassTypeProductDrawer
       classTypeId={classTypeId}
       locationId={locationId}

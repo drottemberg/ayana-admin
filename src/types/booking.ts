@@ -48,6 +48,7 @@ export type Booking = {
   classTypeId?: string
   className?: string
   classCategory?: string | null
+  coachId?: string | null
   creditCost?: number
   creditsUsed?: number
   creditContractNames?: string | null

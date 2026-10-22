@@ -6,6 +6,8 @@ import type {
   UserRequest,
 } from '@/types/user-request'
 import type { InviteCustomerPayload, InviteStaffPayload } from '@/types/membership'
+import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
+import { toApiListDto } from '@/lib/api-types'
 
 export type InviteStaffResult =
   | { created: true; user: { id: string; email: string; firstName: string; lastName: string } }
@@ -13,6 +15,9 @@ export type InviteStaffResult =
 
 type UserRequestsListResponse = {
   userRequests: UserRequest[]
+  page?: number
+  limit?: number
+  total?: number
 }
 
 type UserRequestResponse = {
@@ -31,10 +36,32 @@ function toOrgInvitePayload(payload: SendOrgInvitePayload) {
   }
 }
 
-export async function getUserRequestsRequest(): Promise<UserRequest[]> {
-  const result = await apiClient.post<UserRequestsListResponse>('/user-requests/list')
+export async function getUserRequestsRequest(filters?: Record<string, unknown>): Promise<UserRequest[]> {
+  const result = await apiClient.post<UserRequestsListResponse>('/user-requests/list', {
+    page: 1,
+    limit: 100,
+    ...(filters ? { filters } : {}),
+  })
 
   return result.userRequests
+}
+
+export async function getUserRequestsPageRequest(
+  state: DataTableState<UserRequest>,
+  direction: 'RECEIVED' | 'SENT',
+  filters?: Record<string, unknown>,
+): Promise<DataTableAsyncResult<UserRequest>> {
+  const payload = toApiListDto(state, filters)
+  const result = await apiClient.post<UserRequestsListResponse>('/user-requests/list', {
+    ...payload,
+    direction,
+  })
+  const total = result.total ?? result.userRequests.length
+  return {
+    items: result.userRequests,
+    count: total,
+    pageCount: Math.ceil(total / state.pagination.pageSize),
+  }
 }
 
 export function checkOrgInviteUserRequest(payload: CheckOrgInviteUserPayload): Promise<CheckOrgInviteUserResult> {

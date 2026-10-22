@@ -27,7 +27,9 @@ export type CreateLocationPayload = {
   address?: Address
 }
 
-export type UpdateLocationPayload = Omit<CreateLocationPayload, 'customerId'>
+export type UpdateLocationPayload = Omit<CreateLocationPayload, 'customerId'> & {
+  defaultCoachId?: string | null
+}
 
 export async function fetchLocationFilterOptions(filter: LocationFilterDimension, search: string, page: number) {
   return apiClient.post<{ items: { id: string; label: string }[]; total: number }>('/locations/list/filters', {

@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { AppDrawer } from '@/components/app/AppDrawer'
@@ -18,12 +17,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function CoachProfileDrawer({
   customerId,
+  customerName,
   profile,
+  initialUserId,
+  initialUserName,
   open,
   onOpenChange,
 }: {
   customerId: string
+  customerName?: string | null
   profile?: CoachProfile | null
+  initialUserId?: string
+  initialUserName?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -31,6 +36,7 @@ export function CoachProfileDrawer({
   const [userId, setUserId] = useState('')
   const [bio, setBio] = useState('')
   const [specialties, setSpecialties] = useState('')
+  const [languages, setLanguages] = useState('')
   const [classTypeIds, setClassTypeIds] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const { data: candidates = [], isLoading: loadingCandidates } = useQuery({
@@ -43,14 +49,24 @@ export function CoachProfileDrawer({
     queryFn: () => getCustomerClassTypesRequest(customerId),
     enabled: open,
   })
+  const selectedCandidate = candidates.find((candidate) => candidate.userId === userId)
+  const specificLocationIds = profile?.locationScope === 'SPECIFIC'
+    ? new Set(profile.locations.map((location) => location.id))
+    : selectedCandidate?.locationScope === 'SPECIFIC'
+      ? new Set(selectedCandidate.locationIds)
+      : null
+  const selectableClassTypes = profile?.locationScope === 'NONE' || (!profile && userId && loadingCandidates)
+    ? []
+    : classTypes.filter((classType) => !specificLocationIds || specificLocationIds.has(classType.locationId))
 
   useEffect(() => {
     if (!open) return
-    setUserId(profile?.userId ?? '')
+    setUserId(profile?.userId ?? initialUserId ?? '')
     setBio(profile?.bio ?? '')
     setSpecialties(profile?.specialties.join(', ') ?? '')
+    setLanguages(profile?.languages.join(', ') ?? '')
     setClassTypeIds(profile?.classTypes.map((classType) => classType.id) ?? [])
-  }, [open, profile])
+  }, [open, profile, initialUserId])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -58,16 +74,13 @@ export function CoachProfileDrawer({
       toast.error('Select an instructor first.')
       return
     }
-    if (!classTypeIds.length) {
-      toast.error('Select at least one class type this instructor can teach.')
-      return
-    }
     setIsSaving(true)
     try {
       const payload = {
         bio: bio.trim() || undefined,
         specialties: specialties.split(',').map((value) => value.trim()).filter(Boolean),
-        classTypeIds,
+        languages: languages.split(',').map((value) => value.trim()).filter(Boolean),
+        classTypeIds: classTypeIds.filter((id) => selectableClassTypes.some((classType) => classType.id === id)),
       }
       if (profile) await updateCoachProfileRequest(customerId, profile.userId, payload)
       else await createCoachProfileRequest(customerId, { ...payload, userId })
@@ -75,10 +88,10 @@ export function CoachProfileDrawer({
         queryClient.invalidateQueries({ queryKey: ['coaches'] }),
         queryClient.invalidateQueries({ queryKey: ['coach-candidates', customerId] }),
       ])
-      toast.success(profile ? 'Instructor profile updated.' : 'Instructor profile created.')
+      toast.success(profile ? 'Coach profile updated.' : 'Coach profile created.')
       onOpenChange(false)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save the instructor profile.')
+      toast.error(error instanceof Error ? error.message : 'Could not save the coach profile.')
     } finally {
       setIsSaving(false)
     }
@@ -87,54 +100,53 @@ export function CoachProfileDrawer({
   return <AppDrawer
     open={open}
     onOpenChange={onOpenChange}
-    title={profile ? 'Edit instructor profile' : 'Add instructor profile'}
-    description="Profiles belong to a customer. The instructor’s allowed locations are managed in their customer membership."
-    contentClassName="sm:max-w-xl"
+    title={profile ? 'Edit coach' : 'Add coach'}
+    contentClassName="sm:max-w-lg"
   >
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
-        {profile ? (
-          <div className="rounded-md border border-border p-3 text-sm">
-            <div className="font-medium">{profile.coachName}</div>
-            <div className="text-muted-foreground">{profile.email || profile.userId}</div>
-            <Link to={`/users/${profile.userId}`} className="mt-1 inline-block underline underline-offset-2">Manage role and location access</Link>
-          </div>
-        ) : (
-          <Field label="Customer instructor">
+        <Field label="Customer"><Input value={profile?.customerName || customerName || ''} readOnly /></Field>
+        {profile ? <Field label="Coach"><Input value={profile.coachName || profile.email || ''} readOnly /></Field> : null}
+        {!profile && !initialUserId && (
+          <Field label="Instructor user">
             <SelectInput
-              aria-label="Customer instructor"
+              aria-label="Instructor user"
               items={candidates.map((candidate) => ({
                 value: candidate.userId,
-                label: `${[candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || candidate.userId}${candidate.email ? ` · ${candidate.email}` : ''}`,
+                label: `${[candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || candidate.email || 'Instructor'}${candidate.email && candidate.firstName ? ` · ${candidate.email}` : ''}`,
               }))}
               value={userId}
-              onValueChange={(value) => setUserId(String(value))}
+              onValueChange={(value) => {
+                setUserId(String(value))
+                setClassTypeIds([])
+              }}
               isLoading={loadingCandidates}
               loadingMessage="Loading instructors..."
               placeholder="Select an instructor"
-              emptyMessage="No customer users with the INSTRUCTOR role need a profile."
+              emptyMessage="No instructors available."
             />
           </Field>
         )}
-        <Field label="Class types they can teach">
+        {!profile && initialUserId && <Field label="Instructor user"><Input value={initialUserName || selectedCandidate?.email || 'Instructor'} readOnly /></Field>}
+        <Field label="Class types">
           <MultiselectInput
             aria-label="Class types"
-            items={classTypes.map((classType) => ({ value: classType.id, label: `${classType.name} · ${classType.locationName}` }))}
+            items={selectableClassTypes.map((classType) => ({ value: classType.id, label: `${classType.name} · ${classType.locationName}` }))}
             value={classTypeIds}
             onValueChange={setClassTypeIds}
-            isLoading={loadingClassTypes}
+            isLoading={loadingClassTypes || (!profile && Boolean(userId) && loadingCandidates)}
             loadingMessage="Loading class types..."
             placeholder="Select class types"
-            emptyMessage="No class types exist for this customer."
+            emptyMessage={specificLocationIds ? 'No class types exist at this instructor’s assigned locations.' : 'No class types exist for this customer.'}
           />
         </Field>
+        <Field label="Languages taught"><Input value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="French, English" /></Field>
         <Field label="Specialties"><Input value={specialties} onChange={(event) => setSpecialties(event.target.value)} placeholder="Reformer, Mat, Barrel" /></Field>
-        <Field label="Instructor bio"><Textarea value={bio} onChange={(event) => setBio(event.target.value)} rows={5} /></Field>
-        <p className="text-sm text-muted-foreground">One-off assignments are made on a class session. Recurring assignments use the class schedule and its validity dates. Instructor location scope comes from the user’s membership.</p>
+        <Field label="Bio"><Textarea value={bio} onChange={(event) => setBio(event.target.value)} rows={5} /></Field>
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>
-        <Button type="submit" disabled={isSaving || (!profile && !userId) || loadingClassTypes}>{isSaving ? 'Saving…' : profile ? 'Save changes' : 'Add instructor'}</Button>
+        <Button type="submit" disabled={isSaving || (!profile && !userId) || loadingClassTypes || (!profile && loadingCandidates)}>{isSaving ? 'Saving…' : profile ? 'Save changes' : 'Create profile'}</Button>
       </div>
     </form>
   </AppDrawer>

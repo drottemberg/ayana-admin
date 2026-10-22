@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { BrowserRouter, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
 import ayanaLogo from '@/assets/ayana-logo.png'
 import { PhoneInput } from '@/components/ui/phone-input'
@@ -105,6 +105,12 @@ function sessionKey(customerSlug: string, locationSlug: string) {
 }
 
 type BookingGuestDraft = { firstName: string; phone: string; email: string }
+type AccessModalState = {
+  view: 'choose' | 'email' | 'code'
+  state: Record<string, unknown>
+  email: string
+  verificationId?: string
+}
 
 function guestDraftKey(customerSlug: string, locationSlug: string) {
   return `ayana-booking-guest:${customerSlug}:${locationSlug}`
@@ -212,6 +218,10 @@ function BookingPortalRoute() {
   const [bookingUpsell, setBookingUpsell] = useState<{ className: string; products: ClassProductOffer[] } | null>(null)
   const [accessLoading, setAccessLoading] = useState<PublicAccessChannel | null>(null)
   const [accessError, setAccessError] = useState('')
+  const [accessModal, setAccessModal] = useState<AccessModalState | null>(null)
+  const [accessEmail, setAccessEmail] = useState('')
+  const [accessCode, setAccessCode] = useState('')
+  const [emailAccessLoading, setEmailAccessLoading] = useState(false)
   const restoredSession = useRef(false)
   const restoredOffer = useRef(false)
   const handledPaymentReturn = useRef('')
@@ -249,6 +259,14 @@ function BookingPortalRoute() {
     let active = true
     const tokenFromUrl = searchParams.get('token')
     const sessionTokenFromUrl = searchParams.get('session_token')
+    const emailAccessParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const emailAccessId = emailAccessParams.get('emailAccessId')
+    const emailAccessCode = emailAccessParams.get('emailAccessCode')
+    if (emailAccessId || emailAccessCode) {
+      const url = new URL(window.location.href)
+      url.hash = ''
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+    }
     if (tokenFromUrl) {
       const url = new URL(window.location.href)
       url.searchParams.delete('token')
@@ -272,6 +290,25 @@ function BookingPortalRoute() {
         setSelectedDate((current) => current && schedulePayload.sessions.some((session) => session.localDate === current)
           ? current
           : schedulePayload.sessions[0]?.localDate ?? '')
+
+        if (emailAccessId || emailAccessCode) {
+          if (!emailAccessId || !emailAccessCode) {
+            if (active) setNotice(isFrench ? 'Ce lien de connexion est incomplet. Demande un nouveau lien.' : 'This sign-in link is incomplete. Request a new one.')
+            return
+          }
+          const accessResponse = await fetch(`${API_URL}/public-access/email/verify`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ verificationId: emailAccessId, code: emailAccessCode }),
+          })
+          const accessPayload = await accessResponse.json().catch(() => ({})) as { url?: string; message?: string | string[] }
+          if (!accessResponse.ok || !accessPayload.url) {
+            if (active) setNotice(responseMessage(accessPayload, isFrench ? 'Ce lien a expiré. Demande-en un nouveau.' : 'This link has expired. Request a new one.'))
+            return
+          }
+          window.location.replace(accessPayload.url)
+          return
+        }
 
         const saved = tokenFromUrl ? null : readSession(customerSlug, locationSlug)
         const handoffToken = tokenFromUrl
@@ -367,6 +404,69 @@ function BookingPortalRoute() {
       setAccessLoading(null)
     }
   }
+  const openAccessModal = (state: Record<string, unknown>) => {
+    setAccessError('')
+    setAccessEmail('')
+    setAccessCode('')
+    setAccessModal({ view: 'choose', state, email: '' })
+  }
+  const backInAccessFlow = () => {
+    if (emailAccessLoading) return
+    setAccessError('')
+    setAccessCode('')
+    setAccessModal((current) => current?.view === 'code'
+      ? { ...current, view: 'email', verificationId: undefined }
+      : current?.view === 'email'
+        ? { ...current, view: 'choose', verificationId: undefined }
+        : null)
+  }
+  const requestEmailAccessCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!accessModal) return
+    setEmailAccessLoading(true)
+    setAccessError('')
+    try {
+      const response = await fetch(`${API_URL}/public-access/email/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          customerSlug,
+          locationSlug,
+          destination: 'BOOKING',
+          email: accessEmail.trim(),
+          language,
+          state: accessModal.state,
+        }),
+      })
+      const payload = await response.json().catch(() => ({})) as { verificationId?: string; message?: string | string[] }
+      if (!response.ok || !payload.verificationId) throw new Error(responseMessage(payload, isFrench ? 'Impossible d’envoyer le code.' : 'Could not send the code.'))
+      setAccessModal({ ...accessModal, view: 'code', email: accessEmail.trim(), verificationId: payload.verificationId })
+    } catch (reason) {
+      setAccessError(reason instanceof Error ? reason.message : (isFrench ? 'Impossible d’envoyer le code.' : 'Could not send the code.'))
+    } finally {
+      setEmailAccessLoading(false)
+    }
+  }
+  const verifyEmailAccessCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!accessModal?.verificationId) return
+    setEmailAccessLoading(true)
+    setAccessError('')
+    try {
+      const response = await fetch(`${API_URL}/public-access/email/verify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ verificationId: accessModal.verificationId, code: accessCode.trim() }),
+      })
+      const payload = await response.json().catch(() => ({})) as { url?: string; message?: string | string[] }
+      if (!response.ok || !payload.url) throw new Error(responseMessage(payload, isFrench ? 'Code incorrect ou expiré.' : 'The code is incorrect or expired.'))
+      window.location.assign(payload.url)
+    } catch (reason) {
+      setAccessError(reason instanceof Error ? reason.message : (isFrench ? 'Code incorrect ou expiré.' : 'The code is incorrect or expired.'))
+    } finally {
+      setEmailAccessLoading(false)
+    }
+  }
   const accessState = (resume: 'page' | 'session' | 'offer' = 'page') => ({
     section: activeSection,
     date: selectedDate,
@@ -378,9 +478,7 @@ function BookingPortalRoute() {
     ...(resume === 'offer' && offerToPurchase ? { resumeOffer: offerToPurchase.id } : {}),
   })
   const renderAccessButtons = (state: Record<string, unknown>, buttonClass: string) => <div className="booking-access-buttons">
-    {schedule?.location.whatsappNumber && <button type="button" className={buttonClass} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP', state)}>{accessLoading === 'WHATSAPP' ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Continuer avec WhatsApp' : 'Continue with WhatsApp')}<span>↗</span></button>}
-    {schedule?.location.telegramBotUsername && <button type="button" className={`${buttonClass} booking-telegram-cta`} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM', state)}>{accessLoading === 'TELEGRAM' ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Continuer avec Telegram' : 'Continue with Telegram')}<span>↗</span></button>}
-    {!schedule?.location.whatsappNumber && !schedule?.location.telegramBotUsername && <small>{isFrench ? 'Aucune messagerie n’est configurée pour ce studio.' : 'No messaging channel is configured for this studio.'}</small>}
+    <button type="button" className={buttonClass} onClick={() => openAccessModal(state)}>{isFrench ? 'Se connecter' : 'Sign in'}<span>→</span></button>
   </div>
 
   useEffect(() => {
@@ -390,7 +488,7 @@ function BookingPortalRoute() {
     const session = schedule.sessions.find((item) => item.id === sessionId)
     if (!session) return
     restoredSession.current = true
-    setActiveSection('planning')
+    setActiveSection(searchParams.get('resumeOffer') ? 'offers' : 'planning')
     setSelected(session)
     setSelectedAction('book')
     const url = new URL(window.location.href)
@@ -450,6 +548,16 @@ function BookingPortalRoute() {
     window.addEventListener('focus', refreshOnReturn)
     return () => window.removeEventListener('focus', refreshOnReturn)
   }, [customerSlug, locationSlug, member?.token])
+
+  useEffect(() => {
+    if (searchParams.get('payment') !== 'cancelled') return
+    setNotice(isFrench
+      ? 'Paiement annulé. Tu peux reprendre quand tu veux.'
+      : 'Payment cancelled. You can continue whenever you’re ready.')
+    const cleanUrl = new URL(window.location.href)
+    cleanUrl.searchParams.delete('payment')
+    window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`)
+  }, [searchParams, isFrench])
 
   useEffect(() => {
     const payment = searchParams.get('payment')
@@ -771,7 +879,7 @@ function BookingPortalRoute() {
           <div className="booking-member-identity"><span className="booking-avatar">{(member.identity.firstName?.[0] ?? member.identity.lastName?.[0] ?? 'A').toUpperCase()}</span><div><span>{isFrench ? 'Connecté·e' : 'Signed in'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ')}</strong></div></div>
           <div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (isFrench ? 'accès illimité' : 'unlimited') : (isFrench ? 'crédits' : 'credits')}</span></div><button type="button" className="booking-member-plans" onClick={() => setActiveSection('offers')}><span aria-hidden="true">▤</span>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}<b>→</b></button><button type="button" className="booking-logout" onClick={logout} aria-label={isFrench ? 'Se déconnecter' : 'Log out'} title={isFrench ? 'Se déconnecter' : 'Log out'}>↪</button></div>
         </section>
-        : activeSection !== 'offers' && <section className="booking-login-card"><div><strong>{isFrench ? 'Retrouve ton compte Ayana' : 'Open your Ayana account'}</strong><span>{isFrench ? 'Reviens au planning avec tes réservations et tes crédits.' : 'Return to the schedule with your bookings and credits.'}</span></div><div>{renderAccessButtons(accessState(), 'booking-whatsapp-cta')}{accessError && <p className="booking-error" role="alert">{accessError}</p>}</div></section>}
+        : activeSection !== 'offers' && <section className="booking-login-card"><div><strong>{isFrench ? 'Connecte-toi à ton compte Ayana' : 'Sign in to your Ayana account'}</strong><span>{isFrench ? 'Reviens au planning avec tes réservations et tes crédits.' : 'Return to the schedule with your bookings and credits.'}</span></div><div>{renderAccessButtons(accessState(), 'booking-whatsapp-cta')}{accessError && <p className="booking-error" role="alert">{accessError}</p>}</div></section>}
       {notice && <div className="booking-notice" role="status">{notice}</div>}
 
       <nav className="booking-section-tabs" role="tablist" aria-label={isFrench ? 'Planning et formules' : 'Schedule and plans'}>
@@ -870,7 +978,8 @@ function BookingPortalRoute() {
       <footer className="booking-footer">{isFrench ? 'AYANA FEELNESS CLUB · RÉSERVATION EN LIGNE' : 'AYANA FEELNESS CLUB · ONLINE BOOKING'}</footer>
     </>}
 
-    {offerToPurchase && <div className="booking-overlay" role="presentation" onClick={() => !purchasingOfferId && setOfferToPurchase(null)}><section className="booking-sheet booking-purchase-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-purchase-title" onClick={(event) => event.stopPropagation()}>
+    {offerToPurchase && !accessModal && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !purchasingOfferId && setOfferToPurchase(null)}><section className="booking-sheet booking-flow-panel booking-purchase-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-purchase-title" onClick={(event) => event.stopPropagation()}>
+      <div className="booking-flow-nav"><button type="button" disabled={Boolean(purchasingOfferId)} onClick={() => setOfferToPurchase(null)}><span aria-hidden="true">←</span>{isFrench ? 'Retour' : 'Back'}</button><button type="button" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={Boolean(purchasingOfferId)} onClick={() => setOfferToPurchase(null)}>×</button></div>
       <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={Boolean(purchasingOfferId)} onClick={() => setOfferToPurchase(null)}>×</button>
       <p className="booking-eyebrow">{isFrench ? 'TA COMMANDE' : 'YOUR ORDER'}</p>
       <h2 id="booking-purchase-title">{isFrench ? 'Paiement de la formule' : 'Plan payment'}</h2>
@@ -881,10 +990,10 @@ function BookingPortalRoute() {
         <span>{offerToPurchase.billingInterval && offerToPurchase.billingInterval !== 'ONCE' ? (isFrench ? `Abonnement · facturation ${offerToPurchase.billingInterval.toLowerCase()}` : `Membership · billed ${offerToPurchase.billingInterval.toLowerCase()}`) : (isFrench ? 'Paiement unique' : 'One-time payment')}{offerToPurchase.minimumCommitmentMonths ? ` · ${offerToPurchase.minimumCommitmentMonths} ${isFrench ? 'mois d’engagement minimum' : 'months minimum commitment'}` : ''}</span>
       </div>
       {!member ? <>
-        <p className="booking-purchase-explanation">{isFrench ? 'Connecte-toi avec WhatsApp pour retrouver ton compte, ou continue en invité avec tes coordonnées.' : 'Connect with WhatsApp to use your Ayana account, or continue as a guest with your contact details.'}</p>
+        <p className="booking-purchase-explanation">{isFrench ? 'Connecte-toi à ton compte Ayana, ou continue en invité avec tes coordonnées.' : 'Sign in to your Ayana account, or continue as a guest with your contact details.'}</p>
         {renderAccessButtons(accessState('offer'), 'booking-purchase-whatsapp')}
         {accessError && <div className="booking-error" role="alert">{accessError}</div>}
-        <p className="booking-purchase-divider"><span>{isFrench ? 'ou continuer sans WhatsApp' : 'or continue without WhatsApp'}</span></p>
+        <p className="booking-purchase-divider"><span>{isFrench ? 'ou continuer en invité' : 'or continue as a guest'}</span></p>
       </> : <div className="booking-purchase-account"><span>{isFrench ? 'Compte Ayana connecté' : 'Ayana account connected'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ') || member.identity.email}</strong></div>}
       {!member?.identity.firstName?.trim() && <label className="booking-first-name booking-purchase-field">{isFrench ? 'Prénom' : 'First name'}<input autoComplete="given-name" required maxLength={80} value={member ? firstNameDraft : guestFirstName} onChange={(event) => member ? setFirstNameDraft(event.target.value) : updateGuestDraft('firstName', event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
       {!member && <PhoneInput label={isFrench ? 'Téléphone' : 'Phone number'} value={guestPhone} placeholder={isFrench ? 'Numéro de téléphone' : 'Phone number'} required nativeCountrySelector onValueChange={(value) => updateGuestDraft('phone', value)} />}
@@ -900,7 +1009,8 @@ function BookingPortalRoute() {
       </div>
     </section></div>}
 
-    {selected && <div className="booking-overlay" role="presentation" onClick={() => !submitting && setSelected(null)}><section className="booking-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title" onClick={(event) => event.stopPropagation()}>
+    {selected && !offerToPurchase && !accessModal && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !submitting && setSelected(null)}><section className="booking-sheet booking-flow-panel" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title" onClick={(event) => event.stopPropagation()}>
+      <div className="booking-flow-nav"><button type="button" disabled={submitting} onClick={() => setSelected(null)}><span aria-hidden="true">←</span>{isFrench ? 'Retour au planning' : 'Back to schedule'}</button><button type="button" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={submitting} onClick={() => setSelected(null)}>×</button></div>
       <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={submitting} onClick={() => setSelected(null)}>×</button>
       <p className="booking-eyebrow">{bookingUpsell ? (isFrench ? 'RÉSERVATION CONFIRMÉE' : 'BOOKING CONFIRMED') : selectedAction === 'cancel' ? (isFrench ? 'POLITIQUE D’ANNULATION' : 'CANCELLATION POLICY') : (isFrench ? 'RÉCAPITULATIF' : 'BOOKING SUMMARY')}</p>
       <h2 id="booking-confirm-title">{bookingUpsell ? (isFrench ? 'C’est réservé !' : 'You’re booked!') : selectedAction === 'cancel' ? (isFrench ? 'Annuler cette réservation ?' : 'Cancel this booking?') : (isFrench ? 'Confirmer ce cours ?' : 'Confirm this class?')}</h2>
@@ -934,7 +1044,7 @@ function BookingPortalRoute() {
             })}
           </div>
         </section>
-      </> : !member ? <div className="booking-auth-hint"><p>{isFrench ? 'Retrouve ton compte pour réserver ce cours.' : 'Open your account to book this class.'}</p>{renderAccessButtons(accessState('session'), 'booking-whatsapp-cta')}{accessError && <div className="booking-error" role="alert">{accessError}</div>}</div>
+      </> : !member ? <div className="booking-auth-hint"><p>{isFrench ? 'Connecte-toi pour réserver ce cours.' : 'Sign in to book this class.'}</p>{renderAccessButtons(accessState('session'), 'booking-whatsapp-cta')}{accessError && <div className="booking-error" role="alert">{accessError}</div>}</div>
         : selectedAction === 'cancel' ? <div className="booking-cancellation-policy">
           {quoteLoading ? <p>{isFrench ? 'Vérification de la politique…' : 'Checking cancellation policy…'}</p> : cancellationQuote ? <>
             {cancellationQuote.isLate
@@ -957,6 +1067,29 @@ function BookingPortalRoute() {
         : <p className="booking-confirm-hint">{isFrench ? 'Ta réservation sera confirmée après validation.' : 'Your booking will be confirmed after you submit.'}</p>}
       {bookingError && <div className="booking-error" role="alert">{bookingError}</div>}
       <div className={`booking-sheet-actions${bookingUpsell ? ' booking-sheet-actions-done' : ''}`}>{bookingUpsell ? <button type="button" className="booking-confirm" onClick={() => { setBookingUpsell(null); setSelected(null) }}>{isFrench ? 'Terminé' : 'Done'}</button> : <><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</>}</div>
+    </section></div>}
+
+    {accessModal && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !emailAccessLoading && setAccessModal(null)}><section className="booking-sheet booking-flow-panel booking-access-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-access-title" onClick={(event) => event.stopPropagation()}>
+      <div className="booking-flow-nav"><button type="button" disabled={emailAccessLoading} onClick={backInAccessFlow}><span aria-hidden="true">←</span>{accessModal.view === 'choose' ? (isFrench ? 'Retour' : 'Back') : (isFrench ? 'Précédent' : 'Previous')}</button><button type="button" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={emailAccessLoading} onClick={() => setAccessModal(null)}>×</button></div>
+      <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} disabled={emailAccessLoading} onClick={() => setAccessModal(null)}>×</button>
+      <p className="booking-eyebrow">AYANA</p>
+      <h2 id="booking-access-title">{accessModal.view === 'choose' ? (isFrench ? 'Connecte-toi à ton compte Ayana' : 'Sign in to your Ayana account') : accessModal.view === 'email' ? (isFrench ? 'Connexion par e-mail' : 'Sign in with email') : (isFrench ? 'Vérifie ton e-mail' : 'Check your email')}</h2>
+      {accessModal.view === 'choose' ? <div className="booking-access-methods">
+        <button type="button" className="booking-access-method booking-access-email" onClick={() => { setAccessError(''); setAccessModal({ ...accessModal, view: 'email' }) }}>{isFrench ? 'Continuer avec e-mail' : 'Continue with email'}<span>→</span></button>
+        {schedule?.location.whatsappNumber && <button type="button" className="booking-access-method booking-access-whatsapp" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP', accessModal.state)}>{accessLoading === 'WHATSAPP' ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Continuer avec WhatsApp' : 'Continue with WhatsApp')}<span>↗</span></button>}
+        {schedule?.location.telegramBotUsername && <button type="button" className="booking-access-method booking-access-telegram" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM', accessModal.state)}>{accessLoading === 'TELEGRAM' ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Continuer avec Telegram' : 'Continue with Telegram')}<span>↗</span></button>}
+      </div> : accessModal.view === 'email' ? <form className="booking-access-form" onSubmit={(event) => void requestEmailAccessCode(event)}>
+        <p>{isFrench ? 'Saisis l’adresse e-mail associée à ton compte. Si un compte Ayana l’utilise, tu recevras un code de connexion.' : 'Enter the email address linked to your account. If it belongs to an Ayana account, you’ll receive a sign-in code.'}</p>
+        <label className="booking-first-name">E-mail<input type="email" autoComplete="email" autoFocus required maxLength={254} value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="adresse@exemple.com" /></label>
+        <button type="submit" className="booking-confirm" disabled={emailAccessLoading}>{emailAccessLoading ? (isFrench ? 'Envoi…' : 'Sending…') : (isFrench ? 'Recevoir un code' : 'Send me a code')}</button>
+        <button type="button" className="booking-cancel" disabled={emailAccessLoading} onClick={() => { setAccessError(''); setAccessModal({ ...accessModal, view: 'choose' }) }}>{isFrench ? 'Retour aux options' : 'Back to sign-in options'}</button>
+      </form> : <form className="booking-access-form" onSubmit={(event) => void verifyEmailAccessCode(event)}>
+        <p>{isFrench ? `Saisis le code à 6 chiffres envoyé à ${accessModal.email}.` : `Enter the 6-digit code sent to ${accessModal.email}.`}</p>
+        <label className="booking-first-name">{isFrench ? 'Code de vérification' : 'Verification code'}<input inputMode="numeric" autoComplete="one-time-code" autoFocus required minLength={6} maxLength={6} pattern="[0-9]{6}" value={accessCode} onChange={(event) => setAccessCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" /></label>
+        <button type="submit" className="booking-confirm" disabled={emailAccessLoading || accessCode.length !== 6}>{emailAccessLoading ? (isFrench ? 'Vérification…' : 'Verifying…') : (isFrench ? 'Valider et ouvrir le planning' : 'Verify and open schedule')}</button>
+        <button type="button" className="booking-cancel" disabled={emailAccessLoading} onClick={() => { setAccessError(''); setAccessCode(''); setAccessModal({ ...accessModal, view: 'email', verificationId: undefined }) }}>{isFrench ? 'Changer d’adresse e-mail' : 'Use a different email'}</button>
+      </form>}
+      {accessError && <div className="booking-error" role="alert">{accessError}</div>}
     </section></div>}
   </main>
 }

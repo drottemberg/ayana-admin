@@ -54,6 +54,7 @@ import { getClassSessionColumns } from '@/features/classes/class-session-columns
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { ClassTypeService } from '@/features/classes/class-type-service'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
+import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { classTypesQueryKeys } from '@/features/classes/query-keys'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
@@ -82,9 +83,9 @@ import { getClientContractsRequest } from '@/features/client-contracts/api'
 import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
 import { coachColumns } from '@/features/coaches/coach-columns'
 import { coachesQueryKeys } from '@/features/coaches/query-keys'
-import { deleteCoachProfileRequest, getCoachProfilesRequest } from '@/features/coaches/api'
+import { getCoachProfileRequest, getCoachProfilesRequest } from '@/features/coaches/api'
 import type { CoachProfile } from '@/features/coaches/types'
-import { Modals } from '@/providers/modal'
+import { ApiError } from '@/lib/api-client'
 import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
 import { ClientContractService } from '@/features/client-contracts/client-contract-service'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
@@ -222,11 +223,13 @@ export default function CustomerPage() {
   const [isCreatePricingOptionOpen, setIsCreatePricingOptionOpen] = useState(false)
   const [editingPricingOption, setEditingPricingOption] = useState<PricingOption | null>(null)
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
+  const [editingClassSession, setEditingClassSession] = useState<ClassSession | null>(null)
   const [isCreateClassDrawerOpen, setIsCreateClassDrawerOpen] = useState(false)
   const [isCoachDrawerOpen, setIsCoachDrawerOpen] = useState(false)
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
   const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
+  const [coachUserToCreate, setCoachUserToCreate] = useState<{ id: string; name: string } | null>(null)
   const [editingProductScope, setEditingProductScope] = useState<Product | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingCustomerSetting, setEditingCustomerSetting] = useState<{
@@ -240,6 +243,21 @@ export default function CustomerPage() {
   const canManageCustomer = CustomerService.canManage(permissions)
   const coachPermissions = session?.permissions.coaches
   const canViewCoaches = Boolean(coachPermissions?.view)
+  const openCoachProfileForUser = async (user: User) => {
+    try {
+      const profile = await getCoachProfileRequest(customerId, String(user.id))
+      setEditingCoachProfile(profile)
+      setCoachUserToCreate(null)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) {
+        toast.error(error instanceof Error ? error.message : 'Could not load the coach profile.')
+        return
+      }
+      setEditingCoachProfile(null)
+      setCoachUserToCreate({ id: String(user.id), name: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'Instructor' })
+    }
+    setIsCoachDrawerOpen(true)
+  }
   const canShowUsers = canManageCustomer
   const canEditCustomer = !permissions || permissions.edit
   const customerUsersHiddenFilters = useMemo(() => ({ organizationId: customerId }), [customerId])
@@ -357,7 +375,7 @@ export default function CustomerPage() {
       ...(canManageCustomer ? [{ key: 'location-policies', label: 'Location policies' }] : []),
       ...(canManageCustomer ? [{ key: 'customer-prompt-profile', label: 'Customer prompt profile' }] : []),
       ...(canManageCustomer ? [{ key: 'classes', label: 'Classes' }] : []),
-      ...(canViewCoaches ? [{ key: 'coaches', label: 'Instructors' }] : []),
+      ...(canViewCoaches ? [{ key: 'coaches', label: 'Coaches' }] : []),
       ...(canManageCustomer ? [{ key: 'class-sessions', label: 'Class sessions' }] : []),
       ...(canManageCustomer ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }] : []),
       { key: 'products', label: 'Products' },
@@ -470,7 +488,12 @@ export default function CustomerPage() {
                     customerId: customer.id,
                     canEditPermissions: canEditUserPermissions,
                   })}
-                  getRowCommands={(user) => UserService.getActions(user, session?.permissions.users)}
+                  getRowCommands={(user) => [
+                    ...UserService.getActions(user, session?.permissions.users),
+                    ...(coachPermissions?.edit && user.customerMemberships?.some((membership) => membership.customerId === customer.id && membership.role === 'INSTRUCTOR')
+                      ? [{ label: 'Edit coach profile', onClick: () => { void openCoachProfileForUser(user) } }]
+                      : []),
+                  ]}
                   loadingMessage="Loading users..."
                   emptyMessage="No users found."
                   refetchOnMount={false}
@@ -578,35 +601,17 @@ export default function CustomerPage() {
             {canViewCoaches ? (
               <RelatedEntityModule
                 id={`${MODULE_ANCHOR_PREFIX}-coaches`}
-                title="Instructors"
+                title="Coaches"
                 icon={EntityIcon.classes}
-                action={coachPermissions?.create ? {
-                  label: 'Add instructor',
-                  onClick: () => { setEditingCoachProfile(null); setIsCoachDrawerOpen(true) },
-                } : undefined}
                 queryKey={coachesQueryKeys.customer(customer.id)}
                 loadData={(state: DataTableState<CoachProfile>) => getCoachProfilesRequest(customer.id, state)}
                 tableKey="customers.detail.modules.coaches"
                 columns={coachColumns}
                 getRowCommands={(coach) => [
-                  ...(coachPermissions?.edit ? [{ label: 'Edit profile', onClick: () => { setEditingCoachProfile(coach); setIsCoachDrawerOpen(true) } }] : []),
-                  ...(coachPermissions?.delete ? [{
-                    label: 'Remove profile',
-                    onClick: async () => {
-                      const confirmed = await Modals.confirm({ operation: `remove the instructor profile for “${coach.coachName}”`, okButtonProps: { variant: 'destructive' } })
-                      if (!confirmed) return
-                      try {
-                        await deleteCoachProfileRequest(customer.id, coach.userId)
-                        await queryClient.invalidateQueries({ queryKey: coachesQueryKeys.customer(customer.id) })
-                        toast.success('Instructor profile removed.')
-                      } catch (error) {
-                        toast.error(error instanceof Error ? error.message : 'Could not remove the instructor profile.')
-                      }
-                    },
-                  }] : []),
+                  ...(coachPermissions?.edit ? [{ label: 'Edit profile', onClick: () => { setCoachUserToCreate(null); setEditingCoachProfile(coach); setIsCoachDrawerOpen(true) } }] : []),
                 ]}
                 loadingMessage="Loading instructors..."
-                emptyMessage="No instructor profiles found. Add a profile to qualify an INSTRUCTOR member for class types."
+                emptyMessage="No instructors found for this customer."
                 refetchOnMount="always"
               />
             ) : null}
@@ -624,6 +629,9 @@ export default function CustomerPage() {
                   loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(state, { customerId: customer.id })}
                   tableKey="customers.detail.modules.class-sessions"
                   columns={getClassSessionColumns({ showLocation: true })}
+                  getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
+                    ? [{ label: 'Edit session', onClick: () => setEditingClassSession(classSession) }]
+                    : []}
                   loadingMessage="Loading class sessions..."
                   emptyMessage="No class sessions found."
                   refetchOnMount={false}
@@ -754,6 +762,13 @@ export default function CustomerPage() {
         open={Boolean(editingClassType)}
         onOpenChange={(open) => { if (!open) setEditingClassType(null) }}
       />
+      {editingClassSession ? <ClassSessionEditDrawer
+        session={editingClassSession}
+        locationId={editingClassSession.locationId ?? editingClassSession.organizationId}
+        timeZone={editingClassSession.timezone}
+        open
+        onOpenChange={(open) => { if (!open) setEditingClassSession(null) }}
+      /> : null}
       <CreateClassTypeDrawer
         fixedCustomer={customer}
         open={isCreateClassDrawerOpen}
@@ -761,11 +776,14 @@ export default function CustomerPage() {
       />
       <CoachProfileDrawer
         customerId={customer.id}
+        customerName={customer.name}
         profile={editingCoachProfile}
+        initialUserId={coachUserToCreate?.id}
+        initialUserName={coachUserToCreate?.name}
         open={isCoachDrawerOpen}
         onOpenChange={(open) => {
           setIsCoachDrawerOpen(open)
-          if (!open) setEditingCoachProfile(null)
+          if (!open) { setEditingCoachProfile(null); setCoachUserToCreate(null) }
         }}
       />
       <AccessDeviceDrawer

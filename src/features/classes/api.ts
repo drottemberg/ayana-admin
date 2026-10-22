@@ -98,9 +98,11 @@ export type UpdateClassSessionPayload = {
 
 export type LocationCoach = { userId: string; coachName: string }
 
-export async function getLocationCoachesRequest(locationId: string, classTypeId?: string): Promise<LocationCoach[]> {
-  const query = classTypeId ? `?classTypeId=${encodeURIComponent(classTypeId)}` : ''
-  return apiClient.get<LocationCoach[]>(`/coaches${query}`, { headers: { 'x-org-id': locationId } })
+export async function getLocationCoachesRequest(locationId: string): Promise<LocationCoach[]> {
+  const coaches = await apiClient.get<Array<{ userId: string; label: string }>>('/coaches/options', {
+    headers: { 'x-org-id': locationId },
+  })
+  return coaches.map((coach) => ({ userId: coach.userId, coachName: coach.label }))
 }
 
 export async function updateClassSessionRequest(id: string, locationId: string, payload: UpdateClassSessionPayload) {

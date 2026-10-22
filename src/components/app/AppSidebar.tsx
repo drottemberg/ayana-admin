@@ -29,8 +29,6 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import { canUseFeature } from '@/features/app/features'
 import { useConnect } from '@/features/app/use-connect'
 import { Feature } from '@/types/feature'
-import { getAppMode } from '@/features/app/app-mode'
-import { StaffRole } from '@/types/membership'
 
 const Icon = ({ icon }: { icon: IconSvgElement }) => {
   return <HugeiconsIcon icon={icon} strokeWidth={2} />
@@ -55,37 +53,37 @@ const data = {
       title: 'Pricing options',
       url: '/pricing-options',
       icon: <Icon icon={EntityIcon.pricingOptions} />,
-      feature: Feature.CUSTOMERS,
+      feature: Feature.PRICING_OPTIONS,
     },
     {
       title: 'Classes',
       url: '/classes',
       icon: <Icon icon={EntityIcon.classes} />,
-      feature: Feature.CUSTOMERS,
+      feature: Feature.CLASSES,
     },
     {
       title: 'Class sessions',
       url: '/class-sessions',
       icon: <Icon icon={EntityIcon.classes} />,
-      feature: Feature.CUSTOMERS,
+      feature: Feature.CLASS_SESSIONS,
     },
     {
       title: 'Bookings',
       url: '/bookings',
       icon: <Icon icon={EntityIcon.classes} />,
-      feature: Feature.ORDERS,
+      feature: Feature.BOOKINGS,
     },
     {
       title: 'Client contracts',
       url: '/client-contracts',
       icon: <Icon icon={EntityIcon.clientContracts} />,
-      feature: Feature.CUSTOMERS,
+      feature: Feature.CLIENT_CONTRACTS,
     },
     {
       title: 'Credit transactions',
       url: '/credit-transactions',
       icon: <Icon icon={EntityIcon.clientContracts} />,
-      feature: Feature.CUSTOMERS,
+      feature: Feature.CREDIT_TRANSACTIONS,
     },
     {
       title: 'Orders',
@@ -97,7 +95,7 @@ const data = {
       title: 'Messages',
       url: '/messages',
       icon: <Icon icon={EntityIcon.users} />,
-      feature: Feature.CUSTOMERS,
+      feature: Feature.MESSAGES,
     },
     {
       title: 'Products',
@@ -139,6 +137,12 @@ const data = {
       feature: Feature.USERS,
     },
     {
+      title: 'Invites',
+      url: '/invites',
+      icon: <Icon icon={EntityIcon.users} />,
+      feature: Feature.INVITATIONS,
+    },
+    {
       title: 'Device Types',
       url: '/device-type-groups',
       activeUrls: ['/device-types'],
@@ -149,6 +153,7 @@ const data = {
       title: 'LLM Config',
       url: '/llm-configs',
       icon: <Icon icon={EntityIcon.issues} />,
+      feature: Feature.LLM_CONFIG,
     },
   ],
 }
@@ -191,19 +196,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const isCollapsed = state === 'collapsed'
   const { pathname } = useLocation()
   const { session } = useConnect()
-  const isAdminContext = getAppMode() === 'admin'
-  const staffRole = session?.user.staffRole
-  const canManageLlmConfig = isAdminContext && session?.user.isStaff &&
-    (staffRole === StaffRole.ADMIN || staffRole === StaffRole.SUPER_ADMIN)
   const hasFeature = React.useCallback((feature: Feature) => Boolean(session?.hasFeature(feature)), [session])
   const manageItems = React.useMemo(() => data.manage.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
-  const settingsItems = React.useMemo(
-    () => data.settings
-      .filter((item) => item.title !== 'LLM Config' || canManageLlmConfig)
-      .filter((item) => canUseFeature(item, hasFeature)),
-    [canManageLlmConfig, hasFeature],
-  )
+  const settingsItems = React.useMemo(() => data.settings.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>

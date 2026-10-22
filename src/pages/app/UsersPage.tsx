@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { DataTableAsync } from '@/components/data-table'
 import type { DataTableState } from '@/components/data-table'
@@ -14,6 +15,10 @@ import { UserService } from '@/features/users/user-service'
 import { Drawer, DrawerId } from '@/providers/drawer'
 import type { User } from '@/types/user'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
+import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
+import { getCoachProfileRequest } from '@/features/coaches/api'
+import type { CoachProfile } from '@/features/coaches/types'
+import { ApiError } from '@/lib/api-client'
 
 export default function UsersPage() {
   const [searchParams] = useSearchParams()
@@ -56,6 +61,31 @@ export function UsersTable({
   const portal = getPortalSafe()
   const isCustomerContext = getAppMode() === 'customer'
   const currentOrganizationId = session?.currentOrganization?.id ?? undefined
+  const [coachEditor, setCoachEditor] = useState<{
+    customerId: string
+    customerName: string
+    profile: CoachProfile | null
+    userId: string
+    userName: string
+  } | null>(null)
+  const openCoachEditor = async (user: User, customerId: string, customerName: string) => {
+    let profile: CoachProfile | null = null
+    try {
+      profile = await getCoachProfileRequest(customerId, String(user.id))
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) {
+        toast.error(error instanceof Error ? error.message : 'Could not load the coach profile.')
+        return
+      }
+    }
+    setCoachEditor({
+      customerId,
+      customerName,
+      profile,
+      userId: String(user.id),
+      userName: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'Instructor',
+    })
+  }
   const loadUsers = (tableState: DataTableState<User>) => getUsersRequest(tableState, hiddenFilters)
   const tableColumns = getUserListColumns({
     usage: 'users',
@@ -64,7 +94,7 @@ export function UsersTable({
     canEditPermissions: permissions?.edit,
   })
 
-  return (
+  return <>
     <DataTableAsync
       queryKey={[...usersQueryKeys.all, 'table', hiddenFilters]}
       loadData={loadUsers}
@@ -104,10 +134,29 @@ export function UsersTable({
         },
       ]}
       getCommands={(selectedUsers) => UserService.getTableActions(selectedUsers, permissions)}
-      getRowCommands={(user) => UserService.getActions(user, permissions)}
+      getRowCommands={(user) => [
+        ...UserService.getActions(user, permissions),
+        ...(session?.permissions.coaches?.edit
+          ? (user.customerMemberships ?? [])
+            .filter((membership) => membership.role === 'INSTRUCTOR' && (!isCustomerContext || membership.customerId === currentOrganizationId))
+            .map((membership) => ({
+              label: `Edit coach profile${isCustomerContext ? '' : ` · ${membership.customerName || 'Customer'}`}`,
+              onClick: () => { void openCoachEditor(user, membership.customerId, membership.customerName || 'Customer') },
+            }))
+          : []),
+      ]}
       loadingMessage="Loading users..."
       emptyMessage="No users found."
       errorMessage="Failed to load users."
     />
-  )
+    {coachEditor ? <CoachProfileDrawer
+      customerId={coachEditor.customerId}
+      customerName={coachEditor.customerName}
+      profile={coachEditor.profile}
+      initialUserId={coachEditor.profile ? undefined : coachEditor.userId}
+      initialUserName={coachEditor.userName}
+      open
+      onOpenChange={(open) => { if (!open) setCoachEditor(null) }}
+    /> : null}
+  </>
 }

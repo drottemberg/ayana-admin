@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { getCustomersListRequest } from '@/features/customers/api'
 import { getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, getClassCategoryOptions, getClassSessionsRequest, getClassTypeLocationOptions, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
+import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
@@ -16,6 +17,7 @@ import { Modals } from '@/providers/modal'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ClassSession } from '@/types/class-type'
+import { getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
 
 function getDateRangeFilters(dateRange?: DateRangeValue) {
   if (!dateRange?.from) return {}
@@ -60,6 +62,9 @@ export default function ClassSessionsPage() {
   const currentCustomerId = session?.currentOrganization?.id
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
   const canResumeSessions = Boolean(session?.permissions.classSessions?.edit)
+  const isInstructor = session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
+  const currentUserId = String(session?.user.id ?? '')
+  const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
   const searchParamsString = searchParams.toString()
 
   useEffect(() => {
@@ -85,9 +90,11 @@ export default function ClassSessionsPage() {
 
   const filterCustomerId = searchParams.get('filterCustomerId')
   const filterLocationId = searchParams.get('filterLocationId')
+  const filterCoachId = searchParams.get('filterCoachId')
   const initialFilters = {
     ...(isAdminContext && filterCustomerId ? { customerId: [filterCustomerId] } : {}),
     ...(filterLocationId ? { locationId: [filterLocationId] } : {}),
+    ...(filterCoachId ? { coachId: [filterCoachId] } : {}),
   }
   const columns = useMemo(
     () => getClassSessionColumns({ showCustomer: isAdminContext, showLocation: true }),
@@ -126,6 +133,10 @@ export default function ClassSessionsPage() {
               label: 'View session',
               onClick: () => navigate(`/class-sessions/${item.id}?locationId=${encodeURIComponent(item.locationId ?? item.organizationId)}`),
             },
+            ...(canResumeSessions && item.status === 'SCHEDULED' ? [{
+              label: 'Edit session',
+              onClick: () => setEditingSession(item),
+            }] : []),
             ...(canCancelSessions && (item.status === 'SCHEDULED' || item.status === 'PAUSED') ? [{
               label: 'Cancel session',
               variant: 'destructive' as const,
@@ -158,6 +169,23 @@ export default function ClassSessionsPage() {
                   toast.success('Session resumed. It will stay active through its schedule pause window.')
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : 'Could not resume the session.')
+                }
+              },
+            }] : []),
+            ...(isInstructor && item.coachId === currentUserId && item.status === 'SCHEDULED' && new Date(item.startTime).getTime() >= Date.now() ? [{
+              label: 'Request cover',
+              onClick: async () => {
+                const confirmed = await Modals.confirm({ operation: 'request cover for this session' })
+                if (!confirmed) return
+                try {
+                  await releaseCoachSessionRequest(item.id)
+                  await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+                    queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+                  ])
+                  toast.success('Other qualified coaches have been notified to claim this session.')
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Could not request a cover.')
                 }
               },
             }] : []),
@@ -211,6 +239,14 @@ export default function ClassSessionsPage() {
               queryFn: getClassTypeLocationOptions,
               getValue: (item: ClassSession) => item.locationId,
             },
+            ...(session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
+              ? []
+              : [{
+                  id: 'coachId', label: 'Coach', column: 'coachId' as const,
+                  selectionMode: 'single' as const,
+                  queryFn: getCoachFilterOptionsRequest,
+                  getValue: (item: ClassSession) => item.coachId,
+                }]),
             {
               id: 'category', label: 'Category', column: 'classCategory' as const,
               selectionMode: 'single' as const,
@@ -233,6 +269,13 @@ export default function ClassSessionsPage() {
           errorMessage="Failed to load class sessions."
         />
       </section>
+      {editingSession ? <ClassSessionEditDrawer
+        session={editingSession}
+        locationId={editingSession.locationId ?? editingSession.organizationId}
+        timeZone={editingSession.timezone}
+        open
+        onOpenChange={(open) => { if (!open) setEditingSession(null) }}
+      /> : null}
     </>
   )
 }

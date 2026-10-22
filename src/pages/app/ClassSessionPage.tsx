@@ -21,6 +21,7 @@ import { useConnect } from '@/features/app/use-connect'
 import { Modals } from '@/providers/modal'
 import type { ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
+import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
 
 function formatDate(value?: string | null, timeZone?: string | null) {
   return value ? formatClassSessionTime(value, timeZone) : NO_VALUE_STR
@@ -30,6 +31,7 @@ export default function ClassSessionPage() {
   const { sessionId = '' } = useParams()
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddBookingOpen, setIsAddBookingOpen] = useState(false)
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false)
   const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
@@ -42,6 +44,12 @@ export default function ClassSessionPage() {
   })
   const classSession = data as ClassSession | undefined
   const resolvedLocationId = classSession?.organizationId ?? locationId
+  const instructorMembership = classSession?.customerId
+    ? appSession?.user.customerMemberships.find((membership) => membership.customerId === classSession.customerId)
+    : undefined
+  const isAssignedInstructor = instructorMembership?.role === 'INSTRUCTOR'
+    && classSession?.coachId === appSession?.user.id
+  const canTakeAttendance = Boolean(isAssignedInstructor && classSession && ['SCHEDULED', 'COMPLETED'].includes(classSession.status))
 
   const invalidateBookingViews = async () => Promise.all([
     queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
@@ -92,6 +100,7 @@ export default function ClassSessionPage() {
     icon: EntityIcon.classes,
     fields: [
       { label: 'Status', value: classSession ? <Badge variant="outline">{classSession.status}</Badge> : NO_VALUE_STR },
+      { label: 'Customer', value: classSession?.customerId ? <Link to={`/customers/${classSession.customerId}`} className="underline-offset-2 hover:underline">{classSession.customerName || 'Customer'}</Link> : NO_VALUE_STR },
       { label: 'ID', value: classSession?.id ?? sessionId },
       { label: 'Class', value: classSession?.classTypeId ? <Link to={`/classes/${classSession.classTypeId}?locationId=${encodeURIComponent(resolvedLocationId)}`} className="underline-offset-2 hover:underline">{classSession.className || classSession.classTypeId}</Link> : NO_VALUE_STR },
       { label: 'Category', value: classSession?.classCategory || NO_VALUE_STR },
@@ -99,9 +108,9 @@ export default function ClassSessionPage() {
       { label: 'Starts', value: formatDate(classSession?.startTime, classSession?.timezone) },
       { label: 'Ends', value: formatDate(classSession?.endTime, classSession?.timezone) },
       { label: 'Capacity', value: classSession ? `${classSession.bookedCount} / ${classSession.capacity}` : NO_VALUE_STR },
-      { label: 'Coach', value: classSession?.coachName || classSession?.coachId || NO_VALUE_STR },
+      { label: 'Coach', value: classSession?.coachName || (classSession?.coachId ? 'Instructor' : NO_VALUE_STR) },
       { label: 'Schedule', value: classSession?.scheduleId ?? NO_VALUE_STR },
-      { label: 'Location', value: resolvedLocationId ? <Link to={`/locations/${resolvedLocationId}`} className="underline-offset-2 hover:underline">{classSession?.locationName || resolvedLocationId}</Link> : NO_VALUE_STR },
+      { label: 'Location', value: resolvedLocationId ? <Link to={`/locations/${resolvedLocationId}`} className="underline-offset-2 hover:underline">{classSession?.locationName || 'Location'}</Link> : NO_VALUE_STR },
     ],
   }]
 
@@ -132,6 +141,8 @@ export default function ClassSessionPage() {
       icon={EntityIcon.users}
       action={classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
         ? { label: 'Resume session', onClick: resumeSession }
+        : canTakeAttendance
+          ? { label: 'Take attendance', onClick: () => setIsAttendanceOpen(true) }
         : classSession?.status === 'SCHEDULED' && appSession?.permissions.bookings?.create
           ? { label: 'Add booking', onClick: () => setIsAddBookingOpen(true) }
           : undefined}
@@ -182,5 +193,10 @@ export default function ClassSessionPage() {
       onOpenChange={setIsAddBookingOpen}
       initialSession={classSession ?? null}
     />
+    {canTakeAttendance && classSession ? <CoachAttendanceDrawer
+      session={classSession}
+      open={isAttendanceOpen}
+      onOpenChange={setIsAttendanceOpen}
+    /> : null}
   </DetailPageLayout>
 }

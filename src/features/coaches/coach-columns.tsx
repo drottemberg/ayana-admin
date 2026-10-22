@@ -7,10 +7,9 @@ import type { CoachProfile } from './types'
 export const coachColumns: ColumnDef<CoachProfile>[] = [
   {
     accessorKey: 'coachName',
-    header: 'Instructor',
-    cell: ({ row }) => <Link className="font-medium underline-offset-2 hover:underline" to={`/users/${row.original.userId}`}>{row.original.coachName || row.original.userId}</Link>,
+    header: 'Coach',
+    cell: ({ row }) => <Link className="font-medium underline-offset-2 hover:underline" to={`/coaches/${row.original.customerId}/${row.original.userId}`}>{row.original.coachName || row.original.email || 'Instructor'}</Link>,
   },
-  { accessorKey: 'userId', header: 'User ID', cell: ({ row }) => <Link className="font-mono text-xs underline-offset-2 hover:underline" to={`/users/${row.original.userId}`}>{row.original.userId}</Link> },
   { accessorKey: 'email', header: 'Email', cell: ({ row }) => row.original.email || NO_VALUE_STR },
   {
     accessorKey: 'locationScope',
@@ -28,5 +27,5 @@ export const coachColumns: ColumnDef<CoachProfile>[] = [
       ? row.original.classTypes.map((classType) => classType.name).join(', ')
       : NO_VALUE_STR,
   },
-  { accessorKey: 'specialties', header: 'Specialties', cell: ({ row }) => row.original.specialties.join(', ') || NO_VALUE_STR },
+  { accessorKey: 'languages', header: 'Languages taught', cell: ({ row }) => row.original.languages.join(', ') || NO_VALUE_STR },
 ]

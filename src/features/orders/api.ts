@@ -43,6 +43,7 @@ export type KitchenOrder = {
   total?: number | null
   paymentStatus?: string | null
   paymentMethod?: string | null
+  userId?: string | null
   lastReminderAt?: string | null
   issues?: Array<{ id: string; category: string; status: string; description: string; resolution?: string | null; resolutionNote?: string | null }>
   items: Array<{
@@ -111,6 +112,7 @@ export type KitchenIssueCategory = 'MISSING_INGREDIENT' | 'OUT_OF_STOCK' | 'DELA
 export type KitchenIssueResolution = 'ASK_CUSTOMER' | 'REMOVE_ITEM_REFUND' | 'CANCEL_ORDER_REFUND' | 'CONTINUE_REMAINDER' | 'OTHER'
 
 export type KitchenOrdersResult = {
+  acceptsProductOrders: boolean
   activeOrders: KitchenOrder[]
   awaitingPaymentOrders: KitchenOrder[]
   recentOrders: KitchenOrder[]
@@ -124,6 +126,12 @@ export function getKitchenLocationsRequest(customerId?: string) {
 
 export function getKitchenOrdersRequest(locationId: string) {
   return apiClient.get<KitchenOrdersResult>('/orders/kitchen', { params: { locationId } })
+}
+
+export function setKitchenProductOrderAvailabilityRequest(locationId: string, acceptsProductOrders: boolean) {
+  return apiClient.patch<{ locationId: string; acceptsProductOrders: boolean }>(
+    '/orders/kitchen/product-order-availability', { locationId, acceptsProductOrders },
+  )
 }
 
 export function setKitchenOrderStatusRequest(orderId: string, locationId: string, status: OrderStatus, comment?: string) {

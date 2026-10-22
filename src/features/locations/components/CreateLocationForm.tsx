@@ -20,8 +20,11 @@ import {
   fetchLocationCustomerOptions,
   updateLocationRequest,
   type CreateLocationPayload,
+  type UpdateLocationPayload,
 } from '@/features/locations/api'
 import { locationsQueryKeys } from '@/features/locations/query-keys'
+import { getLocationCoachesRequest } from '@/features/classes/api'
+import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import { validatePhone } from '@/lib/phone'
 import type { Customer } from '@/types/customer'
 import type { Location } from '@/types/location'
@@ -51,6 +54,7 @@ const locationFormSchema = z.object({
   countryId: z.string().trim().min(1, 'Country is required.'),
   description: z.string().optional(),
   googleReviewUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || z.string().url().safeParse(value).success, 'Enter a valid Google review URL.'),
+  defaultCoachId: z.string().optional(),
   contactName: z.string().optional(),
   contactPhone: optionalPhone,
   contactEmail: z
@@ -106,6 +110,11 @@ export function CreateLocationForm({
     queryFn: () => getCustomerRequest(initialCustomerId!),
     enabled: Boolean(initialCustomerId),
   })
+  const locationCoaches = useQuery({
+    queryKey: ['coaches', 'location', location?.id, 'location-default'],
+    queryFn: () => getLocationCoachesRequest(location!.id),
+    enabled: Boolean(isEditMode && location?.id),
+  })
   const createMutation = useMutation({
     mutationFn: createLocationRequest,
     onSuccess: async (_saved, payload) => {
@@ -118,7 +127,7 @@ export function CreateLocationForm({
     },
   })
   const updateMutation = useMutation({
-    mutationFn: (payload: CreateLocationPayload) => {
+    mutationFn: (payload: UpdateLocationPayload) => {
       if (!location) throw new Error('Location is required.')
 
       return updateLocationRequest(location.id, payload)
@@ -127,6 +136,8 @@ export function CreateLocationForm({
       const parentId = location?.parentId
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: locationsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: classTypesQueryKeys.location(location?.id ?? '') }),
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
         location
           ? queryClient.invalidateQueries({ queryKey: locationsQueryKeys.detail(location.id) })
           : Promise.resolve(),
@@ -162,6 +173,7 @@ export function CreateLocationForm({
       countryId: location?.address?.countryId ?? '',
       description: location?.description ?? '',
       googleReviewUrl: location?.googleReviewUrl ?? '',
+      defaultCoachId: location?.defaultCoachId ?? '',
       contactName: location?.contactName ?? '',
       contactPhone: location?.contactPhone ?? '',
       contactEmail: location?.contactEmail ?? '',
@@ -233,7 +245,7 @@ export function CreateLocationForm({
     }
 
     if (isEditMode) {
-      await updateMutation.mutateAsync(payload)
+      await updateMutation.mutateAsync({ ...payload, defaultCoachId: values.defaultCoachId || null })
       return
     }
 
@@ -422,6 +434,30 @@ export function CreateLocationForm({
             />
             <p className="mt-1 text-xs text-muted-foreground">Used to invite customers to review this location after a completed visit or pickup.</p>
           </div>
+          {isEditMode ? (
+            <Controller
+              control={control}
+              name="defaultCoachId"
+              render={({ field }) => (
+                <div className="grid gap-1.5 text-sm font-medium">
+                  <span>Default coach for new schedules</span>
+                  <SelectInput
+                    aria-label="Default coach for new schedules"
+                    items={[
+                      { value: '', label: 'No default coach' },
+                      ...(locationCoaches.data ?? []).map((coach) => ({ value: coach.userId, label: coach.coachName })),
+                    ]}
+                    value={field.value ?? ''}
+                    onValueChange={(value) => field.onChange(String(value ?? ''))}
+                    isLoading={locationCoaches.isLoading}
+                    loadingMessage="Loading instructors..."
+                    emptyMessage={locationCoaches.isError ? 'Could not load instructors.' : 'No instructors assigned to this location.'}
+                  />
+                  <span className="text-xs font-normal text-muted-foreground">Only instructors assigned to this location are listed. New schedules use this coach, and future sessions still using the previous location default are updated when you change it.</span>
+                </div>
+              )}
+            />
+          ) : null}
         </FieldGroup>
       </div>
 

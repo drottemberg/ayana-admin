@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { createClassScheduleRequest, getLocationCoachesRequest } from '@/features/classes/api'
+import { getLocationRequest } from '@/features/locations/api'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import type { ClassType } from '@/types/class-type'
 
@@ -41,11 +42,23 @@ export function ClassScheduleCreateDrawer({
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const locationId = classType?.locationId || classType?.organizationId || ''
-  const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
-    queryKey: ['coaches', 'location', locationId, classType?.id],
-    queryFn: () => getLocationCoachesRequest(locationId, classType?.id),
+  const { data: location } = useQuery({
+    queryKey: ['locations', 'detail', locationId],
+    queryFn: () => getLocationRequest(locationId),
     enabled: Boolean(open && locationId),
   })
+  const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
+    queryKey: ['coaches', 'location', locationId, classType?.id],
+    queryFn: () => getLocationCoachesRequest(locationId),
+    enabled: Boolean(open && locationId),
+  })
+
+  useEffect(() => {
+    if (!open) return
+    setCoachId(location?.defaultCoachId ?? '')
+    setCoachValidFrom('')
+    setCoachValidUntil('')
+  }, [open, locationId, classType?.id, location?.defaultCoachId])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -103,7 +116,7 @@ export function ClassScheduleCreateDrawer({
             isLoading={isLoadingCoaches}
             loadingMessage="Loading coaches..."
             placeholder="Select a coach"
-            emptyMessage="No qualified instructors assigned to this location."
+            emptyMessage="No instructors assigned to this location."
           />
         </Field>
         {coachId ? <>

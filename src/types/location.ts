@@ -5,4 +5,5 @@ export type Location = Omit<Organization, 'type'> & {
   status?: OrganizationStatus
   parentId?: string
   customerName?: string
+  defaultCoachId?: string | null
 }

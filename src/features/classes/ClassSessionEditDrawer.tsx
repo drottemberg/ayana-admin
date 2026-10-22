@@ -36,7 +36,7 @@ export function ClassSessionEditDrawer({
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, session?.classTypeId],
-    queryFn: () => getLocationCoachesRequest(locationId, session?.classTypeId),
+    queryFn: () => getLocationCoachesRequest(locationId),
     enabled: Boolean(open && locationId),
   })
 

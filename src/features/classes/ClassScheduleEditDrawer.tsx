@@ -50,7 +50,7 @@ export function ClassScheduleEditDrawer({
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, classType?.id],
-    queryFn: () => getLocationCoachesRequest(locationId, classType?.id),
+    queryFn: () => getLocationCoachesRequest(locationId),
     enabled: Boolean(open && locationId),
   })
 

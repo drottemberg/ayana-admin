@@ -7,7 +7,7 @@ import { io, type Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { getCustomerRequest, getCustomersListRequest } from '@/features/customers/api'
 import { customersQueryKeys } from '@/features/customers/query-keys'
-import { getKitchenLocationsRequest, getKitchenOrdersRequest, getKitchenOrderDetailsRequest, reportKitchenOrderIssueRequest, resolveKitchenOrderIssueRequest, sendKitchenPickupReminderRequest, setKitchenOrderStatusRequest, startTerminalPaymentRequest, cancelKitchenTerminalPaymentRequest, cancelAwaitingKitchenOrderRequest, type KitchenIssueCategory, type KitchenIssueResolution, type KitchenOrder } from '@/features/orders/api'
+import { getKitchenLocationsRequest, getKitchenOrdersRequest, getKitchenOrderDetailsRequest, reportKitchenOrderIssueRequest, resolveKitchenOrderIssueRequest, sendKitchenPickupReminderRequest, setKitchenOrderStatusRequest, startTerminalPaymentRequest, cancelKitchenTerminalPaymentRequest, cancelAwaitingKitchenOrderRequest, setKitchenProductOrderAvailabilityRequest, type KitchenIssueCategory, type KitchenIssueResolution, type KitchenOrder } from '@/features/orders/api'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { OrderStatus } from '@/types/order'
 import type { Customer } from '@/types/customer'
@@ -151,6 +151,9 @@ function KitchenCard({
   })
   const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.35 : 1 }
   const isDelivery = order.deliveryType === 'DELIVERY'
+  const customerLabel = order.customerFirstName || order.customerLastName
+    ? `${order.customerFirstName ?? ''} ${order.customerLastName ?? ''}`.trim()
+    : (language === 'fr' ? 'Client invité' : 'Guest customer')
 
   return (
     <article ref={setNodeRef} style={style} className={`kitchen-card kitchen-card-${order.status.toLowerCase()}${isAwaitingPayment ? ' kitchen-card-awaiting-payment' : ''}`}>
@@ -165,12 +168,13 @@ function KitchenCard({
         <time className="kitchen-order-time">{formatTime(order.createdAt, language === 'fr' ? 'fr-FR' : 'en-GB')}</time>
       </div>
 
-      <button type="button" className="kitchen-card-customer" onClick={onOpen}>
-        {order.customerFirstName || order.customerLastName
-          ? `${order.customerFirstName ?? ''} ${order.customerLastName ?? ''}`.trim()
-          : (language === 'fr' ? 'Client invité' : 'Guest customer')}
-        <span>{language === 'fr' ? 'Voir le détail' : 'View details'} ↗</span>
-      </button>
+      {order.userId
+        ? <Link className="kitchen-card-customer" to={`/users/${order.userId}`}>
+            {customerLabel}<span>{language === 'fr' ? 'Profil client' : 'Customer profile'} ↗</span>
+          </Link>
+        : <button type="button" className="kitchen-card-customer" onClick={onOpen}>
+            {customerLabel}<span>{language === 'fr' ? 'Voir le détail' : 'View details'} ↗</span>
+          </button>}
 
       {isAwaitingPayment && (
         <div className="kitchen-payment-awaiting">
@@ -457,6 +461,8 @@ export default function KitchenBoardPage() {
   const allOrders = kitchenQuery.data?.activeOrders ?? []
   const awaitingPaymentOrders = kitchenQuery.data?.awaitingPaymentOrders ?? []
   const recentOrders = kitchenQuery.data?.recentOrders ?? []
+  const acceptsProductOrders = kitchenQuery.data?.acceptsProductOrders !== false
+  const canManageProductOrders = session?.permissions.orders?.edit === true
   const selectedKitchenOrder = [...awaitingPaymentOrders, ...allOrders].find((order) => order.id === selectedOrderId)
   const lastReminderAt = selectedKitchenOrder?.lastReminderAt ? new Date(selectedKitchenOrder.lastReminderAt) : null
   const reminderCooldownActive = Boolean(lastReminderAt && Date.now() - lastReminderAt.getTime() < 15 * 60_000)
@@ -597,6 +603,16 @@ export default function KitchenBoardPage() {
       toast.error(error instanceof Error ? error.message : tr('Impossible d’annuler la commande.', 'Could not cancel the order.'))
       void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
     },
+  })
+  const productOrderAvailabilityMutation = useMutation({
+    mutationFn: (acceptsProductOrders: boolean) => setKitchenProductOrderAvailabilityRequest(locationId, acceptsProductOrders),
+    onSuccess: ({ acceptsProductOrders }) => {
+      toast.success(acceptsProductOrders
+        ? tr('Les commandes à emporter sont ouvertes.', 'Pickup product orders are open.')
+        : tr('Les commandes à emporter sont suspendues.', 'Pickup product orders are paused.'))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : tr('Impossible de modifier les commandes.', 'Could not update product ordering.')),
   })
   const reminderMutation = useMutation({
     mutationFn: (orderId: string) => sendKitchenPickupReminderRequest(orderId, locationId),
@@ -839,6 +855,18 @@ export default function KitchenBoardPage() {
               {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </label>
+          {canManageProductOrders && locationId && <button
+            type="button"
+            className={`kitchen-ordering-toggle ${acceptsProductOrders ? 'is-open' : 'is-paused'}`}
+            disabled={!kitchenQuery.data || productOrderAvailabilityMutation.isPending}
+            onClick={() => productOrderAvailabilityMutation.mutate(!acceptsProductOrders)}
+            aria-pressed={acceptsProductOrders}
+          >
+            <span>{acceptsProductOrders ? tr('Commandes ouvertes', 'Orders open') : tr('Commandes suspendues', 'Orders paused')}</span>
+            <strong>{productOrderAvailabilityMutation.isPending
+              ? tr('Mise à jour…', 'Updating…')
+              : acceptsProductOrders ? tr('Suspendre', 'Pause orders') : tr('Reprendre', 'Resume orders')}</strong>
+          </button>}
         </div>
 
         <div className="kitchen-header-tools">
@@ -950,7 +978,9 @@ export default function KitchenBoardPage() {
                 <section className="kitchen-detail-summary">
                   <div>
                     <span>{tr('Client', 'Customer')}</span>
-                    <strong>{`${orderDetails.order.customer?.firstName ?? ''} ${orderDetails.order.customer?.lastName ?? ''}`.trim() || tr('Client invité', 'Guest customer')}</strong>
+                    {orderDetails.order.customer?.id
+                      ? <Link className="kitchen-detail-customer-link" to={`/users/${orderDetails.order.customer.id}`}>{`${orderDetails.order.customer.firstName ?? ''} ${orderDetails.order.customer.lastName ?? ''}`.trim() || orderDetails.order.customer.email || tr('Profil client', 'Customer profile')} ↗</Link>
+                      : <strong>{tr('Client invité', 'Guest customer')}</strong>}
                     {orderDetails.order.customer?.email && <small>{tr('E-mail', 'Email')}: {orderDetails.order.customer.email}</small>}
                     {orderDetails.order.customer?.phone && <small>{tr('Téléphone', 'Phone')}: {orderDetails.order.customer.phone}</small>}
                   </div>

@@ -30,7 +30,9 @@ const IssuesPage = lazy(() => import('@/pages/app/IssuesPage'))
 const AiSupportIssuesPage = lazy(() => import('@/pages/app/AiSupportIssuesPage'))
 const CustomersPage = lazy(() => import('@/pages/app/CustomersPage'))
 const CustomerPage = lazy(() => import('@/pages/app/CustomerPage'))
+const CoachPage = lazy(() => import('@/pages/app/CoachPage'))
 const UsersPage = lazy(() => import('@/pages/app/UsersPage'))
+const InvitesPage = lazy(() => import('@/pages/app/InvitesPage'))
 const PricingOptionsPage = lazy(() => import('@/pages/app/PricingOptionsPage'))
 const ClassesPage = lazy(() => import('@/pages/app/ClassesPage'))
 const ClassTypePage = lazy(() => import('@/pages/app/ClassTypePage'))
@@ -95,7 +97,9 @@ export const router = createBrowserRouter([
           { path: 'data', element: <DataReportsPage /> },
           { path: 'customers', element: <CustomersPage /> },
           { path: 'customers/:customerId', element: <CustomerPage /> },
+          { path: 'coaches/:customerId/:userId', element: <CoachPage /> },
           { path: 'users', element: <UsersPage /> },
+          { path: 'invites', element: <InvitesPage /> },
           { path: 'pricing-options', element: <PricingOptionsPage /> },
           { path: 'classes', element: <ClassesPage /> },
           { path: 'classes/:classTypeId', element: <ClassTypePage /> },

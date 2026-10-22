@@ -228,6 +228,32 @@
   background: #191915;
 }
 
+.kitchen-ordering-toggle {
+  display: inline-flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #b9c9a2;
+  border-radius: 11px;
+  padding: 0 12px;
+  color: #243124;
+  background: #e9f0df;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kitchen-ordering-toggle.is-paused {
+  border-color: #e5b7a9;
+  color: #692914;
+  background: #fae7df;
+}
+
+.kitchen-ordering-toggle:disabled { cursor: wait; opacity: 0.65; }
+.kitchen-ordering-toggle strong { white-space: nowrap; }
+.kitchen-detail-customer-link { color: #a6381c; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
 .kitchen-header-tools {
   justify-content: flex-end;
   gap: clamp(14px, 2vw, 30px);
@@ -607,8 +633,11 @@
   font: inherit;
   font-size: 13px;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
+
+.kitchen-card-customer:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .kitchen-card-customer span {
   color: rgba(189, 207, 174, 0.67);
