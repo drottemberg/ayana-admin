@@ -275,6 +275,21 @@
   cursor: pointer;
 }
 
+.kitchen-lights-reset {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(230, 220, 206, 0.22);
+  border-radius: 10px;
+  color: #e9e1d6;
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kitchen-lights-reset:hover { border-color: #d8a078; background: rgba(255, 255, 255, 0.1); }
+.kitchen-lights-reset:disabled { cursor: wait; opacity: 0.65; }
+
 .kitchen-sound-toggle:hover,
 .kitchen-fullscreen-toggle:hover,
 .kitchen-admin-back:hover,
@@ -1432,6 +1447,63 @@
   color: rgba(234, 224, 208, 0.48);
   font-size: 12px;
 }
+
+/* Keep the header controls on separate rows before they run out of space. */
+@media (max-width: 1500px) {
+  .kitchen-header {
+    flex-wrap: wrap;
+    gap: 10px 18px;
+  }
+
+  .kitchen-header-brand {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .kitchen-header-tools {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .kitchen-location-picker { flex: 0 1 230px; }
+  .kitchen-location-select { width: 100%; max-width: none; min-width: 0; }
+}
+
+.kitchen-card-drag { cursor: default; touch-action: auto; }
+.kitchen-drag-grip { cursor: grab; touch-action: none; }
+.kitchen-order-open { position: relative; z-index: 1; touch-action: manipulation; }
+.kitchen-detail-manage-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #e1ccb3;
+  border-radius: 11px;
+  color: #7f2b17;
+  background: #fffaf1;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.kitchen-detail-manage-order:hover { border-color: #a6381c; background: #fbefe5; }
+.kitchen-detail-manage-order span { font-size: 17px; }
+.kitchen-card-manage-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 2px;
+  color: #8b7e70;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kitchen-card-manage-order:hover { color: #a6381c; }
 
 @media (max-width: 600px) {
   .kitchen-detail-panel { width: 100vw; }

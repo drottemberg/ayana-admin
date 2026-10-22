@@ -136,6 +136,12 @@ export function setKitchenProductOrderAvailabilityRequest(locationId: string, ac
   )
 }
 
+export function refreshKitchenLightsRequest(locationId: string) {
+  return apiClient.post<{ pendingOrders: number; lightsActive: boolean }>(
+    '/orders/kitchen/lights/reset', { locationId },
+  )
+}
+
 export function setKitchenOrderStatusRequest(orderId: string, locationId: string, status: OrderStatus, comment?: string) {
   return apiClient.patch<KitchenOrder>(`/orders/kitchen/${orderId}/status`, { locationId, status, comment })
 }

@@ -7,7 +7,7 @@ import { io, type Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { getCustomerRequest, getCustomersListRequest } from '@/features/customers/api'
 import { customersQueryKeys } from '@/features/customers/query-keys'
-import { getKitchenLocationsRequest, getKitchenOrdersRequest, getKitchenOrderDetailsRequest, reportKitchenOrderIssueRequest, resolveKitchenOrderIssueRequest, sendKitchenPickupReminderRequest, setKitchenOrderStatusRequest, startTerminalPaymentRequest, cancelKitchenTerminalPaymentRequest, cancelAwaitingKitchenOrderRequest, setKitchenProductOrderAvailabilityRequest, type KitchenIssueCategory, type KitchenIssueResolution, type KitchenOrder } from '@/features/orders/api'
+import { getKitchenLocationsRequest, getKitchenOrdersRequest, getKitchenOrderDetailsRequest, reportKitchenOrderIssueRequest, resolveKitchenOrderIssueRequest, sendKitchenPickupReminderRequest, setKitchenOrderStatusRequest, startTerminalPaymentRequest, cancelKitchenTerminalPaymentRequest, cancelAwaitingKitchenOrderRequest, setKitchenProductOrderAvailabilityRequest, refreshKitchenLightsRequest, type KitchenIssueCategory, type KitchenIssueResolution, type KitchenOrder } from '@/features/orders/api'
 import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { OrderStatus } from '@/types/order'
 import type { Customer } from '@/types/customer'
@@ -170,11 +170,9 @@ function KitchenCard({
 
       {order.userId
         ? <Link className="kitchen-card-customer" to={`/users/${order.userId}`}>
-            {customerLabel}<span>{language === 'fr' ? 'Profil client' : 'Customer profile'} ↗</span>
+            {customerLabel}
           </Link>
-        : <button type="button" className="kitchen-card-customer" onClick={onOpen}>
-            {customerLabel}<span>{language === 'fr' ? 'Voir le détail' : 'View details'} ↗</span>
-          </button>}
+        : <button type="button" className="kitchen-card-customer" onClick={onOpen}>{customerLabel}</button>}
 
       {isAwaitingPayment && (
         <div className="kitchen-payment-awaiting">
@@ -257,6 +255,11 @@ function KitchenCard({
                 : (language === 'fr' ? 'Marquer comme prête' : 'Mark as ready')}
         <span className="kitchen-action-arrow" aria-hidden="true">{isAwaitingPayment ? '€' : order.status === 'READY' ? '✓' : '→'}</span>
       </button>
+      {!isAwaitingPayment && ['RECEIVED', 'PREPARING', 'READY'].includes(order.status) && (
+        <Link className="kitchen-card-manage-order" to={`/orders/${order.id}`}>
+          {language === 'fr' ? 'Gérer / annuler' : 'Manage / cancel'} <span aria-hidden="true">↗</span>
+        </Link>
+      )}
       {isAwaitingPayment && order.paymentStatus === 'PROCESSING' && (
         <button type="button" className="kitchen-card-cancel-terminal" disabled={isUpdating} onClick={onCancelTerminalPayment}>
           {language === 'fr' ? 'Arrêter l’appel du terminal' : 'Stop terminal payment'}
@@ -614,6 +617,16 @@ export default function KitchenBoardPage() {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : tr('Impossible de modifier les commandes.', 'Could not update product ordering.')),
   })
+  const refreshKitchenLightsMutation = useMutation({
+    mutationFn: () => refreshKitchenLightsRequest(locationId),
+    onSuccess: ({ pendingOrders }) => {
+      toast.success(pendingOrders > 0
+        ? tr(`${pendingOrders} commande(s) restent à préparer : les lumières restent vertes.`, `${pendingOrders} order(s) still need preparation: the lights stay green.`)
+        : tr('Aucune commande à préparer : la restauration des lumières a été demandée.', 'No orders need preparation: a light restore was requested.'))
+      void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : tr('Impossible de vérifier les commandes et réinitialiser les lumières.', 'Could not check orders and reset the lights.')),
+  })
   const reminderMutation = useMutation({
     mutationFn: (orderId: string) => sendKitchenPickupReminderRequest(orderId, locationId),
     onSuccess: () => {
@@ -870,6 +883,16 @@ export default function KitchenBoardPage() {
         </div>
 
         <div className="kitchen-header-tools">
+          {canManageProductOrders && locationId && <button
+            type="button"
+            className="kitchen-lights-reset"
+            disabled={refreshKitchenLightsMutation.isPending}
+            onClick={() => refreshKitchenLightsMutation.mutate()}
+          >
+            {refreshKitchenLightsMutation.isPending
+              ? tr('Vérification…', 'Checking…')
+              : tr('Réinitialiser les lumières', 'Reset lights')}
+          </button>}
           <button type="button" onClick={enableSound} className={`kitchen-sound-toggle ${soundEnabled ? 'is-enabled' : ''}`} aria-pressed={soundEnabled} aria-label={soundEnabled ? tr('Désactiver le son', 'Disable sound') : tr('Activer le son', 'Enable sound')}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
           </button>
@@ -979,7 +1002,7 @@ export default function KitchenBoardPage() {
                   <div>
                     <span>{tr('Client', 'Customer')}</span>
                     {orderDetails.order.customer?.id
-                      ? <Link className="kitchen-detail-customer-link" to={`/users/${orderDetails.order.customer.id}`}>{`${orderDetails.order.customer.firstName ?? ''} ${orderDetails.order.customer.lastName ?? ''}`.trim() || orderDetails.order.customer.email || tr('Profil client', 'Customer profile')} ↗</Link>
+                      ? <Link className="kitchen-detail-customer-link" to={`/users/${orderDetails.order.customer.id}`}>{`${orderDetails.order.customer.firstName ?? ''} ${orderDetails.order.customer.lastName ?? ''}`.trim() || orderDetails.order.customer.email || tr('Client Ayana', 'Ayana customer')} ↗</Link>
                       : <strong>{orderDetails.order.guestName || tr('Client invité', 'Guest customer')}</strong>}
                     {orderDetails.order.customer?.email && <small>{tr('E-mail', 'Email')}: {orderDetails.order.customer.email}</small>}
                     {orderDetails.order.customer?.phone && <small>{tr('Téléphone', 'Phone')}: {orderDetails.order.customer.phone}</small>}
@@ -988,6 +1011,12 @@ export default function KitchenBoardPage() {
                   <div><span>{tr('Paiement', 'Payment')}</span><strong>{orderDetails.order.paymentStatus}</strong><small>{formatMoney(orderDetails.order.total, orderDetails.order.currency, language === 'fr' ? 'fr-FR' : 'en-GB')}</small></div>
                   <div><span>{tr('Reçue à', 'Received at')}</span><strong>{formatTime(orderDetails.order.createdAt, language === 'fr' ? 'fr-FR' : 'en-GB')}</strong><small>{orderDetails.order.deliveryType}</small></div>
                 </section>
+
+                {['RECEIVED', 'PREPARING', 'READY'].includes(orderDetails.order.status) && (
+                  <Link className="kitchen-detail-manage-order" to={`/orders/${orderDetails.order.id}`}>
+                    {tr('Gérer ou annuler la commande', 'Manage or cancel order')} <span aria-hidden="true">↗</span>
+                  </Link>
+                )}
 
                 {rollbackTargetFor(orderDetails.order.status) && (orderDetails.order.status !== 'PICKED_UP' || orderDetails.order.deliveryType !== 'DELIVERY') && (
                   <button
