@@ -78,6 +78,26 @@
 .store-access-buttons button { width: 100%; border: 0; cursor: pointer; font-family: inherit; text-align: left; }
 .store-access-buttons button:disabled { cursor: wait; opacity: .7; }
 .store-access-buttons .store-telegram-login { color: #fff; background: #2479a8; }
+.store-access-overlay { z-index: 22; }
+.store-access-sheet { padding-top: 24px; }
+.store-access-nav { display: flex; align-items: center; justify-content: space-between; margin: -8px 0 22px; }
+.store-access-nav button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0; border: 0; color: var(--store-muted); background: transparent; font: inherit; font-size: 13px; }
+.store-access-nav button:last-child { display: grid; place-items: center; width: 34px; padding: 0; border-radius: 50%; color: var(--store-espresso); background: #f1e4d4; font-size: 22px; }
+.store-access-methods,.store-access-form { display: grid; gap: 10px; }
+.store-access-methods > button { display: flex; align-items: center; justify-content: space-between; min-height: 53px; padding: 0 15px; border: 0; border-radius: 12px; color: #fff; font: inherit; font-size: 14px; font-weight: 700; text-align: left; }
+.store-access-methods > button:disabled { cursor: wait; opacity: .65; }
+.store-access-methods .store-access-email { color: var(--store-espresso); background: #f1e4d4; }
+.store-access-methods .store-access-whatsapp { background: var(--store-clay); }
+.store-access-methods .store-access-telegram { background: #2479a8; }
+.store-access-methods > small { color: var(--store-muted); font-size: 12px; }
+.store-access-form { margin-top: 6px; }
+.store-access-form p { margin: 0 0 5px; color: var(--store-muted); font-size: 13px; line-height: 1.45; }
+.store-access-form label { display: grid; gap: 6px; color: #65594e; font-size: 12px; font-weight: 700; }
+.store-access-form input { width: 100%; height: 48px; padding: 0 12px; border: 1px solid #ddcbb5; border-radius: 10px; outline: none; color: var(--store-espresso); background: #fffdf9; font: inherit; font-size: 16px; }
+.store-access-form input:focus { border-color: var(--store-clay); box-shadow: 0 0 0 3px rgba(166,56,28,.12); }
+.store-access-form .store-primary { margin-top: 8px; }
+.store-access-secondary { min-height: 42px; border: 0; color: var(--store-muted); background: transparent; font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.store-access-buttons .success-connect-login { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 14px; border-radius: 10px; color: #fff; background: var(--store-clay); font-size: 13px; font-weight: 700; text-align: left; }
 .store-checkout-form [data-slot="phone-input-field"] > div { display: flex; min-width: 0; gap: 7px; }
 .store-checkout-form [data-slot="phone-input-field"] select { flex: 0 0 142px; width: 142px; padding: 0 7px; font-size: 12px; }
 .store-checkout-form [data-slot="phone-input-field"] input { flex: 1 1 0; min-width: 0; }
@@ -92,6 +112,12 @@
 .success-follow-card { display: grid; gap: 12px; width: min(100%, 540px); margin: 12px 0; padding: 20px; border: 1px solid var(--store-line); border-radius: 18px; background: #fffaf1; text-align: left; }
 .success-follow-card h2 { margin: 0; color: var(--store-espresso); font-family: Georgia,serif; font-size: 22px; font-weight: 500; }
 .success-follow-card > p { margin: 0; }
+.success-account-details { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--store-line); border-radius: 12px; background: #fffdf9; }
+.success-account-linked { margin: 0; color: var(--store-sage); font-size: 13px; font-weight: 700; line-height: 1.45; }
+.success-account-fields { display: grid; gap: 10px; }
+.success-account-field { display: grid; gap: 4px; min-width: 0; }
+.success-account-field > span { color: var(--store-muted); font-size: 11px; line-height: 1.4; }
+.success-account-field > strong { overflow-wrap: anywhere; color: var(--store-espresso); font-size: 14px; font-weight: 600; line-height: 1.45; }
 .success-contact-form { display: grid; gap: 11px; }
 .success-contact-form label { display: grid; gap: 5px; color: #65594e; font-size: 12px; font-weight: 700; }
 .success-contact-form input { width: 100%; height: 44px; box-sizing: border-box; padding: 0 11px; border: 1px solid #ddcbb5; border-radius: 9px; outline: none; color: var(--store-espresso); background: #fffdf9; font: inherit; font-size: 14px; }

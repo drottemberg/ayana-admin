@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import ayanaLogo from '@/assets/ayana-logo.png'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { createPublicAccessLink, type PublicAccessChannel } from '@/lib/public-access'
 import './storefront.css'
 
@@ -16,6 +17,7 @@ type Catalog = { customer: { name: string; slug: string }; location: { name: str
 type CartLine = { key: string; productId: string; name: string; variantId: string; variantLabel: string; unitPrice: number; quantity: number; modifierIds: string[]; modifierNames: string[]; modifierTotal: number }
 type Identity = { token?: string; firstName?: string; lastName?: string; email?: string; phone?: string }
 type StorefrontLanguage = 'fr' | 'en'
+type StoreAccessModal = { view: 'choose' | 'email' | 'code'; state: Record<string, unknown>; email?: string; verificationId?: string }
 const STORE_LANGUAGE_KEY = 'ayana-storefront-language'
 
 function readStorefrontLanguage(): StorefrontLanguage {
@@ -103,6 +105,8 @@ function StorefrontRoute() {
     return { firstName: saved.firstName ?? draft.firstName, email: saved.email ?? draft.email, phone: saved.phone ?? draft.phone }
   })
   const [successContactLoading, setSuccessContactLoading] = useState(false)
+  const [successContactLoaded, setSuccessContactLoaded] = useState(false)
+  const [successAccountExists, setSuccessAccountExists] = useState(false)
   const [successContactSaved, setSuccessContactSaved] = useState(false)
   const [successContactError, setSuccessContactError] = useState('')
   const handledProductLink = useRef('')
@@ -111,6 +115,10 @@ function StorefrontRoute() {
   const [checkoutError, setCheckoutError] = useState('')
   const [accessLoading, setAccessLoading] = useState<PublicAccessChannel | null>(null)
   const [accessError, setAccessError] = useState('')
+  const [accessModal, setAccessModal] = useState<StoreAccessModal | null>(null)
+  const [accessEmail, setAccessEmail] = useState('')
+  const [accessCode, setAccessCode] = useState('')
+  const [emailAccessLoading, setEmailAccessLoading] = useState(false)
   const isFrench = language === 'fr'
   const tr = (fr: string, en: string) => isFrench ? fr : en
   const changeLanguage = (nextLanguage: StorefrontLanguage) => {
@@ -121,7 +129,8 @@ function StorefrontRoute() {
   const openAccessLink = async (channel: PublicAccessChannel, extraState: Record<string, unknown> = {}) => {
     setAccessLoading(channel)
     setAccessError('')
-    const resumeCheckout = checkoutOpen
+    const modalState = accessModal?.state ?? {}
+    const resumeCheckout = extraState.resumeCheckout === true || modalState.resumeCheckout === true || checkoutOpen
     if (resumeCheckout) {
       try { localStorage.setItem(checkoutResumeKey(customerSlug, locationSlug), String(Date.now())) } catch { /* the return URL also carries resumeCheckout */ }
     }
@@ -133,7 +142,7 @@ function StorefrontRoute() {
         destination: 'STORE',
         channel,
         language,
-        state: { category, resumeCheckout, ...extraState },
+        state: { category, ...modalState, resumeCheckout, ...extraState },
       })
       window.location.assign(url)
     } catch (reason) {
@@ -144,14 +153,102 @@ function StorefrontRoute() {
       setAccessLoading(null)
     }
   }
-  const renderAccessButtons = (buttonClass: string) => <div className="store-access-buttons">
-    {catalog?.location.whatsappNumber && <button type="button" className={buttonClass} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP')}>{accessLoading === 'WHATSAPP' ? tr('Préparation…', 'Preparing…') : tr('Continuer avec WhatsApp', 'Continue with WhatsApp')} <span>↗</span></button>}
-    {catalog?.location.telegramBotUsername && <button type="button" className={`${buttonClass} store-telegram-login`} disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM')}>{accessLoading === 'TELEGRAM' ? tr('Préparation…', 'Preparing…') : tr('Continuer avec Telegram', 'Continue with Telegram')} <span>↗</span></button>}
-    {!catalog?.location.whatsappNumber && !catalog?.location.telegramBotUsername && <small>{tr('Aucune messagerie n’est configurée pour cette boutique.', 'No messaging channel is configured for this shop.')}</small>}
+  const openAccessModal = (state: Record<string, unknown>) => {
+    const resumeCheckout = checkoutOpen || state.resumeCheckout === true
+    setCheckoutOpen(false)
+    setAccessError('')
+    setAccessEmail(state.returnToSuccess === true ? successContact.email : '')
+    setAccessCode('')
+    setAccessModal({ view: 'choose', state: { category, ...state, resumeCheckout } })
+  }
+  const backInAccessFlow = () => {
+    if (emailAccessLoading) return
+    setAccessError('')
+    setAccessCode('')
+    setAccessModal((current) => current?.view === 'code'
+      ? { ...current, view: 'email', verificationId: undefined }
+      : current?.view === 'email'
+        ? { ...current, view: 'choose', verificationId: undefined }
+        : null)
+  }
+  const requestEmailAccessCode = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!accessModal) return
+    setEmailAccessLoading(true)
+    setAccessError('')
+    try {
+      const response = await fetch(`${API_URL}/public-access/email/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          customerSlug,
+          locationSlug,
+          destination: 'STORE',
+          email: accessEmail.trim(),
+          language,
+          state: accessModal.state,
+        }),
+      })
+      const payload = await response.json().catch(() => ({})) as { verificationId?: string; message?: string | string[] }
+      if (!response.ok || !payload.verificationId) throw new Error(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || tr('Impossible d’envoyer le code.', 'Could not send the code.'))
+      setAccessModal({ ...accessModal, view: 'code', email: accessEmail.trim(), verificationId: payload.verificationId })
+    } catch (reason) {
+      setAccessError(reason instanceof Error ? reason.message : tr('Impossible d’envoyer le code.', 'Could not send the code.'))
+    } finally {
+      setEmailAccessLoading(false)
+    }
+  }
+  const verifyEmailAccessCode = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!accessModal?.verificationId) return
+    setEmailAccessLoading(true)
+    setAccessError('')
+    try {
+      const response = await fetch(`${API_URL}/public-access/email/verify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ verificationId: accessModal.verificationId, code: accessCode.trim() }),
+      })
+      const payload = await response.json().catch(() => ({})) as { url?: string; message?: string | string[] }
+      if (!response.ok || !payload.url) throw new Error(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || tr('Code incorrect ou expiré.', 'The code is incorrect or expired.'))
+      window.location.assign(payload.url)
+    } catch (reason) {
+      setAccessError(reason instanceof Error ? reason.message : tr('Code incorrect ou expiré.', 'The code is incorrect or expired.'))
+    } finally {
+      setEmailAccessLoading(false)
+    }
+  }
+  const renderAccessButtons = (buttonClass: string, state: Record<string, unknown> = {}) => <div className="store-access-buttons">
+    <button type="button" className={buttonClass} disabled={Boolean(accessLoading) || emailAccessLoading} onClick={() => openAccessModal(state)}>{tr('Se connecter', 'Sign in')} <span>→</span></button>
   </div>
   const orderCode = searchParams.get('code')?.trim()
   const successOrderId = searchParams.get('orderId')?.trim() ?? ''
   const successSessionId = searchParams.get('session_id')?.trim() ?? searchParams.get('sessionId')?.trim() ?? ''
+  const stripeEmailLocked = accessModal?.state.returnToSuccess === true && Boolean(successContact.email.trim())
+  const renderAccessModal = () => {
+    if (!accessModal) return null
+    return <div className="store-overlay store-access-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !emailAccessLoading && !accessLoading) setAccessModal(null) }}><section className="store-sheet store-access-sheet" role="dialog" aria-modal="true" aria-labelledby="store-access-title">
+      <div className="store-access-nav"><button type="button" disabled={emailAccessLoading || Boolean(accessLoading)} onClick={backInAccessFlow}><span aria-hidden="true">←</span>{accessModal.view === 'choose' ? tr('Retour', 'Back') : tr('Précédent', 'Previous')}</button><button type="button" aria-label={tr('Fermer', 'Close')} disabled={emailAccessLoading || Boolean(accessLoading)} onClick={() => setAccessModal(null)}>×</button></div>
+      <p className="store-eyebrow">AYANA</p>
+      <h2 id="store-access-title">{accessModal.view === 'choose' ? tr('Connecte-toi à ton compte Ayana', 'Sign in to your Ayana account') : accessModal.view === 'email' ? tr('Connexion par e-mail', 'Sign in with email') : tr('Vérifie ton e-mail', 'Check your email')}</h2>
+      {accessModal.view === 'choose' ? <div className="store-access-methods">
+        <button type="button" className="store-access-email" onClick={() => { setAccessError(''); setAccessModal({ ...accessModal, view: 'email' }) }}>{tr('Continuer avec e-mail', 'Continue with email')}<span>→</span></button>
+        {catalog?.location.whatsappNumber && <button type="button" className="store-access-whatsapp" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP')}>{accessLoading === 'WHATSAPP' ? tr('Préparation…', 'Preparing…') : tr('Continuer avec WhatsApp', 'Continue with WhatsApp')}<span>↗</span></button>}
+        {catalog?.location.telegramBotUsername && <button type="button" className="store-access-telegram" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM')}>{accessLoading === 'TELEGRAM' ? tr('Préparation…', 'Preparing…') : tr('Continuer avec Telegram', 'Continue with Telegram')}<span>↗</span></button>}
+        {catalog && !catalog.location.whatsappNumber && !catalog.location.telegramBotUsername && <small>{tr('Seule la connexion par e-mail est disponible pour cette boutique.', 'Only email sign-in is available for this shop.')}</small>}
+      </div> : accessModal.view === 'email' ? <form className="store-access-form" onSubmit={(event) => void requestEmailAccessCode(event)}>
+        <p>{stripeEmailLocked ? tr('On utilise l’adresse e-mail de ton paiement Stripe pour te connecter.', 'We’ll use the email address from your Stripe payment to sign you in.') : tr('Saisis ton adresse e-mail. Si tu as déjà un compte, tu seras connecté·e. Sinon, ton compte Ayana sera créé après vérification.', 'Enter your email address. If you already have an account, you’ll be signed in. Otherwise, your Ayana account will be created after verification.')}</p>
+        <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" autoFocus={!stripeEmailLocked} readOnly={stripeEmailLocked} required maxLength={254} value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder="adresse@exemple.com" /></label>
+        <button type="submit" className="store-primary" disabled={emailAccessLoading}>{emailAccessLoading ? tr('Envoi…', 'Sending…') : tr('Recevoir un code', 'Send me a code')}<span>→</span></button>
+      </form> : <form className="store-access-form" onSubmit={(event) => void verifyEmailAccessCode(event)}>
+        <p>{tr(`Saisis le code à 6 chiffres envoyé à ${accessModal.email}.`, `Enter the 6-digit code sent to ${accessModal.email}.`)}</p>
+        <label>{tr('Code de vérification', 'Verification code')}<input inputMode="numeric" autoComplete="one-time-code" autoFocus required minLength={6} maxLength={6} pattern="[0-9]{6}" value={accessCode} onChange={(event) => setAccessCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" /></label>
+        <button type="submit" className="store-primary" disabled={emailAccessLoading || accessCode.length !== 6}>{emailAccessLoading ? tr('Vérification…', 'Verifying…') : tr('Valider et continuer', 'Verify and continue')}<span>→</span></button>
+        <button type="button" className="store-access-secondary" disabled={emailAccessLoading} onClick={() => { setAccessError(''); setAccessCode(''); setAccessModal({ ...accessModal, view: 'email', verificationId: undefined }) }}>{tr('Changer d’adresse e-mail', 'Use a different email')}</button>
+      </form>}
+      {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
+    </section></div>
+  }
 
   const logout = () => {
     try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory identity even if storage is unavailable */ }
@@ -190,7 +287,7 @@ function StorefrontRoute() {
     let active = true
     fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/success-details?${new URLSearchParams({ orderId: successOrderId, sessionId: successSessionId })}`)
       .then(async (response) => {
-        const payload = await response.json().catch(() => ({})) as { firstName?: string; email?: string; phone?: string; message?: string | string[] }
+        const payload = await response.json().catch(() => ({})) as { firstName?: string; email?: string; phone?: string; accountExists?: boolean; message?: string | string[] }
         if (!response.ok) throw new Error(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || tr('Impossible de charger tes coordonnées.', 'Could not load your contact details.'))
         return payload
       })
@@ -201,8 +298,15 @@ function StorefrontRoute() {
           email: details.email || current.email,
           phone: details.phone || current.phone,
         }))
+        if (details.email) setAccessEmail(details.email)
+        setSuccessAccountExists(details.accountExists === true)
+        setSuccessContactLoaded(true)
       })
-      .catch((reason: unknown) => { if (active) setSuccessContactError(reason instanceof Error ? reason.message : tr('Impossible de charger tes coordonnées.', 'Could not load your contact details.')) })
+      .catch((reason: unknown) => {
+        if (!active) return
+        setSuccessContactError(reason instanceof Error ? reason.message : tr('Impossible de charger tes coordonnées.', 'Could not load your contact details.'))
+        setSuccessContactLoaded(true)
+      })
     return () => { active = false }
   }, [customerSlug, location.pathname, locationSlug, successOrderId, successSessionId, isFrench])
 
@@ -656,6 +760,7 @@ function StorefrontRoute() {
       const saved = payload.identity ?? successContact
       setSuccessContact({ firstName: saved.firstName ?? '', email: saved.email ?? '', phone: saved.phone ?? '' })
       setSuccessContactSaved(true)
+      setSuccessAccountExists(true)
       const nextIdentity = { ...identity, firstName: saved.firstName, email: saved.email, phone: saved.phone }
       setIdentity(nextIdentity)
       try {
@@ -671,9 +776,28 @@ function StorefrontRoute() {
 
   if (location.pathname.endsWith('/success')) {
     return <main className="ayana-store"><header className="store-topbar"><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /><LanguageSelector language={language} onChange={changeLanguage} /></header><section className="store-success"><div className="success-mark">✓</div><p className="store-eyebrow">{tr('Commande Ayana', 'Ayana order')}</p><h1>{tr('Merci pour ta commande !', 'Thank you for your order!')}</h1><p>{whatsappReturnUrl ? tr('Ton paiement est confirmé. Tu retournes sur WhatsApp pour retrouver ta conversation avec Ayana.', 'Your payment is confirmed. You are returning to WhatsApp to continue your conversation with Ayana.') : tr('Ton paiement est confirmé.', 'Your payment is confirmed.')}</p>{orderCode && <strong className="success-code">{orderCode}</strong>}
-      {successOrderId && successSessionId && !identity.token && <section className="success-follow-card"><h2>{tr('Suivre ta commande', 'Follow your order')}</h2><p>{tr('Enregistre tes coordonnées ou connecte-toi à ta messagerie pour retrouver ta commande avec Ayana.', 'Save your contact details or connect your messaging account to follow your order with Ayana.')}</p><form className="success-contact-form" onSubmit={(event) => void saveSuccessContact(event)}><label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required value={successContact.firstName} onChange={(event) => setSuccessContact((current) => ({ ...current, firstName: event.target.value }))} /></label><label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required={!successContact.phone.trim()} value={successContact.email} onChange={(event) => setSuccessContact((current) => ({ ...current, email: event.target.value }))} /></label><label>{tr('Téléphone', 'Phone')}<input type="tel" autoComplete="tel" placeholder="+33 6 12 34 56 78" pattern="\\+[1-9][0-9]{7,14}" required={!successContact.email.trim()} value={successContact.phone} onChange={(event) => setSuccessContact((current) => ({ ...current, phone: event.target.value }))} /></label><small>{tr('Renseigne au moins un e-mail ou un téléphone.', 'Enter at least an email address or phone number.')}</small><button className="success-contact-submit" type="submit" disabled={successContactLoading}>{successContactLoading ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer mes coordonnées', 'Save my details')}</button>{successContactSaved && <p className="success-contact-saved" role="status">{tr('C’est enregistré. Ta commande est associée à ces coordonnées.', 'Saved. Your order is linked to these contact details.')}</p>}{successContactError && <p className="store-form-error" role="alert">{successContactError}</p>}</form><div className="success-connect"><span>{tr('Ou connecte-toi avec', 'Or connect with')}</span><div className="store-access-buttons">{catalog?.location.whatsappNumber && <button type="button" className="success-connect-whatsapp" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('WHATSAPP', { orderId: successOrderId, sessionId: successSessionId, code: orderCode, returnToSuccess: true })}>{accessLoading === 'WHATSAPP' ? tr('Préparation…', 'Preparing…') : tr('WhatsApp', 'WhatsApp')} ↗</button>}{catalog?.location.telegramBotUsername && <button type="button" className="success-connect-telegram" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM', { orderId: successOrderId, sessionId: successSessionId, code: orderCode, returnToSuccess: true })}>{accessLoading === 'TELEGRAM' ? tr('Préparation…', 'Preparing…') : tr('Telegram', 'Telegram')} ↗</button>}{!catalog?.location.whatsappNumber && !catalog?.location.telegramBotUsername && <small>{tr('Aucune messagerie n’est configurée pour cette boutique.', 'No messaging channel is configured for this shop.')}</small>}</div></div></section>}
+      {successOrderId && successSessionId && !identity.token && <section className="success-follow-card">
+        <h2>{tr('Suivre ta commande', 'Follow your order')}</h2>
+        <p>{tr('Retrouve ta commande avec ton compte Ayana.', 'Find your order with your Ayana account.')}</p>
+        {successContactLoaded && successAccountExists ? <div className="success-account-details">
+          <p className="success-account-linked">{tr('Compte Ayana déjà associé à cette commande', 'Ayana account already linked to this order')}</p>
+          <div className="success-account-fields">
+            {successContact.firstName && <div className="success-account-field"><span>{tr('Prénom', 'First name')}</span><strong>{successContact.firstName}</strong></div>}
+            {successContact.email && <div className="success-account-field"><span>{tr('E-mail utilisé pour le paiement Stripe', 'Email used for Stripe payment')}</span><strong>{successContact.email}</strong></div>}
+          </div>
+        </div> : <form className="success-contact-form" onSubmit={(event) => void saveSuccessContact(event)}>
+          <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required value={successContact.firstName} onChange={(event) => setSuccessContact((current) => ({ ...current, firstName: event.target.value }))} /></label>
+          <label>{tr('E-mail', 'Email')}<input type="email" autoComplete="email" required={!successContact.phone.trim()} readOnly={successContactLoaded && Boolean(successContact.email.trim())} value={successContact.email} onChange={(event) => setSuccessContact((current) => ({ ...current, email: event.target.value }))} /></label>
+          <PhoneInput label={tr('Téléphone', 'Phone')} value={successContact.phone} placeholder={tr('Numéro de téléphone', 'Phone number')} required={!successContact.email.trim()} nativeCountrySelector onValueChange={(value) => setSuccessContact((current) => ({ ...current, phone: value }))} />
+          <small>{tr('Renseigne au moins un e-mail ou un téléphone.', 'Enter at least an email address or phone number.')}</small>
+          <button className="success-contact-submit" type="submit" disabled={successContactLoading || !successContactLoaded}>{successContactLoading ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer mes coordonnées', 'Save my details')}</button>
+          {successContactSaved && <p className="success-contact-saved" role="status">{tr('C’est enregistré. Ta commande est associée à ces coordonnées.', 'Saved. Your order is linked to these contact details.')}</p>}
+          {successContactError && <p className="store-form-error" role="alert">{successContactError}</p>}
+        </form>}
+        <div className="success-connect"><span>{tr('Ou connecte-toi à ton compte', 'Or sign in to your account')}</span>{renderAccessButtons('success-connect-login', { orderId: successOrderId, sessionId: successSessionId, code: orderCode, returnToSuccess: true })}</div>
+      </section>}
       {identity.token && <section className="success-follow-card success-follow-connected"><h2>{tr('Tu es connecté·e', 'You’re connected')}</h2><p>{tr('Ta commande est associée à ton compte Ayana.', 'Your order is linked to your Ayana account.')}</p><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email || identity.phone}</strong></section>}
-      {accessError && <p className="store-form-error" role="alert">{accessError}</p>}{whatsappReturnUrl && <a className="store-secondary-link" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} ↗</a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a></section></main>
+      {accessError && <p className="store-form-error" role="alert">{accessError}</p>}{whatsappReturnUrl && <a className="store-secondary-link" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} ↗</a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a>{renderAccessModal()}</section></main>
   }
 
   if (loading) return <main className="ayana-store"><div className="store-loading"><span className="store-spinner" />{tr('Ouverture de la boutique…', 'Opening the shop…')}</div></main>
@@ -738,14 +862,14 @@ function StorefrontRoute() {
         <button className="store-primary" onClick={() => setTerminalOrder(null)}>{tr('Compris', 'Got it')}</button>
       </section></div>}
 
-      {checkoutOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setCheckoutOpen(false) }}><section className="store-sheet checkout-sheet" role="dialog" aria-modal="true" aria-label={identity.token ? tr('Paiement', 'Payment') : tr('Connexion WhatsApp', 'WhatsApp sign-in')}>
+      {checkoutOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setCheckoutOpen(false) }}><section className="store-sheet checkout-sheet" role="dialog" aria-modal="true" aria-label={identity.token ? tr('Paiement', 'Payment') : tr('Connexion', 'Sign in')}>
         <button className="sheet-close" onClick={() => setCheckoutOpen(false)} aria-label={tr('Fermer', 'Close')} disabled={submitting}>×</button>
         <p className="store-eyebrow">{tr('Ta commande', 'Your order')}</p>
         {checkoutError && <p className="store-form-error">{checkoutError}</p>}
         {!identity.token ? <>
           <h2>{tr('Comment veux-tu continuer ?', 'How would you like to continue?')}</h2>
           <p className="sheet-description">{tr('Connecte-toi pour retrouver ton compte, ou commande en invité. Si tu paies en ligne, Stripe te demandera l’e-mail du reçu.', 'Sign in to use your Ayana account, or continue as a guest. If you pay online, Stripe will ask for an email for the receipt.')}</p>
-          {renderAccessButtons('store-primary store-whatsapp-login')}
+          {renderAccessButtons('store-primary store-whatsapp-login', { resumeCheckout: true })}
           {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
           <p className="checkout-divider"><span>{tr('ou commander en invité', 'or continue as a guest')}</span></p>
@@ -765,6 +889,8 @@ function StorefrontRoute() {
           </form>
         </>}
       </section></div>}
+
+      {renderAccessModal()}
     </main>
   )
 }

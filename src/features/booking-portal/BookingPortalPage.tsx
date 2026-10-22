@@ -63,7 +63,7 @@ type Schedule = {
 
 type MemberState = {
   token: string
-  identity: { firstName?: string | null; lastName?: string | null; email?: string | null; language?: string | null }
+  identity: { firstName?: string | null; lastName?: string | null; phone?: string | null; email?: string | null; language?: string | null }
   creditBalance: number
   hasUnlimitedContract: boolean
   bookedSessionIds: string[]
@@ -104,7 +104,7 @@ function sessionKey(customerSlug: string, locationSlug: string) {
   return `ayana-booking-session:${customerSlug}:${locationSlug}`
 }
 
-type BookingGuestDraft = { firstName: string; phone: string; email: string }
+type BookingGuestDraft = { firstName: string; lastName: string; phone: string; email: string }
 type AccessModalState = {
   view: 'choose' | 'email' | 'code'
   state: Record<string, unknown>
@@ -123,12 +123,13 @@ function readGuestDraft(customerSlug: string, locationSlug: string): BookingGues
       const draft = JSON.parse(saved) as Partial<BookingGuestDraft>
       return {
         firstName: typeof draft.firstName === 'string' ? draft.firstName : '',
+        lastName: typeof draft.lastName === 'string' ? draft.lastName : '',
         phone: typeof draft.phone === 'string' ? draft.phone : '',
         email: typeof draft.email === 'string' ? draft.email : '',
       }
     }
   } catch { /* allow guest checkout when browser storage is unavailable */ }
-  return { firstName: '', phone: '', email: '' }
+  return { firstName: '', lastName: '', phone: '', email: '' }
 }
 
 function saveGuestDraft(customerSlug: string, locationSlug: string, draft: BookingGuestDraft) {
@@ -184,7 +185,10 @@ function BookingPortalRoute() {
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [member, setMember] = useState<MemberState | null>(null)
   const [firstNameDraft, setFirstNameDraft] = useState('')
+  const [lastNameDraft, setLastNameDraft] = useState('')
+  const [memberPhoneDraft, setMemberPhoneDraft] = useState('')
   const [guestFirstName, setGuestFirstName] = useState(() => readGuestDraft(customerSlug, locationSlug).firstName)
+  const [guestLastName, setGuestLastName] = useState(() => readGuestDraft(customerSlug, locationSlug).lastName)
   const [guestPhone, setGuestPhone] = useState(() => readGuestDraft(customerSlug, locationSlug).phone)
   const [guestEmail, setGuestEmail] = useState(() => readGuestDraft(customerSlug, locationSlug).email)
   const [language, setLanguage] = useState<'fr' | 'en'>(readBookingLanguage)
@@ -226,17 +230,24 @@ function BookingPortalRoute() {
   const restoredOffer = useRef(false)
   const handledPaymentReturn = useRef('')
   const isFrench = language === 'fr'
+  const checkoutFirstName = member ? member.identity.firstName?.trim() || firstNameDraft.trim() : guestFirstName.trim()
+  const checkoutLastName = member ? member.identity.lastName?.trim() || lastNameDraft.trim() : guestLastName.trim()
+  const checkoutPhone = member ? member.identity.phone?.trim() || memberPhoneDraft.trim() : guestPhone.trim()
+  const canPurchaseOffer = Boolean(checkoutFirstName && checkoutLastName && checkoutPhone && !validatePhone(checkoutPhone))
+    && (Boolean(member) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim()))
 
   useEffect(() => {
     const draft = readGuestDraft(customerSlug, locationSlug)
     setGuestFirstName(draft.firstName)
+    setGuestLastName(draft.lastName)
     setGuestPhone(draft.phone)
     setGuestEmail(draft.email)
   }, [customerSlug, locationSlug])
 
   const updateGuestDraft = (field: keyof BookingGuestDraft, value: string) => {
-    const draft = { firstName: guestFirstName, phone: guestPhone, email: guestEmail, [field]: value }
+    const draft = { firstName: guestFirstName, lastName: guestLastName, phone: guestPhone, email: guestEmail, [field]: value }
     setGuestFirstName(draft.firstName)
+    setGuestLastName(draft.lastName)
     setGuestPhone(draft.phone)
     setGuestEmail(draft.email)
     saveGuestDraft(customerSlug, locationSlug, draft)
@@ -251,6 +262,8 @@ function BookingPortalRoute() {
     try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory session even if storage is unavailable */ }
     setMember(null)
     setFirstNameDraft('')
+    setLastNameDraft('')
+    setMemberPhoneDraft('')
     setSessionFilter('all')
     setNotice('')
   }
@@ -342,6 +355,8 @@ function BookingPortalRoute() {
         if (active) {
           setMember(nextMember)
           setFirstNameDraft(nextMember.identity.firstName ?? '')
+          setLastNameDraft(nextMember.identity.lastName ?? '')
+          setMemberPhoneDraft(nextMember.identity.phone ?? '')
           setNotice('')
         }
       } catch (reason) {
@@ -649,11 +664,11 @@ function BookingPortalRoute() {
 
   const purchaseOffer = async (pricingOptionId: string, paymentMethod: 'link' | 'terminal') => {
     if (offerPurchaseInFlight.current) return
-    const firstName = member
-      ? member.identity.firstName?.trim() || firstNameDraft.trim()
-      : guestFirstName.trim()
-    if (!firstName) {
-      setOfferCheckoutError(isFrench ? 'Indique ton prénom pour continuer.' : 'Enter your first name to continue.')
+    const firstName = checkoutFirstName
+    const lastName = checkoutLastName
+    const phone = checkoutPhone
+    if (!firstName || !lastName || !phone || validatePhone(phone)) {
+      setOfferCheckoutError(isFrench ? 'Indique ton prénom, ton nom et un numéro de téléphone valide pour continuer.' : 'Enter your first name, last name and a valid phone number to continue.')
       return
     }
     if (!member && (validatePhone(guestPhone) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim()))) {
@@ -674,7 +689,9 @@ function BookingPortalRoute() {
           paymentMethod,
           language,
           firstName,
-          ...(member ? {} : { phone: guestPhone, email: guestEmail.trim() }),
+          lastName,
+          phone,
+          ...(!member ? { email: guestEmail.trim() } : {}),
         }),
       })
       const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; sessionToken?: string; message?: string | string[] }
@@ -697,6 +714,8 @@ function BookingPortalRoute() {
             } as MemberState
             setMember(nextMember)
             setFirstNameDraft(nextMember.identity.firstName ?? '')
+            setLastNameDraft(nextMember.identity.lastName ?? '')
+            setMemberPhoneDraft(nextMember.identity.phone ?? '')
             localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
           }
         }
@@ -710,8 +729,13 @@ function BookingPortalRoute() {
       } else {
         throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
       }
-      if (member && !member.identity.firstName?.trim()) {
-        const updated = { ...member, identity: { ...member.identity, firstName: firstNameDraft.trim() } }
+      if (member && (!member.identity.firstName?.trim() || !member.identity.lastName?.trim() || !member.identity.phone?.trim())) {
+        const updated = { ...member, identity: {
+          ...member.identity,
+          firstName: member.identity.firstName?.trim() || firstName,
+          lastName: member.identity.lastName?.trim() || lastName,
+          phone: member.identity.phone?.trim() || phone,
+        } }
         setMember(updated)
         localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updated))
       }
@@ -995,15 +1019,16 @@ function BookingPortalRoute() {
         {accessError && <div className="booking-error" role="alert">{accessError}</div>}
         <p className="booking-purchase-divider"><span>{isFrench ? 'ou continuer en invité' : 'or continue as a guest'}</span></p>
       </> : <div className="booking-purchase-account"><span>{isFrench ? 'Compte Ayana connecté' : 'Ayana account connected'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ') || member.identity.email}</strong></div>}
-      {!member?.identity.firstName?.trim() && <label className="booking-first-name booking-purchase-field">{isFrench ? 'Prénom' : 'First name'}<input autoComplete="given-name" required maxLength={80} value={member ? firstNameDraft : guestFirstName} onChange={(event) => member ? setFirstNameDraft(event.target.value) : updateGuestDraft('firstName', event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
-      {!member && <PhoneInput label={isFrench ? 'Téléphone' : 'Phone number'} value={guestPhone} placeholder={isFrench ? 'Numéro de téléphone' : 'Phone number'} required nativeCountrySelector onValueChange={(value) => updateGuestDraft('phone', value)} />}
+      {(!member || !member.identity.firstName?.trim()) && <label className="booking-first-name booking-purchase-field">{isFrench ? 'Prénom' : 'First name'}<input autoComplete="given-name" required maxLength={80} value={member ? firstNameDraft : guestFirstName} onChange={(event) => member ? setFirstNameDraft(event.target.value) : updateGuestDraft('firstName', event.target.value)} placeholder={isFrench ? 'Prénom' : 'First name'} /></label>}
+      {(!member || !member.identity.lastName?.trim()) && <label className="booking-first-name booking-purchase-field">{isFrench ? 'Nom' : 'Last name'}<input autoComplete="family-name" required maxLength={80} value={member ? lastNameDraft : guestLastName} onChange={(event) => member ? setLastNameDraft(event.target.value) : updateGuestDraft('lastName', event.target.value)} placeholder={isFrench ? 'Nom' : 'Last name'} /></label>}
+      {(!member || !member.identity.phone?.trim()) && <PhoneInput label={isFrench ? 'Téléphone' : 'Phone number'} value={member ? memberPhoneDraft : guestPhone} placeholder={isFrench ? 'Numéro de téléphone' : 'Phone number'} required nativeCountrySelector onValueChange={(value) => member ? setMemberPhoneDraft(value) : updateGuestDraft('phone', value)} />}
       {!member && <label className="booking-first-name booking-purchase-field">{isFrench ? 'E-mail' : 'Email'}<input type="email" autoComplete="email" required maxLength={254} value={guestEmail} onChange={(event) => updateGuestDraft('email', event.target.value)} placeholder={isFrench ? 'adresse@exemple.com' : 'name@example.com'} /></label>}
       {offerCheckoutError && <div className="booking-error" role="alert">{offerCheckoutError}</div>}
       <div className="booking-purchase-actions">
-        {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId) || !(member?.identity.firstName?.trim() || firstNameDraft.trim() || guestFirstName.trim()) || (!member && (Boolean(validatePhone(guestPhone)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())))} onClick={() => void purchaseOffer(offerToPurchase.id, 'link')}>
+        {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId) || !canPurchaseOffer} onClick={() => void purchaseOffer(offerToPurchase.id, 'link')}>
           {purchasingOfferId === offerToPurchase.id ? (isFrench ? 'Préparation du paiement…' : 'Preparing payment…') : (isFrench ? 'Payer en ligne par carte' : 'Pay online by card')}<span>→</span>
         </button>}
-        {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-purchase-terminal" disabled={Boolean(purchasingOfferId) || !(member?.identity.firstName?.trim() || firstNameDraft.trim() || guestFirstName.trim()) || (!member && (Boolean(validatePhone(guestPhone)) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())))} onClick={() => void purchaseOffer(offerToPurchase.id, 'terminal')}>
+        {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-purchase-terminal" disabled={Boolean(purchasingOfferId) || !canPurchaseOffer} onClick={() => void purchaseOffer(offerToPurchase.id, 'terminal')}>
           {purchasingOfferId === offerToPurchase.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer sur place par carte' : 'Pay in person by card')}<span>→</span>
         </button>}
       </div>
