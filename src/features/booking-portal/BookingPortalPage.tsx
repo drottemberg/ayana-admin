@@ -216,7 +216,6 @@ function BookingPortalRoute() {
   const [offerCheckoutError, setOfferCheckoutError] = useState('')
   const [offerToPurchase, setOfferToPurchase] = useState<PricingOffer | null>(null)
   const [forcedOfferFlow, setForcedOfferFlow] = useState(false)
-  const [offerPaymentNotices, setOfferPaymentNotices] = useState<Record<string, string>>({})
   const [purchasingOfferId, setPurchasingOfferId] = useState('')
   const offerPurchaseInFlight = useRef(false)
   const [bookingUpsell, setBookingUpsell] = useState<{ className: string; products: ClassProductOffer[] } | null>(null)
@@ -662,7 +661,7 @@ function BookingPortalRoute() {
     } finally { setQuoteLoading(false) }
   }
 
-  const purchaseOffer = async (pricingOptionId: string, paymentMethod: 'link' | 'terminal') => {
+  const purchaseOffer = async (pricingOptionId: string) => {
     if (offerPurchaseInFlight.current) return
     const firstName = checkoutFirstName
     const lastName = checkoutLastName
@@ -686,7 +685,7 @@ function BookingPortalRoute() {
         body: JSON.stringify({
           pricingOptionId,
           ...(selected?.id ? { sessionId: selected.id, sessionFilter } : {}),
-          paymentMethod,
+          paymentMethod: 'link',
           language,
           firstName,
           lastName,
@@ -694,41 +693,9 @@ function BookingPortalRoute() {
           ...(!member ? { email: guestEmail.trim() } : {}),
         }),
       })
-      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; sessionToken?: string; message?: string | string[] }
+      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; message?: string | string[] }
       if (!response.ok) throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
-      if (paymentMethod === 'link' && payload.checkoutUrl) {
-        window.location.assign(payload.checkoutUrl)
-        return
-      } else if (paymentMethod === 'terminal' && payload.awaitingPayment) {
-        if (!member && payload.sessionToken) {
-          const meUrl = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/me`
-          const meResponse = await fetch(meUrl, { method: 'POST', headers: { authorization: `Bearer ${payload.sessionToken}` } })
-          const state = await meResponse.json().catch(() => ({})) as Partial<MemberState>
-          if (meResponse.ok && state.identity && typeof state.creditBalance === 'number') {
-            const nextMember = {
-              ...state,
-              token: payload.sessionToken,
-              hasUnlimitedContract: state.hasUnlimitedContract === true,
-              bookedSessionIds: state.bookedSessionIds ?? [],
-              bookings: state.bookings ?? [],
-            } as MemberState
-            setMember(nextMember)
-            setFirstNameDraft(nextMember.identity.firstName ?? '')
-            setLastNameDraft(nextMember.identity.lastName ?? '')
-            setMemberPhoneDraft(nextMember.identity.phone ?? '')
-            localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
-          }
-        }
-        setOfferPaymentNotices((current) => ({
-          ...current,
-          [pricingOptionId]: isFrench
-            ? 'Ta formule est enregistrée. À l’accueil, tu pourras lire et accepter ses conditions sur le terminal avant de payer. Les crédits seront ajoutés après validation du paiement.'
-            : 'Your plan is saved. At reception, review and accept its terms on the reader before paying. Credits will be added after payment is confirmed.',
-        }))
-        setOfferToPurchase(null)
-      } else {
-        throw new Error(responseMessage(payload, isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
-      }
+      if (!payload.checkoutUrl) throw new Error(responseMessage(payload, isFrench ? 'Le paiement en ligne n’a pas pu être préparé.' : 'Could not prepare online checkout.'))
       if (member && (!member.identity.firstName?.trim() || !member.identity.lastName?.trim() || !member.identity.phone?.trim())) {
         const updated = { ...member, identity: {
           ...member.identity,
@@ -739,6 +706,7 @@ function BookingPortalRoute() {
         setMember(updated)
         localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updated))
       }
+      window.location.assign(payload.checkoutUrl)
     } catch (reason) {
       setOfferCheckoutError(reason instanceof Error ? reason.message : (isFrench ? 'Le paiement n’a pas pu être préparé.' : 'Could not prepare checkout.'))
     } finally {
@@ -876,9 +844,7 @@ function BookingPortalRoute() {
       {offer.description && <p>{offer.description}</p>}
       <small>{creditsLabel}{offer.validityDays ? ` · ${offer.validityDays} ${isFrench ? 'jours de validité' : 'days validity'}` : ''} · {billingLabel}{offer.minimumCommitmentMonths ? ` · ${offer.minimumCommitmentMonths} ${isFrench ? 'mois d’engagement minimum' : 'months minimum commitment'}` : ''}</small>
       {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
-      {offer.billingInterval && offer.billingInterval !== 'ONCE' && schedule?.location.paymentMethods?.terminal && <small className="booking-terminal-consent-hint">{isFrench ? 'Sur place, tu confirmeras sur le terminal le prélèvement initial et les renouvellements automatiques.' : 'In person, you’ll confirm the initial payment and automatic renewals on the reader.'}</small>}
-      {!offerPaymentNotices[offer.id] && <button type="button" className="booking-offer-buy" onClick={() => { setOfferToPurchase(offer); setOfferCheckoutError('') }}>{isFrench ? 'Acheter' : 'Buy'}<span>→</span></button>}
-      {offerPaymentNotices[offer.id] && <p className="booking-offer-payment-notice" role="status">{offerPaymentNotices[offer.id]}</p>}
+      <button type="button" className="booking-offer-buy" onClick={() => { setOfferToPurchase(offer); setOfferCheckoutError('') }}>{isFrench ? 'Acheter' : 'Buy'}<span>→</span></button>
     </article>
   }
 
@@ -1025,12 +991,9 @@ function BookingPortalRoute() {
       {!member && <label className="booking-first-name booking-purchase-field">{isFrench ? 'E-mail' : 'Email'}<input type="email" autoComplete="email" required maxLength={254} value={guestEmail} onChange={(event) => updateGuestDraft('email', event.target.value)} placeholder={isFrench ? 'adresse@exemple.com' : 'name@example.com'} /></label>}
       {offerCheckoutError && <div className="booking-error" role="alert">{offerCheckoutError}</div>}
       <div className="booking-purchase-actions">
-        {schedule?.location.paymentMethods?.online !== false && <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId) || !canPurchaseOffer} onClick={() => void purchaseOffer(offerToPurchase.id, 'link')}>
+        <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId) || !canPurchaseOffer} onClick={() => void purchaseOffer(offerToPurchase.id)}>
           {purchasingOfferId === offerToPurchase.id ? (isFrench ? 'Préparation du paiement…' : 'Preparing payment…') : (isFrench ? 'Payer en ligne par carte' : 'Pay online by card')}<span>→</span>
-        </button>}
-        {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-purchase-terminal" disabled={Boolean(purchasingOfferId) || !canPurchaseOffer} onClick={() => void purchaseOffer(offerToPurchase.id, 'terminal')}>
-          {purchasingOfferId === offerToPurchase.id ? (isFrench ? 'Préparation…' : 'Preparing…') : (isFrench ? 'Payer sur place par carte' : 'Pay in person by card')}<span>→</span>
-        </button>}
+        </button>
       </div>
     </section></div>}
 
