@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DateRangePicker } from '@/components/ui/date-range-picker'
+import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
-import { SelectInput, SelectInputAsync } from '@/components/ui/select-input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
@@ -21,6 +20,28 @@ const shiftDate = (date: Date, days: number) => new Date(date.getFullYear(), dat
 const currency = (amount: number, code: string) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: code }).format(amount)
 const percent = (rate: number) => new Intl.NumberFormat('fr-FR', { style: 'percent', maximumFractionDigits: 2 }).format(rate)
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`
+const selectClassName = 'h-9 w-full rounded-[10px] border border-input bg-white px-3 text-base outline-none focus-visible:border-[var(--color-accent-500)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent-500)] disabled:cursor-not-allowed disabled:opacity-50'
+
+function ReportSelect({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  label: string
+  value: string
+  options: Array<{ value: string; label: string }>
+  onChange: (value: string) => void
+  disabled?: boolean
+}) {
+  return <label className="grid min-w-0 gap-1.5 text-sm font-medium">
+    <span>{label}</span>
+    <select className={selectClassName} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+      {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
+  </label>
+}
 
 const periodItems = [
   { value: 'TODAY', label: 'Today' },
@@ -89,7 +110,21 @@ export default function SalesReportPage() {
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('YEAR_TO_DATE')
   const [customerId, setCustomerId] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer>()
+  const [customerSearch, setCustomerSearch] = useState('')
   const [locationId, setLocationId] = useState('')
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('')
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedCustomerSearch(customerSearch.trim()), 250)
+    return () => window.clearTimeout(timeout)
+  }, [customerSearch])
+
+  const customersQuery = useQuery({
+    queryKey: [...customersQueryKeys.all, 'sales-report-picker', debouncedCustomerSearch],
+    queryFn: () => getCustomersListRequest({ contractId: undefined }, debouncedCustomerSearch),
+    enabled: isAdmin,
+    staleTime: 30_000,
+  })
 
   const locationsQuery = useQuery({
     queryKey: ['reports', 'sales', 'locations', isAdmin, activeCustomerId, customerId],
@@ -108,7 +143,7 @@ export default function SalesReportPage() {
   })
 
   const locationItems = useMemo(() => [
-    { value: '__all__', label: isAdmin && !customerId ? 'All locations' : 'All accessible locations' },
+    { value: '', label: isAdmin && !customerId ? 'All locations' : 'All accessible locations' },
     ...(locationsQuery.data ?? []).map((location) => ({
       value: location.id,
       label: isAdmin && !customerId && location.customerName ? `${location.name} · ${location.customerName}` : location.name,
@@ -136,54 +171,55 @@ export default function SalesReportPage() {
             <CardDescription>Choose a reporting period, customer and location.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 p-0 md:grid-cols-2 xl:grid-cols-4">
-            {isAdmin ? <SelectInputAsync<Customer>
-              label="Customer"
-              placeholder="All customers"
-              queryKey={[...customersQueryKeys.all, 'sales-report-picker']}
-              queryFn={(search) => getCustomersListRequest({ contractId: undefined }, search)}
-              getOption={(customer) => ({ value: customer.id, label: customer.name })}
-              selectedItems={selectedCustomer ? [selectedCustomer] : []}
-              value={customerId || undefined}
-              onValueChange={(value) => {
-                setCustomerId(String(value))
-                setLocationId('')
-              }}
-              onSelectedItemsChange={(items) => setSelectedCustomer(items[0])}
-              labelAction={customerId ? <Button variant="ghost" size="xs" onClick={() => { setCustomerId(''); setSelectedCustomer(undefined); setLocationId('') }}>Clear</Button> : undefined}
-              loadingMessage="Loading customers…"
-              errorMessage="Could not load customers."
-              emptyMessage="No customers found."
-            /> : null}
-            <SelectInput
+            {isAdmin ? <div className="grid min-w-0 gap-1.5 text-sm font-medium">
+              <label htmlFor="sales-report-customer-search">Customer</label>
+              <Input
+                id="sales-report-customer-search"
+                type="search"
+                placeholder="Search customers"
+                value={customerSearch}
+                onChange={(event) => setCustomerSearch(event.target.value)}
+              />
+              <select
+                aria-label="Customer"
+                className={selectClassName}
+                value={customerId}
+                disabled={customersQuery.isLoading}
+                onChange={(event) => {
+                  const nextId = event.target.value
+                  const nextCustomer = customersQuery.data?.find((customer) => customer.id === nextId)
+                  setCustomerId(nextId)
+                  setSelectedCustomer(nextCustomer)
+                  setLocationId('')
+                }}
+              >
+                <option value="">All customers</option>
+                {selectedCustomer && !customersQuery.data?.some((customer) => customer.id === selectedCustomer.id)
+                  ? <option value={selectedCustomer.id}>{selectedCustomer.name}</option>
+                  : null}
+                {(customersQuery.data ?? []).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+              </select>
+              {customersQuery.isError ? <span className="text-xs text-destructive">Could not load customers.</span> : null}
+            </div> : null}
+            <ReportSelect
               label="Location"
-              placeholder="All locations"
-              searchable
-              items={locationItems}
-              value={locationId || '__all__'}
-              isLoading={locationsQuery.isLoading}
-              loadingMessage="Loading locations…"
-              emptyMessage={locationsQuery.isError ? 'Could not load locations.' : 'No locations found.'}
-              disabled={locationsQuery.isError}
-              onValueChange={(value) => setLocationId(String(value) === '__all__' ? '' : String(value))}
+              value={locationId}
+              options={locationItems}
+              disabled={locationsQuery.isLoading || locationsQuery.isError}
+              onChange={setLocationId}
             />
-            <SelectInput
+            <ReportSelect
               label="Period"
-              searchable={false}
-              items={periodItems}
               value={periodPreset}
-              onValueChange={(value) => applyPreset(String(value))}
+              options={periodItems}
+              onChange={applyPreset}
             />
             {periodPreset === 'CUSTOM' ? <div className="grid gap-1.5 text-sm font-medium">
-              <span>Custom dates</span>
-              <DateRangePicker
-                value={{ from, to: to || undefined }}
-                placeholder="Choose date range"
-                className="w-full"
-                onValueChange={(range) => {
-                  setFrom(range?.from ?? '')
-                  setTo(range?.to ?? '')
-                }}
-              />
+              <label htmlFor="sales-report-from">Custom dates</label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input id="sales-report-from" aria-label="From date" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+                <Input aria-label="To date" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+              </div>
             </div> : <div className="flex flex-col justify-end gap-1.5 text-sm">
               <span className="font-medium">Selected dates</span>
               <div className="flex h-9 items-center rounded-lg border border-input bg-background px-3 text-muted-foreground">
