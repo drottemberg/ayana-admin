@@ -130,7 +130,7 @@ export default function SalesReportPage() {
     <PageHeader title="Sales report" subtitle="Sales, refunds, VAT and payment processing fees." />
     <section className="px-6 pb-8 md:px-8">
       <div className="mx-auto flex flex-col gap-5">
-        <Card size="sm" className="gap-4 rounded-lg bg-muted p-4">
+        <Card size="sm" className="relative z-20 gap-4 overflow-visible rounded-lg bg-muted p-4">
           <CardHeader className="p-0">
             <CardTitle className="text-lg">Report filters</CardTitle>
             <CardDescription>Choose a reporting period, customer and location.</CardDescription>
