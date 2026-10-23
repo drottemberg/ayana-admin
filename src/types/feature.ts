@@ -22,6 +22,7 @@ export const Feature = {
   CREDIT_TRANSACTIONS: 'CREDIT_TRANSACTIONS',
   MESSAGES: 'MESSAGES',
   LLM_CONFIG: 'LLM_CONFIG',
+  REPORTS: 'REPORTS',
 } as const
 
 export type Feature = (typeof Feature)[keyof typeof Feature]

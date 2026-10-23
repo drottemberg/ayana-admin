@@ -32,6 +32,7 @@ const routeFeatures: FeatureRoute[] = [
   { pathPrefix: '/users', feature: Feature.USERS },
   { pathPrefix: '/invites', feature: Feature.INVITATIONS },
   { pathPrefix: '/data', feature: Feature.DATA },
+  { pathPrefix: '/reports', feature: Feature.REPORTS },
   { pathPrefix: '/device-type-groups', feature: Feature.DEVICE_TYPE },
   { pathPrefix: '/device-types', feature: Feature.DEVICE_TYPE },
   { pathPrefix: '/llm-configs', feature: Feature.LLM_CONFIG },

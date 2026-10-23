@@ -26,6 +26,7 @@ const MediaCampaignPage = lazy(() => import('@/pages/app/MediaCampaignPage'))
 const ProductsPage = lazy(() => import('@/pages/app/ProductsPage'))
 const ProductPage = lazy(() => import('@/pages/app/ProductPage'))
 const DataReportsPage = lazy(() => import('@/pages/app/DataReportsPage'))
+const SalesReportPage = lazy(() => import('@/pages/app/SalesReportPage'))
 const IssuesPage = lazy(() => import('@/pages/app/IssuesPage'))
 const AiSupportIssuesPage = lazy(() => import('@/pages/app/AiSupportIssuesPage'))
 const CustomersPage = lazy(() => import('@/pages/app/CustomersPage'))
@@ -95,6 +96,7 @@ export const router = createBrowserRouter([
           { path: 'issues', element: <IssuesPage /> },
           { path: 'agent-support-issues', element: <AiSupportIssuesPage /> },
           { path: 'data', element: <DataReportsPage /> },
+          { path: 'reports/sales', element: <SalesReportPage /> },
           { path: 'customers', element: <CustomersPage /> },
           { path: 'customers/:customerId', element: <CustomerPage /> },
           { path: 'coaches/:customerId/:userId', element: <CoachPage /> },

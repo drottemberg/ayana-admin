@@ -92,6 +92,12 @@ const data = {
       feature: Feature.ORDERS,
     },
     {
+      title: 'Reports',
+      url: '/reports/sales',
+      icon: <Icon icon={EntityIcon.data} />,
+      feature: Feature.REPORTS,
+    },
+    {
       title: 'Messages',
       url: '/messages',
       icon: <Icon icon={EntityIcon.users} />,
