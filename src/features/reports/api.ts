@@ -30,6 +30,7 @@ export type SalesReport = {
   totals: SalesReportTotal[]
   vatBreakdown: SalesVatBucket[]
   entries: SalesReportEntry[]
+  pagination: { page: number; limit: number; total: number; pageCount: number }
   unallocated: Array<{ currency: string; gross: number }>
   stripeFeeSyncFailures?: number
   note: string
@@ -41,6 +42,6 @@ export function getSalesReportLocationsRequest(customerId?: string) {
   })
 }
 
-export function getSalesReportRequest(filters: { from: string; to: string; customerId?: string; locationId?: string }) {
+export function getSalesReportRequest(filters: { from: string; to: string; customerId?: string; locationId?: string; page?: number; limit?: number }) {
   return apiClient.get<SalesReport>('/reports/sales', { params: filters })
 }

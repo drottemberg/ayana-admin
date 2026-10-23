@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TablePagination } from '@/components/table-pagination'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { getCustomersListRequest } from '@/features/customers/api'
@@ -81,11 +82,11 @@ function displayDateRange(from: string, to: string) {
   return `${format(from)} – ${format(to)}`
 }
 
-function downloadCsv(report: SalesReport) {
+function downloadCsv(report: SalesReport, entries = report.entries) {
   const rows: unknown[][] = [
     ['Section', 'Date', 'Type', 'Order', 'Client', 'Location', 'VAT rate', 'Net sales', 'VAT', 'Gross', 'Currency'],
     ...report.vatBreakdown.map((item) => ['VAT', `${report.from} – ${report.to}`, 'NET SALES', '', '', '', percent(item.vatRate), item.net, item.vat, item.gross, item.currency]),
-    ...report.entries.map((item) => [
+    ...entries.map((item) => [
       'Transaction', new Date(item.date).toISOString(), item.type === 'STRIPE_FEE' ? 'PAYMENT PROCESSING FEE' : item.type,
       item.orderCode ?? item.orderId ?? '', item.customerName ?? '', item.locationName,
       item.vatAllocated ? 'Allocated by order VAT rates' : 'Unallocated', '', '', item.type === 'SALE' ? item.amount : -item.amount, item.currency,
@@ -113,6 +114,11 @@ export default function SalesReportPage() {
   const [customerSearch, setCustomerSearch] = useState('')
   const [locationId, setLocationId] = useState('')
   const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('')
+  const [entriesPage, setEntriesPage] = useState(1)
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportError, setExportError] = useState(false)
+
+  useEffect(() => setEntriesPage(1), [from, to, customerId, locationId])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedCustomerSearch(customerSearch.trim()), 250)
@@ -131,12 +137,14 @@ export default function SalesReportPage() {
     queryFn: () => getSalesReportLocationsRequest(isAdmin ? customerId || undefined : undefined),
   })
   const reportQuery = useQuery({
-    queryKey: ['reports', 'sales', from, to, isAdmin ? customerId : activeCustomerId, locationId],
+    queryKey: ['reports', 'sales', from, to, isAdmin ? customerId : activeCustomerId, locationId, entriesPage],
     queryFn: () => getSalesReportRequest({
       from,
       to,
       ...(isAdmin ? (customerId ? { customerId } : {}) : {}),
       ...(locationId ? { locationId } : {}),
+      page: entriesPage,
+      limit: 50,
     }),
     enabled: Boolean(from && to && from <= to),
     staleTime: 0,
@@ -160,6 +168,34 @@ export default function SalesReportPage() {
   }
 
   const report = reportQuery.data
+
+  const exportFullReport = async () => {
+    if (!report) return
+    setIsExporting(true)
+    setExportError(false)
+    try {
+      const filters = {
+        from,
+        to,
+        ...(isAdmin ? (customerId ? { customerId } : {}) : {}),
+        ...(locationId ? { locationId } : {}),
+      }
+      const allEntries: SalesReport['entries'] = []
+      let page = 1
+      let pageCount = 1
+      while (page <= pageCount) {
+        const pageReport = await getSalesReportRequest({ ...filters, page, limit: 5000 })
+        allEntries.push(...pageReport.entries)
+        pageCount = pageReport.pagination.pageCount
+        page += 1
+      }
+      downloadCsv(report, allEntries)
+    } catch {
+      setExportError(true)
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return <>
     <PageHeader title="Sales report" subtitle="Sales, refunds, VAT and payment processing fees." />
@@ -234,7 +270,10 @@ export default function SalesReportPage() {
         {report ? <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">{displayDateRange(report.from, report.to)} · Dates use each location’s timezone.</p>
-            <Button variant="outline" onClick={() => downloadCsv(report)}>Export CSV</Button>
+            <div className="flex items-center gap-3">
+              {exportError ? <span role="alert" className="text-sm text-destructive">Could not export the full report.</span> : null}
+              <Button variant="outline" disabled={isExporting} onClick={() => void exportFullReport()}>{isExporting ? 'Preparing CSV…' : 'Export CSV'}</Button>
+            </div>
           </div>
 
           {report.totals.length ? report.totals.map((total) => <div key={total.currency} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -284,6 +323,20 @@ export default function SalesReportPage() {
                   {!report.entries.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No transactions found.</TableCell></TableRow> : null}
                 </TableBody>
               </Table>
+              {report.pagination.pageCount > 1 ? <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+                <p className="text-sm text-muted-foreground">
+                  {((report.pagination.page - 1) * report.pagination.limit) + 1}–{Math.min(report.pagination.page * report.pagination.limit, report.pagination.total)} of {report.pagination.total} transactions
+                </p>
+                <TablePagination
+                  pageIndex={report.pagination.page - 1}
+                  pageCount={report.pagination.pageCount}
+                  canPreviousPage={report.pagination.page > 1}
+                  canNextPage={report.pagination.page < report.pagination.pageCount}
+                  onPreviousPage={() => setEntriesPage((page) => Math.max(1, page - 1))}
+                  onNextPage={() => setEntriesPage((page) => Math.min(report.pagination.pageCount, page + 1))}
+                  onPageChange={(page) => setEntriesPage(page + 1)}
+                />
+              </div> : null}
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground">{report.note.replaceAll('Stripe fees', 'Payment processing fees')}</p>
