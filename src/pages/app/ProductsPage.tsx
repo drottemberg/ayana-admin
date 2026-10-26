@@ -32,11 +32,11 @@ export default function ProductsPage() {
   )
   const handleGetRowCommands = useCallback((product: Product) => {
     return ProductManagementService.getRowActions(product, {
-      canEdit: Boolean(session?.permissions.customers?.edit),
+      canEdit: Boolean(session?.permissions.products?.edit),
       onEdit: setEditingProduct,
       onEditScope: setEditingScopeProduct,
     })
-  }, [session?.permissions.customers?.edit])
+  }, [session?.permissions.products?.edit])
 
   return (
     <>

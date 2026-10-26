@@ -322,7 +322,7 @@ export default function ProductPage() {
   } | null>(null)
   const { session } = useConnect()
   const queryClient = useQueryClient()
-  const canManageOrders = Boolean(session?.permissions.customers?.edit)
+  const canManageOrders = Boolean(session?.permissions.orders?.edit)
 
   const {
     data: product,
@@ -529,7 +529,7 @@ export default function ProductPage() {
           }
           tableKey="products.detail.modules.orders"
           columns={getOrderColumns({ showCustomer: false })}
-          getRowCommands={(order) => OrderService.getRowActions(order, canManageOrders, canManageOrders || Boolean(session?.permissions.orders?.delete))}
+          getRowCommands={(order) => OrderService.getRowActions(order, canManageOrders, Boolean(session?.permissions.orders?.delete))}
           loadingMessage="Loading product orders..."
           emptyMessage="No orders contain this product."
           refetchOnMount={false}

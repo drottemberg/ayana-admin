@@ -138,7 +138,12 @@ export default function LocationPage() {
   const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
   const { session } = useConnect()
   const canViewCoaches = Boolean(session?.permissions.coaches?.view)
-  const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
+  const canEditProducts = Boolean(session?.permissions.products?.edit)
+  const canViewClientContracts = Boolean(session?.permissions.clientContracts?.view)
+  const canEditClientContracts = Boolean(session?.permissions.clientContracts?.edit)
+  const canViewOrders = Boolean(session?.permissions.orders?.view)
+  const canEditOrders = Boolean(session?.permissions.orders?.edit)
+  const canRefundOrders = Boolean(session?.permissions.orders?.delete)
   const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
   const modules = useMemo(() => [
     { key: 'pricing-options', label: 'Pricing options' },
@@ -146,11 +151,10 @@ export default function LocationPage() {
     ...(canViewCoaches ? [{ key: 'coaches', label: 'Coaches' }] : []),
     { key: 'class-sessions', label: 'Class sessions' },
     { key: 'devices', label: 'Devices' },
-    ...(canManageOrdersAndContracts ? [{ key: 'products', label: 'Products' }] : []),
-    ...(canManageOrdersAndContracts
-      ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }]
-      : []),
-  ], [canManageOrdersAndContracts, canViewCoaches])
+    ...(canEditProducts ? [{ key: 'products', label: 'Products' }] : []),
+    ...(canViewClientContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
+    ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
+  ], [canEditProducts, canViewClientContracts, canViewOrders, canViewCoaches])
   const {
     data: location,
     isError,
@@ -272,7 +276,7 @@ export default function LocationPage() {
           loadingMessage="Loading devices..."
           emptyMessage="No devices found for this location."
         />
-        {canManageOrdersAndContracts ? <RelatedEntityModule
+        {canEditProducts ? <RelatedEntityModule
           id="module-products"
           title="Products"
           icon={EntityIcon.products}
@@ -284,7 +288,7 @@ export default function LocationPage() {
           loadingMessage="Loading products..."
           emptyMessage="No products configured for this customer."
         /> : null}
-        {canManageOrdersAndContracts ? <RelatedEntityModule
+        {canViewClientContracts ? <RelatedEntityModule
           id="module-client-contracts"
           title="Client contracts"
           icon={EntityIcon.clientContracts}
@@ -293,11 +297,11 @@ export default function LocationPage() {
           loadData={(state: DataTableState<ClientContract>) => getClientContractsRequest(state, { locationId })}
           tableKey={`locations.detail.modules.client-contracts.${locationId}`}
           columns={getClientContractColumns({ showLocation: false })}
-          getRowCommands={(contract) => ClientContractService.getRowActions(contract, Boolean(session?.permissions.customers?.edit))}
+          getRowCommands={(contract) => ClientContractService.getRowActions(contract, canEditClientContracts)}
           loadingMessage="Loading client contracts..."
           emptyMessage="No client contracts found for this location."
         /> : null}
-        {canManageOrdersAndContracts ? <RelatedEntityModule
+        {canViewOrders ? <RelatedEntityModule
           id="module-orders"
           title="Orders"
           icon={EntityIcon.orders}
@@ -306,7 +310,7 @@ export default function LocationPage() {
           loadData={(state: DataTableState<Order>) => getOrdersRequest(state, { locationId })}
           tableKey={`locations.detail.modules.orders.${locationId}`}
           columns={getOrderColumns({ showLocation: false })}
-          getRowCommands={(order) => OrderService.getRowActions(order, Boolean(session?.permissions.customers?.edit), Boolean(session?.permissions.orders?.edit || session?.permissions.orders?.delete))}
+          getRowCommands={(order) => OrderService.getRowActions(order, canEditOrders, canRefundOrders)}
           loadingMessage="Loading orders..."
           emptyMessage="No orders found for this location."
         /> : null}

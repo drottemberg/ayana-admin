@@ -33,7 +33,7 @@ export default function ClientContractsPage() {
     ...(searchParams.get('filterLocationId') ? { locationId: [searchParams.get('filterLocationId')!] } : {}),
     ...(searchParams.get('userId') ? { userId: [searchParams.get('userId')!] } : {}),
   }
-  const canManage = Boolean(session?.permissions.customers?.edit)
+  const canManage = Boolean(session?.permissions.clientContracts?.edit)
 
   return <>
     <PageHeader title="Client contracts" subtitle="Memberships and credit packs held by customers." />

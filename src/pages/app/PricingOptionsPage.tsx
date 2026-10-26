@@ -43,7 +43,7 @@ export default function PricingOptionsPage() {
       <PageHeader
         title="Pricing options"
         subtitle="Manage pricing options across customers."
-        primaryAction={session?.permissions.customers?.create
+        primaryAction={session?.permissions.pricingOptions?.create
           ? { children: 'Create pricing option', onClick: openCreate }
           : undefined}
       />
@@ -80,8 +80,8 @@ export default function PricingOptionsPage() {
             },
           ]}
           getRowCommands={(option) => PricingOptionService.getRowActions(option, {
-            canEdit: Boolean(session?.permissions.customers?.edit),
-            canDelete: Boolean(session?.permissions.customers?.delete),
+            canEdit: Boolean(session?.permissions.pricingOptions?.edit),
+            canDelete: Boolean(session?.permissions.pricingOptions?.delete),
             onEdit: openEdit,
           })}
           loadingMessage="Loading pricing options..."
