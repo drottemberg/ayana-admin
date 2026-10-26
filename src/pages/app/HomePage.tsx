@@ -158,7 +158,7 @@ export default function HomePage() {
     enabled: Boolean(locationQuery.customerId && locationQuery.locationId),
   })
   const pendingInvites = useQuery({
-    queryKey: [...userRequestsQueryKeys.all, 'home', 'received', 'pending-count'],
+    queryKey: [...userRequestsQueryKeys.all, 'home', getAppMode(), userId, 'received', 'pending-count'],
     queryFn: () => getUserRequestsPageRequest({
       pagination: { pageIndex: 0, pageSize: 1 },
       sorting: [],
@@ -168,9 +168,13 @@ export default function HomePage() {
       status: [UserRequestStatus.PENDING],
       type: [UserRequestType.ORG_INVITE],
     }),
-    enabled: Boolean(session),
+    enabled: Boolean(session?.user.id),
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
-  const hasPendingInvites = (pendingInvites.data?.count ?? 0) > 0
+  const hasPendingInvites = pendingInvites.isSuccess
+    && !pendingInvites.isFetching
+    && (pendingInvites.data.count > 0)
 
   const canViewSessions = Boolean(isCoach && session?.permissions.classSessions?.view)
   const canViewBookings = Boolean(isCoach && session?.permissions.bookings?.view)
@@ -215,7 +219,7 @@ export default function HomePage() {
           title="Received invites"
           icon={EntityIcon.users}
           columns={inviteColumns}
-          queryKey={[...userRequestsQueryKeys.all, 'home', 'received', 'pending']}
+          queryKey={[...userRequestsQueryKeys.all, 'home', getAppMode(), userId, 'received', 'pending']}
           loadData={async (state) => {
             const result = await getUserRequestsPageRequest(state, 'RECEIVED', {
               status: [UserRequestStatus.PENDING],
