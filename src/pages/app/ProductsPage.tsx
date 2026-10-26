@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
@@ -15,6 +16,7 @@ import type { Product } from '@/types/product'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 
 export default function ProductsPage() {
+  const navigate = useNavigate()
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingScopeProduct, setEditingScopeProduct] = useState<Product | null>(null)
   const { session } = useConnect()
@@ -40,7 +42,14 @@ export default function ProductsPage() {
 
   return (
     <>
-      <PageHeader title="Products" subtitle="Customer catalog and location visibility." />
+      <PageHeader
+        title="Products"
+        subtitle="Customer catalog and location visibility."
+        tabs={[
+          { key: 'products', label: 'Products', active: true },
+          { key: 'categories', label: 'Categories', onClick: () => navigate('/products/categories') },
+        ]}
+      />
 
       <section className="space-y-5 p-4 md:p-6">
         <DataTableAsync

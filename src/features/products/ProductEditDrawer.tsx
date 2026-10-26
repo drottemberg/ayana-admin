@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { SelectInput } from '@/components/ui/select-input'
 import { TextInput } from '@/components/ui/text-input'
 import { Textarea } from '@/components/ui/textarea'
-import { getProductManagementRequest, updateProductManagementRequest } from '@/features/products/api'
+import { getProductManagementRequest, updateProductManagementRequest, uploadProductImageRequest } from '@/features/products/api'
+import { CatalogImageEditor } from '@/features/products/CatalogImageEditor'
 import { productLocationQueryKeys } from '@/features/products/location-products'
 import { productsQueryKeys } from '@/features/products/query-keys'
 import type {
@@ -75,6 +76,9 @@ export function ProductEditDrawer({
   const [isOnline, setIsOnline] = useState(false)
   const [isInStore, setIsInStore] = useState(true)
   const [isSellable, setIsSellable] = useState(true)
+  const [productImageUrl, setProductImageUrl] = useState('')
+  const [productImageAttachmentId, setProductImageAttachmentId] = useState('')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [variants, setVariants] = useState<ProductVariant[]>([])
   const [modifierGroups, setModifierGroups] = useState<ProductModifierGroup[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -99,6 +103,8 @@ export function ProductEditDrawer({
     setIsOnline(data.isOnline ?? false)
     setIsInStore(data.isInStore ?? true)
     setIsSellable(data.isSellable ?? true)
+    setProductImageUrl(data.imageUrl ?? '')
+    setProductImageAttachmentId(data.attachmentId ?? '')
     setVariants([
       ...(data.variants ?? []).map((variant) => ({ ...variant, attributes: [...(variant.attributes ?? [])] })),
       ...(addSection === 'variants'
@@ -224,6 +230,25 @@ export function ProductEditDrawer({
   const selectedProductType = details.data?.productTypes?.find((type) => type.id === productTypeId)
   const inheritedVatRate = selectedProductType?.vatRate == null ? null : Number(selectedProductType.vatRate) * 100
 
+  const uploadImage = async (file: File): Promise<boolean> => {
+    if (!product) return false
+    setUploadingPhoto(true)
+    try {
+      const uploaded = await uploadProductImageRequest(product.id, customerId, file)
+      setProductImageUrl(uploaded.imageUrl)
+      setProductImageAttachmentId(uploaded.attachmentId)
+      await queryClient.invalidateQueries({ queryKey: [...productsQueryKeys.detail(product.id), 'management'] })
+      await queryClient.invalidateQueries({ queryKey: productsQueryKeys.all })
+      toast.success('Product photo saved.')
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save this product photo.')
+      return false
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
   return (
     <AppDrawer
       open={open}
@@ -253,6 +278,13 @@ export function ProductEditDrawer({
                   onValueChange={(value) => setProductTypeId(String(value))}
                   searchable
                 />
+                <section className="space-y-3 rounded-xl bg-muted/30 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">Product photo</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">Upload an image or use AI to create a polished version. Review the preview before saving.</p>
+                  </div>
+                  <CatalogImageEditor label="Product photo" imageUrl={productImageUrl} attachmentId={productImageAttachmentId} customerId={customerId} emptyIcon="✨" uploading={uploadingPhoto} onUpload={uploadImage} />
+                </section>
                 <label className="grid gap-1.5 text-sm font-medium">
                   VAT rate (%)
                   <input

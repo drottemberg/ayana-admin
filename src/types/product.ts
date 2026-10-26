@@ -6,6 +6,14 @@ export type ProductBrand = {
   name: string
 }
 
+export type ProductCategory = {
+  id: string
+  name: string
+  vatRate: number | string
+  attachmentId?: string | null
+  imageUrl?: string | null
+}
+
 export const ProductStatus = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',
@@ -30,10 +38,12 @@ export type Product = {
   customerId?: string
   organizationId?: string
   productType?: { id: string; name: string; vatRate?: number | string } | null
-  productTypes?: { id: string; name: string; vatRate?: number | string }[]
+  productTypes?: { id: string; name: string; vatRate?: number | string; imageUrl?: string | null; attachmentId?: string | null }[]
   /** null inherits the selected product category rate; values are fractions (0.20 = 20%). */
   vatRate?: number | string | null
   description?: string | null
+  attachmentId?: string | null
+  imageUrl?: string | null
   isOnline?: boolean
   isInStore?: boolean
   isActive?: boolean

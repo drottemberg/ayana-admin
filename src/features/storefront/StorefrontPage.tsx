@@ -12,8 +12,9 @@ type ProductOption = { id: string; name: string; price: number }
 type ModifierGroup = { id: string; name: string; required: boolean; minSelect: number; maxSelect: number; options: ProductOption[] }
 type Variant = { id: string; label: string; price: number; stock: number; available: boolean }
 type Product = { id: string; name: string; description?: string | null; categoryId?: string; category: string; imageUrl?: string | null; variants: Variant[]; modifierGroups: ModifierGroup[] }
+type StoreCategory = { id: string; name: string; imageUrl?: string | null; productCount: number }
 type PrefillChoice = { product: Product; variant?: Variant; options: Record<string, string[]>; quantity: number; missingOption: boolean }
-type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null; telegramBotUsername?: string | null }; currency: string; acceptsProductOrders?: boolean; paymentMethods?: { online: boolean; terminal: boolean }; products: Product[] }
+type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null; telegramBotUsername?: string | null }; currency: string; acceptsProductOrders?: boolean; paymentMethods?: { online: boolean; terminal: boolean }; categories?: StoreCategory[]; products: Product[] }
 type CartLine = { key: string; productId: string; name: string; variantId: string; variantLabel: string; unitPrice: number; quantity: number; modifierIds: string[]; modifierNames: string[]; modifierTotal: number }
 type Identity = { token?: string; firstName?: string; lastName?: string; email?: string; phone?: string }
 type StorefrontLanguage = 'fr' | 'en'
@@ -73,6 +74,24 @@ function money(value: number, currency: string, language: StorefrontLanguage) {
   return new Intl.NumberFormat(language === 'fr' ? 'fr-FR' : 'en-GB', { style: 'currency', currency }).format(value)
 }
 
+function categoryEmoji(name: string) {
+  const normalized = name.toLocaleLowerCase()
+  if (/matcha/.test(normalized)) return '🍵'
+  if (/coffee|café|cafe/.test(normalized)) return '☕'
+  if (/tea|thé|the|infusion/.test(normalized)) return '🫖'
+  if (/good|merch|accessor/.test(normalized)) return '🛍️'
+  return '✨'
+}
+
+function productEmoji(category: string, name: string) {
+  const normalized = `${category} ${name}`.toLocaleLowerCase()
+  if (/matcha/.test(normalized)) return '🍵'
+  if (/coffee|café|cafe|espresso|latte|cappuccino|americano/.test(normalized)) return '☕'
+  if (/tea|thé|the|infusion/.test(normalized)) return '🫖'
+  if (/good|merch|sock|chaussette|tote|gourde/.test(normalized)) return '🛍️'
+  return '✨'
+}
+
 function StorefrontRoute() {
   const { customerSlug = '', locationSlug = '' } = useParams()
   const [searchParams] = useSearchParams()
@@ -83,6 +102,7 @@ function StorefrontRoute() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [category, setCategory] = useState(() => searchParams.get('category') ?? 'Tout')
+  const [showCategoryListing, setShowCategoryListing] = useState(() => searchParams.has('category') || searchParams.has('categoryId'))
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [variantId, setVariantId] = useState('')
   const [selectedProductQuantity, setSelectedProductQuantity] = useState(1)
@@ -93,6 +113,7 @@ function StorefrontRoute() {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({})
   const [optionError, setOptionError] = useState('')
   const [cart, setCart] = useState<CartLine[]>(readCart)
+  const [orderNote, setOrderNote] = useState('')
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'terminal'>('online')
@@ -250,12 +271,6 @@ function StorefrontRoute() {
     </section></div>
   }
 
-  const logout = () => {
-    try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear in-memory identity even if storage is unavailable */ }
-    setIdentity({})
-    setCheckoutError('')
-  }
-
   useEffect(() => {
     localStorage.setItem(CART_KEY, JSON.stringify(cart))
   }, [cart])
@@ -273,6 +288,7 @@ function StorefrontRoute() {
     setIdentity(savedIdentity)
     setCheckoutFirstName(savedIdentity.firstName ?? draft.firstName)
     setCategory(searchParams.get('category') ?? 'Tout')
+    setShowCategoryListing(searchParams.has('category') || searchParams.has('categoryId'))
   }, [customerSlug, locationSlug])
 
   useEffect(() => {
@@ -399,7 +415,16 @@ function StorefrontRoute() {
     }
   }, [isFrench, searchParams])
 
-  const categories = useMemo(() => ['Tout', ...new Set(catalog?.products.map((product) => product.category) ?? [])], [catalog])
+  const categoryCards = useMemo(() => {
+    if (catalog?.categories?.length) return catalog.categories
+    const seen = new Set<string>()
+    return (catalog?.products ?? []).flatMap((product) => {
+      if (seen.has(product.category)) return []
+      seen.add(product.category)
+      return [{ id: product.categoryId ?? product.category, name: product.category, imageUrl: null, productCount: catalog?.products.filter((item) => item.category === product.category).length ?? 0 }]
+    })
+  }, [catalog])
+  const categories = useMemo(() => ['Tout', ...new Set(categoryCards.map((item) => item.name))], [categoryCards])
   const visibleProducts = useMemo(() => catalog?.products.filter((product) => category === 'Tout' || product.category === category) ?? [], [catalog, category])
   const selectedVariant = selectedProduct?.variants.find((variant) => variant.id === variantId)
   const selectedModifierIds = Object.values(selectedOptions).flat()
@@ -494,7 +519,7 @@ function StorefrontRoute() {
     const requestedCategoryId = searchParams.get('categoryId')
     if (requestedCategoryId) {
       const categoryProduct = catalog.products.find((product) => product.categoryId === requestedCategoryId)
-      if (categoryProduct) setCategory(categoryProduct.category)
+      if (categoryProduct) { setCategory(categoryProduct.category); setShowCategoryListing(true) }
     }
     const encodedCart = searchParams.get('cart')
     const cartLinkKey = `${searchParams.get('token') ?? ''}:${encodedCart ?? ''}`
@@ -693,6 +718,7 @@ function StorefrontRoute() {
             : { firstName: checkoutFirstName.trim() }),
           paymentMethod: selectedMethod,
           language,
+          ...(orderNote.trim() ? { note: orderNote.trim() } : {}),
           items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity, modifierIds: line.modifierIds })),
         }),
       })
@@ -710,6 +736,7 @@ function StorefrontRoute() {
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextIdentity))
       if (terminalQueued) {
         setCart([])
+        setOrderNote('')
         localStorage.removeItem(guestDraftKey(customerSlug, locationSlug))
         setCheckoutOpen(false)
         setTerminalOrder({ shortCode: payload.shortCode })
@@ -805,42 +832,60 @@ function StorefrontRoute() {
 
   return (
     <main className="ayana-store">
-      <header className="store-topbar"><a className="ayana-logo-link" href={storeBasePath}><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></a><LanguageSelector language={language} onChange={changeLanguage} />{catalog.acceptsProductOrders !== false && <button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label={tr('Ouvrir le panier', 'Open cart')}>{tr('Panier', 'Cart')} <b>{totalCount}</b></button>}</header>
-      <section className="store-hero">
-        <p className="store-eyebrow">{catalog.location.name}</p>
-        <h1>{isFrench ? <>Un peu de douceur,<br /><em>à emporter.</em></> : <>A little something<br /><em>to take away.</em></>}</h1>
-        <p>{tr('Café, matcha et essentiels Ayana. Choisis, personnalise, puis règle ta commande en toute simplicité.', 'Coffee, matcha and Ayana essentials. Choose your items, customise them, then check out with ease.')}</p>
-        <span className="hero-sun" aria-hidden="true">✳</span>
-      </section>
+      <header className="store-topbar">
+        {showCategoryListing && <button className="store-back" type="button" onClick={() => { setCategory('Tout'); setShowCategoryListing(false) }} aria-label={tr('Retour aux catégories', 'Back to categories')}>←</button>}
+        <button className="ayana-logo-link" type="button" onClick={() => { setCategory('Tout'); setShowCategoryListing(false) }} aria-label={tr('Accueil boutique', 'Shop home')}><img className="ayana-logo" src={ayanaLogo} alt="Ayana Feelness Club" /></button>
+        <LanguageSelector language={language} onChange={changeLanguage} />
+        {catalog.acceptsProductOrders !== false && <button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label={`${tr('Ouvrir le panier', 'Open cart')}, ${totalCount}`}>🛒 <b>{totalCount}</b></button>}
+      </header>
       {catalog.acceptsProductOrders === false && <div className="store-notice" role="status">{tr('La boutique ne prend pas de commandes à emporter pour le moment. Réessaie un peu plus tard.', 'The shop is not taking pickup orders right now. Please try again later.')}</div>}
-      {identity.token
-        ? <section className="store-account-card"><div><span>{tr('Connecté·e', 'Signed in')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div><button type="button" className="store-account-logout" onClick={logout} aria-label={tr('Se déconnecter', 'Log out')} title={tr('Se déconnecter', 'Log out')}>↪</button></section>
-        : <section className="store-account-card store-account-login"><div><strong>{tr('Commande avec ton compte Ayana', 'Order with your Ayana account')}</strong></div>{renderAccessButtons('store-login-cta')}{accessError && <p className="store-form-error" role="alert">{accessError}</p>}</section>}
       {checkoutError && !checkoutOpen && <div className="store-notice">{checkoutError}</div>}
+      {!showCategoryListing ? <section className="store-category-home">
+        <p className="store-eyebrow">{catalog.location.name}</p>
+        <h1>{isFrench ? <>Qu’est-ce qui te<br /><em>ferait envie&nbsp;?</em></> : <>What are you<br /><em>craving?</em></>}</h1>
+        <p className="store-home-description"></p>
+        <div className="store-category-grid">
+          {categoryCards.map((item, index) => {
+            const imageUrl = item.imageUrl || catalog.products.find((product) =>
+              (product.categoryId === item.id || product.category === item.name) && product.imageUrl,
+            )?.imageUrl
+            return <button className={`store-category-card category-card-${index % 4}`} type="button" key={item.id} onClick={() => { setCategory(item.name); setShowCategoryListing(true) }}>
+              {imageUrl ? <img className="store-category-photo" src={imageUrl} alt="" loading="lazy" /> : <span className="store-category-emoji" aria-hidden="true">{categoryEmoji(item.name)}</span>}
+              <span className="store-category-name">{item.name}</span><span className="store-category-arrow" aria-hidden="true">→</span>
+            </button>
+          })}
+        </div>
+        <button className="store-browse-all" type="button" onClick={() => { setCategory('Tout'); setShowCategoryListing(true) }}>{tr('Tout voir', 'Browse everything')} <span>→</span></button>
+      </section> : <>
+      <section className="store-category-heading"><p className="store-eyebrow">{catalog.location.name}</p><h1>{category === 'Tout' ? tr('Tout le menu', 'Browse everything') : category}</h1></section>
       <nav className="store-categories" aria-label={tr('Catégories', 'Categories')}>
-        {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item === 'Tout' ? tr('Tout', 'All') : item}</button>)}
+        {categories.map((item) => <button key={item} className={category === item ? 'active' : ''} onClick={() => { setCategory(item); setShowCategoryListing(true) }}>{item === 'Tout' ? tr('Tout', 'All') : item}</button>)}
       </nav>
       <section className="store-products">
         {visibleProducts.map((product, index) => {
           const availablePrices = product.variants.filter((variant) => variant.available).map((variant) => variant.price)
           const startPrice = availablePrices.length ? Math.min(...availablePrices) : Number.POSITIVE_INFINITY
+          const hasPriceChoices = product.variants.filter((variant) => variant.available).length > 1 || product.modifierGroups.some((group) => group.options.some((option) => option.price > 0))
           return <button className="store-product" key={product.id} disabled={catalog.acceptsProductOrders === false} onClick={() => openProduct(product)}>
-            <span className={`product-art art-${index % 4}`}>{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <span>{product.category.toLowerCase().includes('good') ? '✳' : '◌'}</span>}</span>
-            <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}<span className="product-buy">{Number.isFinite(startPrice) ? `${tr('À partir de', 'From')} ${money(startPrice, currency, language)}` : tr('Indisponible', 'Unavailable')} <b aria-hidden="true">＋</b></span></span>
+            <span className={`product-art art-${index % 4} ${product.imageUrl ? 'product-art-has-image' : 'product-art-no-image'}`}>{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <span className="product-fallback-emoji" aria-hidden="true">{productEmoji(product.category, product.name)}</span>}</span>
+            <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}<span className="product-buy">{Number.isFinite(startPrice) ? `${hasPriceChoices ? `${tr('À partir de', 'From')} ` : ''}${money(startPrice, currency, language)}` : tr('Indisponible', 'Unavailable')} <b aria-hidden="true">＋</b></span></span>
           </button>
         })}
         {!visibleProducts.length && <div className="store-empty"><h2>{tr('Aucun article disponible', 'No items available')}</h2><p>{tr('La sélection de cette catégorie arrive bientôt.', 'Items in this category will be available soon.')}</p></div>}
       </section>
       <footer className="store-footer"><span>AYANA FEELNESS CLUB</span><span>{catalog.location.name}</span></footer>
+      </>}
 
-      {catalog.acceptsProductOrders !== false && totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>{tr('Voir mon panier', 'View my cart')} <small>{totalCount} {tr(totalCount > 1 ? 'articles' : 'article', totalCount > 1 ? 'items' : 'item')}</small></span><b>{money(total, currency, language)}　→</b></button>}
+      {catalog.acceptsProductOrders !== false && totalCount > 0 && <button className="store-sticky-cart" onClick={() => setCartOpen(true)}><span>{tr('Voir mon panier', 'View cart')} · {totalCount} {tr(totalCount > 1 ? 'articles' : 'article', totalCount > 1 ? 'items' : 'item')}</span><b>{money(total, currency, language)}　→</b></button>}
 
       {selectedProduct && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProduct() }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={selectedProduct.name}>
-        <button className="sheet-close" onClick={closeProduct} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
+        <button className="sheet-close" onClick={closeProduct} aria-label={tr('Fermer', 'Close')}>×</button>
+        <div className={`product-sheet-photo ${selectedProduct.imageUrl ? 'product-sheet-photo-has-image' : 'product-sheet-photo-no-image'}`}>{selectedProduct.imageUrl ? <img src={selectedProduct.imageUrl} alt="" /> : <span aria-hidden="true">{productEmoji(selectedProduct.category, selectedProduct.name)}</span>}</div>
+        <p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
         <label className="product-quantity-field">{tr('Quantité', 'Quantity')}<input type="number" min={1} max={50} step={1} value={selectedProductQuantity} onChange={(event) => setSelectedProductQuantity(Math.max(1, Math.min(50, Math.floor(Number(event.target.value) || 1))))} /></label>
         {selectedProduct.variants.length > 1 && <fieldset className="option-section"><legend>{tr('Choisis ton format', 'Choose a size')}</legend>{selectedProduct.variants.map((variant) => <button type="button" key={variant.id} disabled={!variant.available} onClick={() => setVariantId(variant.id)} className={`option-choice ${variantId === variant.id ? 'chosen' : ''}`}><span>{variant.label}</span><b>{variant.available ? money(variant.price, currency, language) : tr('Épuisé', 'Sold out')}</b></button>)}</fieldset>}
         {selectedProduct.modifierGroups.map((group) => <fieldset className="option-section" key={group.id}><legend>{group.name}{group.required || group.minSelect > 0 ? <small> · {tr('obligatoire', 'required')}</small> : <small> · {tr('au choix', 'optional')}</small>}</legend>{group.options.map((option) => <button type="button" key={option.id} className={`option-choice ${(selectedOptions[group.id] ?? []).includes(option.id) ? 'chosen' : ''}`} onClick={() => toggleOption(group, option)}><span>{option.name}</span><b>{option.price ? `+ ${money(option.price, currency, language)}` : tr('Inclus', 'Included')}</b></button>)}</fieldset>)}
-        {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>{tr(editingCartKey ? 'Enregistrer les modifications' : 'Ajouter au panier', editingCartKey ? 'Save changes' : 'Add to cart')}</span><b>{money(selectedUnitPrice * selectedProductQuantity, currency, language)}</b></button>
+        {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary product-sheet-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>{tr(editingCartKey ? 'Enregistrer les modifications' : 'Ajouter au panier', editingCartKey ? 'Save changes' : 'Add to cart')}</span><b>{money(selectedUnitPrice * selectedProductQuantity, currency, language)}</b></button>
         {isPrefillSelection && <button type="button" className="store-text-button prefill-skip" onClick={skipPrefillChoice}>{tr('Ignorer cet article', 'Skip this item')}</button>}
       </section></div>}
 
@@ -848,7 +893,8 @@ function StorefrontRoute() {
         <button className="sheet-close" onClick={() => setCartOpen(false)} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{tr('Ta sélection', 'Your selection')}</p><h2>{tr('Ton panier', 'Your cart')}</h2>
         {!cart.length ? <div className="store-empty"><p>{tr('Ton panier est vide.', 'Your cart is empty.')}</p><button className="store-text-button" onClick={() => setCartOpen(false)}>{tr('Continuer mes achats', 'Continue shopping')}</button></div> : <>
           <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><div className="cart-line-info"><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><button className="cart-line-edit" type="button" onClick={() => editCartLine(line)}>{tr('Modifier les options', 'Edit options')}</button><b>{money(line.unitPrice * line.quantity, currency, language)}</b></div><div className="quantity-picker"><button onClick={() => updateQuantity(line.key, -1)} aria-label={tr('Retirer un article', 'Remove one item')}>−</button><span>{line.quantity}</span><button onClick={() => updateQuantity(line.key, 1)} aria-label={tr('Ajouter un article', 'Add one item')}>＋</button></div></article>)}</div>
-          <div className="cart-total"><span>{tr('Total', 'Total')}</span><b>{money(total, currency, language)}</b></div><p className="cart-note">{tr(`Le retrait se fait au Feelness Bar de ${catalog.location.name}.`, `Pickup is at the Feelness Bar in ${catalog.location.name}.`)}</p><button className="store-primary" onClick={startCheckout}>{tr('Continuer', 'Continue')} <span>→</span></button>
+          <label className="cart-order-note">{tr('Note pour la commande (facultatif)', 'Order note (optional)')}<textarea maxLength={1000} rows={2} value={orderNote} onChange={(event) => setOrderNote(event.target.value)} placeholder={tr('Une précision pour le Feelness Bar…', 'Anything the Feelness Bar should know…')} /></label>
+          <div className="cart-total"><span>{tr('Total', 'Subtotal')}</span><b>{money(total, currency, language)}</b></div><p className="cart-note">{tr(`À retirer au Feelness Bar de ${catalog.location.name}.`, `Pick up at the Feelness Bar in ${catalog.location.name}.`)}</p><button className="store-primary" onClick={startCheckout}>{tr('Passer la commande', 'Continue to checkout')} <span>→</span></button>
         </>}
       </section></div>}
 
@@ -867,17 +913,15 @@ function StorefrontRoute() {
         <p className="store-eyebrow">{tr('Ta commande', 'Your order')}</p>
         {checkoutError && <p className="store-form-error">{checkoutError}</p>}
         {!identity.token ? <>
-          <h2>{tr('Comment veux-tu continuer ?', 'How would you like to continue?')}</h2>
-          <p className="sheet-description">{tr('Connecte-toi pour retrouver ton compte, ou commande en invité. Si tu paies en ligne, Stripe te demandera l’e-mail du reçu.', 'Sign in to use your Ayana account, or continue as a guest. If you pay online, Stripe will ask for an email for the receipt.')}</p>
-          {renderAccessButtons('store-primary store-whatsapp-login', { resumeCheckout: true })}
-          {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
+          <h2>{tr('Commander en invité', 'Guest checkout')}</h2>
+          <p className="sheet-description">{tr('Règle ta commande en quelques instants. Stripe demandera l’e-mail du reçu pour un paiement en ligne.', 'Place your order in a few moments. Stripe will ask for an email receipt for online payment.')}</p>
           <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
-          <p className="checkout-divider"><span>{tr('ou commander en invité', 'or continue as a guest')}</span></p>
           <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
             <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => updateGuestDraft(event.target.value)} /></label>
           <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
           </form>
-          {!terminalAvailable && <p className="secure-note">{tr('Le panier reste enregistré si tu reviens après la connexion.', 'Your cart is saved if you return after signing in.')}</p>}
+          <div className="checkout-login-suggestion"><span>{tr('Déjà membre Ayana ?', 'Already an Ayana member?')}</span>{renderAccessButtons('checkout-login-link', { resumeCheckout: true })}</div>
+          {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
         </> : <>
           <h2>{tr('Paiement de la commande', 'Order payment')}</h2>
           <div className="saved-identity"><span>{tr('Compte Ayana connecté', 'Ayana account connected')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div>

@@ -6,6 +6,7 @@ import type {
   CreateProductPayload,
   Product,
   ProductBrand,
+  ProductCategory,
   ProductDeviceHistory,
   ProductDeviceHistoryPeriod,
   UpdateProductManagementPayload,
@@ -25,6 +26,8 @@ type ProductRecord = {
   variants?: Product['variants']
   modifierGroups?: Product['modifierGroups']
   productTypes?: Product['productTypes']
+  attachmentId?: string | null
+  imageUrl?: string | null
   vatRate?: Product['vatRate']
   description?: string | null
   isOnline?: boolean
@@ -72,6 +75,8 @@ export function toProduct(record: ProductRecord): Product {
     scope: record.scope ?? 'ALL',
     productType: record.productType ?? null,
     productTypes: record.productTypes ?? [],
+    attachmentId: record.attachmentId ?? null,
+    imageUrl: record.imageUrl ?? null,
     vatRate: record.vatRate ?? null,
     description: record.description ?? null,
     isOnline: record.isOnline ?? false,
@@ -205,6 +210,35 @@ export async function getProductRequest(productId: string): Promise<Product> {
 export async function getProductManagementRequest(productId: string, customerId: string): Promise<Product> {
   const product = await apiClient.get<ProductRecord>(`/products/${productId}/management?customerId=${encodeURIComponent(customerId)}`)
   return toProduct(product)
+}
+
+export async function getProductCategoriesRequest(customerId: string): Promise<ProductCategory[]> {
+  return apiClient.get<ProductCategory[]>(`/products/types/management?customerId=${encodeURIComponent(customerId)}`)
+}
+
+export async function uploadProductImageRequest(productId: string, customerId: string, file: File): Promise<{ attachmentId: string; imageUrl: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<{ attachmentId: string; imageUrl: string }>(`/products/${encodeURIComponent(productId)}/image?customerId=${encodeURIComponent(customerId)}`, form)
+}
+
+export async function uploadProductCategoryImageRequest(categoryId: string, customerId: string, file: File): Promise<{ attachmentId: string; imageUrl: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<{ attachmentId: string; imageUrl: string }>(`/products/types/${encodeURIComponent(categoryId)}/image?customerId=${encodeURIComponent(customerId)}`, form)
+}
+
+export async function beautifyCatalogImageRequest(input: {
+  mode: 'edit' | 'generate'
+  prompt: string
+  customerId: string
+  attachmentId?: string
+}): Promise<{ imageBase64: string; mimeType: string }> {
+  const form = new FormData()
+  form.append('mode', input.mode)
+  form.append('prompt', input.prompt)
+  if (input.attachmentId) form.append('attachmentId', input.attachmentId)
+  return apiClient.post<{ imageBase64: string; mimeType: string }>(`/products/images/beautify?customerId=${encodeURIComponent(input.customerId)}`, form)
 }
 
 export async function updateProductManagementRequest(product: Product, payload: UpdateProductManagementPayload): Promise<Product> {
