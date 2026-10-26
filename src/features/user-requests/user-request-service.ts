@@ -4,6 +4,9 @@ import {
   cancelUserRequestRequest,
   rejectUserRequestRequest,
 } from '@/features/user-requests/api'
+import { appQueryKeys } from '@/features/app/query-keys'
+import { getAppMode } from '@/features/app/app-mode'
+import { saveSelectedOrgId } from '@/features/organizations/storage'
 import { userRequestsQueryKeys } from '@/features/user-requests/query-keys'
 import { queryClient } from '@/lib/query-client'
 import { Modals } from '@/providers/modal'
@@ -33,7 +36,7 @@ async function runRequestAction(
   operation: string,
   action: () => Promise<UserRequest>,
   destructive = false,
-  reloadAfterSuccess = false,
+  refreshAppConnect = false,
 ) {
   const confirmed = await Modals.confirm({
     operation,
@@ -41,9 +44,19 @@ async function runRequestAction(
   })
   if (!confirmed) return
 
-  await action()
-  await queryClient.invalidateQueries({ queryKey: userRequestsQueryKeys.all })
-  if (reloadAfterSuccess) window.location.reload()
+  const request = await action()
+  if (refreshAppConnect && getAppMode() === 'customer') {
+    const metadata = request.metadata
+    const customerId = metadata && 'customerId' in metadata && typeof metadata.customerId === 'string'
+      ? metadata.customerId
+      : null
+    if (metadata && metadata.kind === 'CUSTOMER' && customerId) saveSelectedOrgId(customerId)
+  }
+
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: userRequestsQueryKeys.all }),
+    ...(refreshAppConnect ? [queryClient.invalidateQueries({ queryKey: appQueryKeys.connect })] : []),
+  ])
 }
 
 export const UserRequestService = {
