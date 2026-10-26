@@ -1988,3 +1988,29 @@
 .kitchen-detail-history-row { border-color: #eadfce; color: #65594e; }
 .kitchen-detail-history-row time,
 .kitchen-detail-empty { color: #8b7e70; }
+
+.kitchen-take-order {
+  display: inline-flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #a6381c;
+  border-radius: 11px;
+  padding: 0 13px;
+  color: #fffaf1;
+  background: #a6381c;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.kitchen-take-order:hover { border-color: #842d17; background: #842d17; }
+.kitchen-take-order svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.kitchen-take-order.is-unavailable { border-color: #d5c5b4; color: #817365; background: #eee4d7; cursor: not-allowed; }
+
+@media (max-width: 560px) {
+  .kitchen-take-order { min-height: 36px; padding: 0 9px; font-size: 12px; }
+  .kitchen-take-order svg { width: 16px; height: 16px; }
+}

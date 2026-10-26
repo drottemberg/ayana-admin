@@ -436,6 +436,7 @@ export default function KitchenBoardPage() {
     staleTime: 30_000,
   })
   const locations = locationsQuery.data ?? []
+  const selectedLocation = locations.find((location) => location.id === locationId)
 
   useEffect(() => {
     if (!customerId || locationsQuery.isLoading) return
@@ -868,6 +869,23 @@ export default function KitchenBoardPage() {
               {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </label>
+          {locationId && <a
+            className={`kitchen-take-order${selectedLocation?.storefrontUrl ? '' : ' is-unavailable'}`}
+            href={selectedLocation?.storefrontUrl ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!selectedLocation?.storefrontUrl}
+            onClick={(event) => {
+              if (!selectedLocation?.storefrontUrl) event.preventDefault()
+            }}
+            title={selectedLocation?.storefrontUrl
+              ? tr('Ouvrir la boutique de cette location', 'Open this location’s storefront')
+              : tr('Configurez les slugs du client et de la location pour ouvrir la boutique.', 'Configure the customer and location slugs to open the storefront.')}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
+            <span>{tr('Prendre une commande', 'Take order')}</span>
+            <span aria-hidden="true">↗</span>
+          </a>}
           {canManageProductOrders && locationId && <button
             type="button"
             className={`kitchen-ordering-toggle ${acceptsProductOrders ? 'is-open' : 'is-paused'}`}

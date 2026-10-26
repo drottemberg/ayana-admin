@@ -25,6 +25,7 @@ export type KitchenLocation = {
   parentId: string
   currency?: string | null
   timezone?: string | null
+  storefrontUrl?: string | null
 }
 
 export type KitchenOrder = {
