@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { DataTableAsync } from '@/components/data-table'
@@ -9,6 +8,7 @@ import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getUsersRequest } from '@/features/users/api'
+import { getLocationFilterOptionsRequest } from '@/features/locations/api'
 import { getUserListColumns } from '@/features/users/user-columns'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
@@ -21,27 +21,28 @@ import type { CoachProfile } from '@/features/coaches/types'
 import { ApiError } from '@/lib/api-client'
 
 export default function UsersPage() {
-  const [searchParams] = useSearchParams()
   const { session } = useConnect()
-  const storeId = searchParams.get('storeId') || undefined
   const isCustomerContext = getAppMode() === 'customer'
   const currentCustomerId = session?.currentOrganization?.id
+  const canAddUser = Boolean(session?.can('users', 'create')) && (!isCustomerContext || Boolean(currentCustomerId))
   const hiddenFilters = useMemo(() => ({
-    ...(storeId ? { storeId } : {}),
     ...(isCustomerContext && currentCustomerId ? { organizationId: currentCustomerId } : {}),
-  }), [currentCustomerId, isCustomerContext, storeId])
+    userDirectory: 'users',
+  }), [currentCustomerId, isCustomerContext])
 
   return (
     <>
       <PageHeader
         title="Users"
-        primaryAction={{
-          children: 'Create new user',
-          onClick: () => Drawer.show(DrawerId.CreateUser, {}),
-        }}
+        primaryAction={canAddUser ? {
+          children: 'Add user',
+          onClick: () => Drawer.show(DrawerId.CreateUser, isCustomerContext
+            ? { mode: 'customer-user', customerId: currentCustomerId }
+            : { mode: 'invite' }),
+        } : undefined}
       />
       <section className="p-4 md:p-6">
-        <UsersTable key={storeId ?? 'all'} hiddenFilters={hiddenFilters} />
+        <UsersTable hiddenFilters={hiddenFilters} />
       </section>
     </>
   )
@@ -51,10 +52,12 @@ export function UsersTable({
   hiddenFilters,
   initialFilters,
   tableKey = 'users.root',
+  userDirectory = 'users',
 }: {
   hiddenFilters?: Record<string, unknown>
   initialFilters?: Partial<Record<keyof User & string, string[]>>
   tableKey?: string
+  userDirectory?: 'users' | 'staff'
 }) {
   const { session } = useConnect()
   const permissions = session?.permissions.users
@@ -86,9 +89,9 @@ export function UsersTable({
       userName: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'Instructor',
     })
   }
-  const loadUsers = (tableState: DataTableState<User>) => getUsersRequest(tableState, hiddenFilters)
+  const loadUsers = (tableState: DataTableState<User>) => getUsersRequest(tableState, { ...hiddenFilters, userDirectory })
   const tableColumns = getUserListColumns({
-    usage: 'users',
+    usage: userDirectory === 'staff' ? 'staff' : 'users',
     portal,
     customerId: portal === Portal.CUSTOMER ? currentOrganizationId : undefined,
     canEditPermissions: permissions?.edit,
@@ -96,7 +99,7 @@ export function UsersTable({
 
   return <>
     <DataTableAsync
-      queryKey={[...usersQueryKeys.all, 'table', hiddenFilters]}
+      queryKey={[...usersQueryKeys.all, 'table', userDirectory, hiddenFilters]}
       loadData={loadUsers}
       refetchOnMount="always"
       tableKey={tableKey}
@@ -105,7 +108,7 @@ export function UsersTable({
       searchPlaceholder="Search by ID, name, email, phone"
       searchColumns={['id', 'firstName', 'lastName', 'email', 'phone']}
       filters={[
-        ...(isCustomerContext ? [] : [{
+        ...(isCustomerContext || userDirectory === 'staff' ? [] : [{
           id: 'customerId',
           label: 'Customer',
           column: 'customer' as const,
@@ -118,6 +121,20 @@ export function UsersTable({
             }
           },
         }]),
+        {
+          id: 'contractLocationId',
+          label: 'Contract location',
+          column: 'contractLocationId',
+          selectionMode: 'single',
+          queryFn: getLocationFilterOptionsRequest,
+        },
+        {
+          id: 'purchaseLocationId',
+          label: 'Purchase location',
+          column: 'purchaseLocationId',
+          selectionMode: 'single',
+          queryFn: getLocationFilterOptionsRequest,
+        },
         {
           id: 'status',
           label: 'Status',
@@ -146,8 +163,8 @@ export function UsersTable({
           : []),
       ]}
       loadingMessage="Loading users..."
-      emptyMessage="No users found."
-      errorMessage="Failed to load users."
+      emptyMessage={userDirectory === 'staff' ? 'No staff found.' : 'No users found.'}
+      errorMessage={userDirectory === 'staff' ? 'Failed to load staff.' : 'Failed to load users.'}
     />
     {coachEditor ? <CoachProfileDrawer
       customerId={coachEditor.customerId}

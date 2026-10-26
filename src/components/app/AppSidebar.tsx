@@ -143,6 +143,12 @@ const data = {
       feature: Feature.USERS,
     },
     {
+      title: 'Staff',
+      url: '/staff',
+      icon: <Icon icon={EntityIcon.users} />,
+      feature: Feature.USERS,
+    },
+    {
       title: 'Invites',
       url: '/invites',
       icon: <Icon icon={EntityIcon.users} />,

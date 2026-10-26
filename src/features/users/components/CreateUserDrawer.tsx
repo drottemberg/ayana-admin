@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { AppDrawer } from '@/components/app/AppDrawer'
 
 import { CreateUserStep } from '@/features/users/components/user-drawer-steps/CreateUserStep'
+import { CreateCustomerUserForm } from '@/features/users/components/CreateCustomerUserForm'
 import { EditPermissionsStep } from '@/features/users/components/user-drawer-steps/EditPermissionsStep'
 import { EditUserDetailsForm } from '@/features/users/components/EditUserDetailsForm'
 import { InviteStaffStep } from '@/features/users/components/user-drawer-steps/InviteStaffStep'
@@ -36,7 +37,7 @@ import {
 export type CreateUserDrawerProps = {
   user?: User
   customerId?: string
-  mode?: 'create' | 'invite' | 'permissions' | 'edit-details' | 'edit-permissions' | 'view-permissions'
+  mode?: 'create' | 'customer-user' | 'invite' | 'invite-staff' | 'permissions' | 'edit-details' | 'edit-permissions' | 'view-permissions'
   permissionScope?: {
     kind: 'customer'
     organizationId: string
@@ -49,18 +50,22 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
   const isFormDirtyRef = useRef(false)
   const isEditMode = !!user?.id
   const initialStep: UserDrawerStep =
-    mode === 'edit-details'
-      ? 'edit-details'
-      : mode === 'edit-permissions' || mode === 'view-permissions'
-        ? 'edit-permissions'
-        : mode === 'permissions'
-          ? 'permissions'
-          : isEditMode
-            ? 'create'
-            : mode === 'create' || mode === 'invite'
-              ? mode
-              : 'action'
-  const initialAction: UserFlowAction | undefined = mode === 'create' || mode === 'invite' ? mode : undefined
+    mode === 'customer-user'
+      ? 'customer-user'
+      : mode === 'invite-staff'
+        ? 'invite-staff'
+        : mode === 'edit-details'
+          ? 'edit-details'
+          : mode === 'edit-permissions' || mode === 'view-permissions'
+            ? 'edit-permissions'
+            : mode === 'permissions'
+              ? 'permissions'
+              : isEditMode
+                ? 'create'
+                : mode === 'create' || mode === 'invite'
+                  ? mode
+                  : 'action'
+  const initialAction: UserFlowAction | undefined = mode === 'create' || mode === 'invite' || mode === 'invite-staff' ? mode : undefined
   const initialRole = user?.role ?? UserRole.MEMBER
   const [flowRole, setFlowRole] = useState(initialRole)
   const [customerInviteRole, setCustomerInviteRole] = useState<CustomerRole>(CustomerRole.MEMBER)
@@ -92,6 +97,11 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
         id: 'create',
         title: isEditMode ? 'Edit user' : 'Create user',
         description: isEditMode ? 'Update user profile and access role.' : 'Create a user profile directly.',
+      },
+      {
+        id: 'customer-user',
+        title: 'Add user',
+        description: 'Add a customer user with at least one contact method.',
       },
       {
         id: 'edit-details',
@@ -259,6 +269,20 @@ const CreateUserDrawer = NiceModal.create(({ user, customerId, mode, permissionS
             isFormDirtyRef.current = dirty
           }}
           initialFormValues={getUserFormValues(steps.data.formValues)}
+        />
+      ) : null}
+
+      {steps.currentId === 'customer-user' && !user ? (
+        <CreateCustomerUserForm
+          customerId={customerId}
+          onSaved={async (savedUser) => {
+            isFormDirtyRef.current = false
+            await drawer.forceClose(savedUser)
+          }}
+          onCancel={() => drawer.requestClose(false)}
+          onDirtyChange={(dirty) => {
+            isFormDirtyRef.current = dirty
+          }}
         />
       ) : null}
 

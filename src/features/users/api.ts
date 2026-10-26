@@ -59,6 +59,13 @@ export type UserMarketingPreference = {
   source: string | null
 }
 
+export type CreateCustomerUserPayload = {
+  firstName: string
+  lastName: string
+  email?: string
+  phone?: string
+}
+
 type UserMembershipRecord = {
   customerId: string
   customerName?: string
@@ -213,6 +220,12 @@ export async function updateUserMarketingPreferenceRequest(
 }
 
 export async function createUserRequest(payload: CreateUserPayload): Promise<User> {
+  const user = await apiClient.post<UserRecord>('/users', payload)
+
+  return toUser(user)
+}
+
+export async function createCustomerUserRequest(payload: CreateCustomerUserPayload): Promise<User> {
   const user = await apiClient.post<UserRecord>('/users', payload)
 
   return toUser(user)

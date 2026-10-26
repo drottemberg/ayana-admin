@@ -7,6 +7,7 @@ export type UserDrawerStep =
   | 'invite'
   | 'invite-staff'
   | 'create'
+  | 'customer-user'
   | 'success'
   | 'permissions'
   | 'edit-details'

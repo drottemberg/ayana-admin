@@ -2,6 +2,7 @@ import type { DataTableAsyncResult, DataTableState } from '@/components/data-tab
 import { toApiListDto, toDataTableResult, type ApiListResult } from '@/lib/api-types'
 import { apiClient } from '@/lib/api-client'
 import type { Order, OrderManagementDetails, OrderStatus } from '@/types/order'
+import { getLocationFilterOptionsRequest } from '@/features/locations/api'
 
 export const ordersListConfig = {
   url: '/orders/list',
@@ -207,12 +208,5 @@ export function getOrderManagementDetailsRequest(orderId: string) {
 }
 
 export async function getOrderLocationOptions(search: string, page = 1) {
-  const result = await apiClient.post<ApiListResult<{ id: string; name: string }>>('/locations/list', {
-    search: search.trim() || undefined,
-    page,
-    limit: 20,
-    orderBy: 'name',
-    order: 'asc',
-  })
-  return { items: result.items.map((location) => ({ id: location.id, label: location.name })), total: result.total }
+  return getLocationFilterOptionsRequest(search, page)
 }

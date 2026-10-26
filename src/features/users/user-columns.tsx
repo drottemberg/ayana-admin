@@ -11,7 +11,7 @@ import { formatDateTime } from '@/utils/date-utils'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 import { formatPhoneNumber } from '@/lib/phone'
 
-export type UserTableUsage = 'users' | 'customer-details' | 'store-details'
+export type UserTableUsage = 'users' | 'staff' | 'customer-details' | 'store-details'
 
 export type UserListColumnOptions = {
   usage?: UserTableUsage
@@ -75,6 +75,19 @@ export const adminOnlyUserColumns: ColumnDef<User>[] = [
 ]
 
 const adminUsersColumns: ColumnDef<User>[] = [
+  {
+    id: 'customer',
+    header: 'Customer',
+    cell: ({ row }) => {
+      const customer = row.original.customer
+      if (!customer) return NO_VALUE_STR
+
+      return <Link to={`/customers/${customer.id}`} className="underline-offset-2 hover:underline">{customer.name}</Link>
+    },
+  },
+]
+
+const adminStaffColumns: ColumnDef<User>[] = [
   ...adminOnlyUserColumns,
   {
     id: 'customers',
@@ -172,6 +185,13 @@ export function getUserListColumns(options: UserListColumnOptions = {}) {
 
   if (usage === 'users') {
     if (portal === Portal.ADMIN) return [...userColumns, ...adminUsersColumns]
+    if (portal === Portal.CUSTOMER) return userColumns
+
+    return userColumns
+  }
+
+  if (usage === 'staff') {
+    if (portal === Portal.ADMIN) return [...userColumns, ...adminStaffColumns]
     if (portal === Portal.CUSTOMER) {
       return [...userColumns, customerRoleColumn(options.customerId), customerScopeColumn(options.customerId, canEdit)]
     }

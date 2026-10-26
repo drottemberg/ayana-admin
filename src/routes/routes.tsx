@@ -33,6 +33,7 @@ const CustomersPage = lazy(() => import('@/pages/app/CustomersPage'))
 const CustomerPage = lazy(() => import('@/pages/app/CustomerPage'))
 const CoachPage = lazy(() => import('@/pages/app/CoachPage'))
 const UsersPage = lazy(() => import('@/pages/app/UsersPage'))
+const StaffPage = lazy(() => import('@/pages/app/StaffPage'))
 const InvitesPage = lazy(() => import('@/pages/app/InvitesPage'))
 const PricingOptionsPage = lazy(() => import('@/pages/app/PricingOptionsPage'))
 const ClassesPage = lazy(() => import('@/pages/app/ClassesPage'))
@@ -101,6 +102,7 @@ export const router = createBrowserRouter([
           { path: 'customers/:customerId', element: <CustomerPage /> },
           { path: 'coaches/:customerId/:userId', element: <CoachPage /> },
           { path: 'users', element: <UsersPage /> },
+          { path: 'staff', element: <StaffPage /> },
           { path: 'invites', element: <InvitesPage /> },
           { path: 'pricing-options', element: <PricingOptionsPage /> },
           { path: 'classes', element: <ClassesPage /> },

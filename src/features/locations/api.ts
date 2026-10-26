@@ -67,6 +67,17 @@ export async function getLocationsRequest(
   return toDataTableResult(result)
 }
 
+export async function getLocationFilterOptionsRequest(search: string, page = 1) {
+  const result = await apiClient.post<ApiListResult<{ id: string; name: string }>>(LOCATIONS_LIST_URL, {
+    search: search.trim() || undefined,
+    page,
+    limit: 20,
+    orderBy: 'name',
+    order: 'asc',
+  })
+  return { items: result.items.map((location) => ({ id: location.id, label: location.name })), total: result.total }
+}
+
 export async function getAllLocationsForCustomerRequest(customerId: string): Promise<Location[]> {
   const limit = 100
   const requestConfig = getAppMode() === 'customer' ? { headers: { 'x-org-id': customerId } } : undefined

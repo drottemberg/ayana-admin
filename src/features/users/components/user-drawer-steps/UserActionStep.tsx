@@ -13,12 +13,6 @@ export function UserActionStep({ onSelect }: UserActionStepProps) {
       <div className="grid gap-3">
         <ActionButton
           icon={<HugeiconsIcon icon={MailSend02Icon} strokeWidth={2} />}
-          title="Invite Staff"
-          description="Send an invitation to a Gaudier staff member."
-          onClick={() => onSelect('invite-staff')}
-        />
-        <ActionButton
-          icon={<HugeiconsIcon icon={MailSend02Icon} strokeWidth={2} />}
           title="Invite Customer User"
           description="Send an invitation to a customer contact."
           onClick={() => onSelect('invite')}

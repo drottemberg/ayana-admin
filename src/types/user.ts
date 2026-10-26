@@ -47,6 +47,9 @@ export type User = {
   preferences?: Record<string, unknown> | null
   position?: string | null
   customerId?: string | null
+  /** Virtual server-side list filters; not stored on the user record. */
+  contractLocationId?: string
+  purchaseLocationId?: string
   customer?: {
     id: string
     name: string

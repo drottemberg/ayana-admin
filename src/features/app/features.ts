@@ -30,6 +30,7 @@ const routeFeatures: FeatureRoute[] = [
   { pathPrefix: '/orders/kitchen', feature: Feature.ORDERS },
   { pathPrefix: '/locations', feature: Feature.LOCATIONS },
   { pathPrefix: '/users', feature: Feature.USERS },
+  { pathPrefix: '/staff', feature: Feature.USERS },
   { pathPrefix: '/invites', feature: Feature.INVITATIONS },
   { pathPrefix: '/data', feature: Feature.DATA },
   { pathPrefix: '/reports', feature: Feature.REPORTS },
