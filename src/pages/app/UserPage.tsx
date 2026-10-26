@@ -235,9 +235,10 @@ export default function UserPage() {
     )
     .sort()
     .join('|')
+  const hasCustomerMembership = (user?.customerMemberships?.length ?? 0) > 0
   const modules = [
-    { key: 'customers', label: 'Customers' },
-    { key: 'locations', label: 'Locations' },
+    ...(isAdminContext ? [{ key: 'customers', label: 'Customers' }] : []),
+    ...(hasCustomerMembership ? [{ key: 'locations', label: 'Locations' }] : []),
     ...(canViewContracts || canViewCreditWallets || canViewBookings || canViewOrders
       ? [
           ...(canViewContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
@@ -274,7 +275,7 @@ export default function UserPage() {
       modules={modules}
       aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canViewCreditWallets)} isLoading={isLoading} />}
     >
-      <RelatedEntityModule
+      {isAdminContext ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-customers`}
         title="Customers"
         initialTotal={getUserCustomersCount(user)}
@@ -292,8 +293,8 @@ export default function UserPage() {
         loadingMessage="Loading customers..."
         emptyMessage="No customers assigned"
         errorMessage="Failed to load customers."
-      />
-      <RelatedEntityModule
+      /> : null}
+      {hasCustomerMembership ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-locations`}
         title="Locations"
         viewAllTo="/locations"
@@ -304,7 +305,7 @@ export default function UserPage() {
         loadingMessage="Loading locations..."
         emptyMessage="No locations assigned"
         errorMessage="Failed to load locations."
-      />
+      /> : null}
       {canViewContracts ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-client-contracts`}
         title="Client contracts"
