@@ -192,7 +192,11 @@ export default function UserPage() {
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const permissions = session?.permissions.users
-  const canManageOrdersAndContracts = Boolean(session?.permissions.customers?.edit)
+  const canViewContracts = Boolean(session?.permissions.clientContracts?.view)
+  const canManageCredits = Boolean(session?.permissions.clientContracts?.edit)
+  const canViewCreditWallets = canViewContracts
+  const canViewBookings = Boolean(session?.permissions.bookings?.view)
+  const canViewOrders = Boolean(session?.permissions.orders?.view)
   const [contractsToGrant, setContractsToGrant] = useState<ClientContract[]>([])
   const [grantCreditsOpen, setGrantCreditsOpen] = useState(false)
   const [walletAdjustmentOpen, setWalletAdjustmentOpen] = useState(false)
@@ -223,7 +227,7 @@ export default function UserPage() {
   const creditWallets = useQuery({
     queryKey: [...clientContractsQueryKeys.all, 'wallet-balances', userId],
     queryFn: () => getUserCreditWalletBalancesRequest(userId),
-    enabled: Boolean(userId && canManageOrdersAndContracts),
+    enabled: Boolean(userId && canViewCreditWallets),
   })
   const locationMembershipKey = (user?.customerMemberships ?? [])
     .map((membership) =>
@@ -234,12 +238,12 @@ export default function UserPage() {
   const modules = [
     { key: 'customers', label: 'Customers' },
     { key: 'locations', label: 'Locations' },
-    ...(canManageOrdersAndContracts
+    ...(canViewContracts || canViewCreditWallets || canViewBookings || canViewOrders
       ? [
-          { key: 'client-contracts', label: 'Client contracts' },
-          { key: 'credit-transactions', label: 'Credit transactions' },
-          { key: 'bookings', label: 'Bookings' },
-          { key: 'orders', label: 'Orders' },
+          ...(canViewContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
+          ...(canViewCreditWallets ? [{ key: 'credit-transactions', label: 'Credit transactions' }] : []),
+          ...(canViewBookings ? [{ key: 'bookings', label: 'Bookings' }] : []),
+          ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
         ]
       : []),
     ...(canManageMarketingPreferences ? [{ key: 'marketing-messages', label: 'Marketing messages' }] : []),
@@ -268,7 +272,7 @@ export default function UserPage() {
         options: user ? UserService.getDetailHeaderActions(user, permissions).options : [],
       }}
       modules={modules}
-      aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canManageOrdersAndContracts)} isLoading={isLoading} />}
+      aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canViewCreditWallets)} isLoading={isLoading} />}
     >
       <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-customers`}
@@ -301,7 +305,7 @@ export default function UserPage() {
         emptyMessage="No locations assigned"
         errorMessage="Failed to load locations."
       />
-      {canManageOrdersAndContracts ? <RelatedEntityModule
+      {canViewContracts ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-client-contracts`}
         title="Client contracts"
         icon={EntityIcon.clientContracts}
@@ -310,7 +314,7 @@ export default function UserPage() {
         loadData={(state: DataTableState<ClientContract>) => getClientContractsRequest(state, { userId })}
         tableKey={`client-contracts.user.${userId}`}
         columns={getClientContractColumns({ showUser: false })}
-        getRowCommands={(contract) => ClientContractService.getRowActions(contract, canManageOrdersAndContracts, canManageOrdersAndContracts ? {
+        getRowCommands={(contract) => ClientContractService.getRowActions(contract, canManageCredits, canManageCredits ? {
           onGrant: (selected) => { setContractsToGrant([selected]); setGrantCreditsOpen(true) },
           onRemove: setContractToRemoveCredits,
         } : undefined)}
@@ -318,7 +322,7 @@ export default function UserPage() {
         emptyMessage="No client contracts found."
       /> : null}
       <GrantCreditsDrawer contracts={contractsToGrant} open={grantCreditsOpen} onOpenChange={setGrantCreditsOpen} />
-      {(isAdminContext || currentCustomerId) && user ? (
+      {canManageCredits && (isAdminContext || currentCustomerId) && user ? (
         <GiftCreditsDrawer
           customerId={isAdminContext ? undefined : currentCustomerId}
           customerName={currentCustomerName}
@@ -332,7 +336,7 @@ export default function UserPage() {
         open={Boolean(contractToRemoveCredits)}
         onOpenChange={(open) => { if (!open) setContractToRemoveCredits(null) }}
       />
-      {canManageOrdersAndContracts ? <RelatedEntityModule
+      {canViewCreditWallets ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-credit-transactions`}
         title="Credit transactions"
         icon={EntityIcon.clientContracts}
@@ -342,7 +346,7 @@ export default function UserPage() {
         loadData={(state: DataTableState<ClientContractCreditMovement>) => getUserCreditMovementsRequest(state, userId)}
         tableKey={`credit-transactions.user.${userId}`}
         columns={getCreditMovementColumns({ showUser: false, showCustomer: isAdminContext })}
-        action={canManageOrdersAndContracts && (isAdminContext || currentCustomerId) && user ? {
+        action={canManageCredits && (isAdminContext || currentCustomerId) && user ? {
           label: 'Adjust credits',
           onClick: () => setWalletAdjustmentOpen(true),
         } : undefined}
@@ -350,7 +354,7 @@ export default function UserPage() {
         emptyMessage="No credit transactions found."
         errorMessage="Failed to load credit transactions."
       /> : null}
-      {canManageOrdersAndContracts ? <RelatedEntityModule
+      {canViewBookings ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-bookings`}
         title="Bookings"
         icon={EntityIcon.classes}
@@ -384,7 +388,7 @@ export default function UserPage() {
         emptyMessage="No AI support issues found for this user."
         errorMessage="Failed to load AI support issues."
       /> : null}
-      {canManageOrdersAndContracts ? <RelatedEntityModule
+      {canViewOrders ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-orders`}
         title="Orders"
         icon={EntityIcon.orders}
