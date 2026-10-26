@@ -9,7 +9,7 @@ export function getPortal(hostname: string = window.location.hostname): Portal {
   const subdomain = hostname.split('.')[0]
 
   if (subdomain === 'admin') return Portal.ADMIN
-  if (subdomain === 'customer') return Portal.CUSTOMER
+  if (subdomain === 'customer' || subdomain === 'partner') return Portal.CUSTOMER
 
   throw new Error(`Unknown portal for hostname: ${hostname}`)
 }
