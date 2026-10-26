@@ -12,6 +12,6 @@ export function getAppModeLabel(mode: AppMode): string {
     case 'admin':
       return 'Admin'
     case 'customer':
-      return 'Customer'
+      return 'Partner'
   }
 }
