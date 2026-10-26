@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -308,21 +309,41 @@ export default function SalesReportPage() {
           <Card size="sm" className="gap-4 rounded-lg p-0">
             <CardHeader className="p-4 pb-0"><CardTitle className="text-lg">Transactions</CardTitle><CardDescription>Payments, refunds and payment processing fees recorded during the selected period.</CardDescription></CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Location</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>VAT detail</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {report.entries.map((entry) => <TableRow key={entry.id}>
-                    <TableCell className="whitespace-nowrap">{new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(entry.date))}</TableCell>
-                    <TableCell>{entry.type === 'REFUND' ? 'Refund' : entry.type === 'STRIPE_FEE' ? 'Payment processing fee' : 'Sale'}</TableCell>
-                    <TableCell>{entry.orderCode ?? entry.orderId ?? '—'}</TableCell>
-                    <TableCell>{entry.customerName ?? 'Guest'}</TableCell>
-                    <TableCell>{entry.locationName}</TableCell>
-                    <TableCell className={`text-right tabular-nums ${entry.type !== 'SALE' ? 'text-destructive' : ''}`}>{entry.type !== 'SALE' ? '−' : ''}{currency(entry.amount, entry.currency)}</TableCell>
-                    <TableCell>{entry.type === 'STRIPE_FEE' ? 'Processing fee' : entry.vatAllocated ? 'Order VAT rates' : 'Unallocated'}</TableCell>
-                  </TableRow>)}
-                  {!report.entries.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No transactions found.</TableCell></TableRow> : null}
-                </TableBody>
-              </Table>
+              <div className="overflow-hidden rounded-lg border bg-card">
+                <Table>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Order</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>VAT detail</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report.entries.map((entry) => <TableRow key={entry.id}>
+                      <TableCell className="whitespace-nowrap">{new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(entry.date))}</TableCell>
+                      <TableCell>{entry.type === 'REFUND' ? 'Refund' : entry.type === 'STRIPE_FEE' ? 'Payment processing fee' : 'Sale'}</TableCell>
+                      <TableCell>
+                        {entry.orderId
+                          ? <Link to={`/orders/${entry.orderId}`} className="font-medium underline-offset-2 hover:underline">{entry.orderCode ?? entry.orderId}</Link>
+                          : entry.orderCode ?? '—'}
+                      </TableCell>
+                      <TableCell>
+                        {entry.userId
+                          ? <Link to={`/users/${entry.userId}`} title={entry.userId} className="underline-offset-2 hover:underline">{entry.customerName ?? entry.userId}</Link>
+                          : entry.customerName ?? 'Guest'}
+                      </TableCell>
+                      <TableCell>{entry.locationName}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${entry.type !== 'SALE' ? 'text-destructive' : ''}`}>{entry.type !== 'SALE' ? '−' : ''}{currency(entry.amount, entry.currency)}</TableCell>
+                      <TableCell>{entry.type === 'STRIPE_FEE' ? 'Processing fee' : entry.vatAllocated ? 'Order VAT rates' : 'Unallocated'}</TableCell>
+                    </TableRow>)}
+                    {!report.entries.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No transactions found.</TableCell></TableRow> : null}
+                  </TableBody>
+                </Table>
+              </div>
               {report.pagination.pageCount > 1 ? <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
                 <p className="text-sm text-muted-foreground">
                   {((report.pagination.page - 1) * report.pagination.limit) + 1}–{Math.min(report.pagination.page * report.pagination.limit, report.pagination.total)} of {report.pagination.total} transactions

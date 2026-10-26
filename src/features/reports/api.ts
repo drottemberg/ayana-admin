@@ -18,6 +18,7 @@ export type SalesReportEntry = {
   currency: string
   orderId: string | null
   orderCode: string | null
+  userId: string | null
   customerName: string | null
   locationId: string
   locationName: string

@@ -16,6 +16,8 @@ npm run dev
 
 The development server runs at `http://localhost:5173` by default.
 
+UI implementation conventions are documented in [`docs/UI_STYLE.md`](docs/UI_STYLE.md).
+
 ## Scripts
 
 - `npm run dev` — start Vite
