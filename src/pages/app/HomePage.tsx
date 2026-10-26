@@ -6,9 +6,7 @@ import { toast } from 'sonner'
 
 import {
   DetailPageLayout,
-  DetailSidePanel,
   RelatedEntityModule,
-  type DetailPanelSection,
 } from '@/components/app/detail-page-layout'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +27,6 @@ import { getBookingsRequest } from '@/features/bookings/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { getLocationRequest } from '@/features/locations/api'
-import { Feature } from '@/types/feature'
 import type { Booking } from '@/types/booking'
 import type { ClassSession } from '@/types/class-type'
 import { UserRequestStatus, UserRequestType, type UserRequest } from '@/types/user-request'
@@ -160,8 +157,21 @@ export default function HomePage() {
     queryFn: () => getLocationRequest(locationQuery.locationId!),
     enabled: Boolean(locationQuery.customerId && locationQuery.locationId),
   })
+  const pendingInvites = useQuery({
+    queryKey: [...userRequestsQueryKeys.all, 'home', 'received', 'pending-count'],
+    queryFn: () => getUserRequestsPageRequest({
+      pagination: { pageIndex: 0, pageSize: 1 },
+      sorting: [],
+      search: '',
+      filters: {},
+    } as DataTableState<HomeInviteRow>, 'RECEIVED', {
+      status: [UserRequestStatus.PENDING],
+      type: [UserRequestType.ORG_INVITE],
+    }),
+    enabled: Boolean(session),
+  })
+  const hasPendingInvites = (pendingInvites.data?.count ?? 0) > 0
 
-  const canViewInvites = Boolean(session?.hasFeature(Feature.INVITATIONS))
   const canViewSessions = Boolean(isCoach && session?.permissions.classSessions?.view)
   const canViewBookings = Boolean(isCoach && session?.permissions.bookings?.view)
   const showCoachModules = Boolean(customerId && userId && isCoach)
@@ -175,45 +185,17 @@ export default function HomePage() {
     : localDayKey(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
 
   const modules = useMemo(() => [
-    ...(canViewInvites ? [{ key: 'received-invites', label: 'Received invites' }] : []),
+    ...(hasPendingInvites ? [{ key: 'received-invites', label: 'Received invites' }] : []),
     ...(canViewSessions ? [
       { key: 'day-planning', label: 'Day planning' },
       { key: 'upcoming-sessions', label: 'Upcoming sessions' },
       { key: 'sessions-to-claim', label: 'Sessions to claim' },
     ] : []),
     ...(canViewBookings ? [{ key: 'last-bookings', label: 'Last bookings' }] : []),
-  ], [canViewBookings, canViewInvites, canViewSessions])
+  ], [canViewBookings, canViewSessions, hasPendingInvites])
 
   const sessionListUrl = customerId ? scopedListUrl('/class-sessions', customerId, locationId, userId, true) : '/class-sessions'
   const bookingListUrl = customerId ? scopedListUrl('/bookings', customerId, locationId, userId) : '/bookings'
-
-  const sideSections: DetailPanelSection[] = [
-    {
-      title: 'Your profile',
-      icon: EntityIcon.users,
-      fields: [
-        { label: 'Name', value: session?.user.fullName || '-' },
-        { label: 'Email', value: session?.user.email || '-' },
-        { label: 'Phone', value: session?.user.phone || '-' },
-        ...(isCoach ? [{ label: 'Role', value: 'Instructor' }] : []),
-        ...(isCoach && myCoachProfile.data ? [
-          { label: 'Languages taught', value: myCoachProfile.data.languages.join(', ') || '-' },
-          { label: 'Specialties', value: myCoachProfile.data.specialties.join(', ') || '-' },
-        ] : []),
-      ],
-    },
-    {
-      title: 'Current workspace',
-      icon: EntityIcon.locations,
-      fields: [
-        { label: 'Customer', value: session?.currentOrganization?.name || '-' },
-        {
-          label: 'Location',
-          value: locationId ? selectedLocation.data?.name || (selectedLocation.isLoading ? 'Loading…' : '-') : 'All locations',
-        },
-      ],
-    },
-  ]
 
   return (
     <DetailPageLayout
@@ -225,9 +207,9 @@ export default function HomePage() {
           : undefined,
       }}
       modules={modules}
-      aside={<DetailSidePanel sections={sideSections} />}
+      aside={null}
     >
-      {canViewInvites ? (
+      {session && hasPendingInvites ? (
         <RelatedEntityModule<HomeInviteRow>
           id={`${MODULE_ANCHOR_PREFIX}-received-invites`}
           title="Received invites"
