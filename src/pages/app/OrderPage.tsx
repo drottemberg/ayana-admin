@@ -158,7 +158,8 @@ export default function OrderPage() {
           {items.map((item) => <div key={item.id} className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
             <div className="min-w-0">
               <p className="font-medium">{item.variantName || [item.productName, item.variantLabel].filter(Boolean).join(' ')}</p>
-              <p className="text-sm text-muted-foreground">{item.quantity} × {formatMoney(item.unitPrice, currency)} · VAT {(Number(item.vatRate) * 100).toLocaleString()}%</p>
+              <p className="text-sm text-muted-foreground">{item.quantity} × {item.originalUnitPrice != null ? <><s>{formatMoney(item.originalUnitPrice, currency)}</s> <span className="font-medium text-foreground">{formatMoney(item.unitPrice, currency)}</span></> : formatMoney(item.unitPrice, currency)} · VAT {(Number(item.vatRate) * 100).toLocaleString()}%</p>
+              {item.discountPercent != null ? <p className="mt-1 text-sm text-green-800">Discount {item.discountPercent}% · {item.partnershipName ? `Partnership: ${item.partnershipName}` : 'Partnership'}</p> : null}
               {item.notes ? <p className="mt-1 text-sm text-muted-foreground">{item.notes}</p> : null}
               {(modifiers[item.id] ?? []).map((modifier) => <div key={modifier.id} className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
                 <span>+ {modifier.name}</span>

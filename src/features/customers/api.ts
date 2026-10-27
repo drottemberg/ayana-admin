@@ -38,6 +38,24 @@ export async function getCustomersRequest(
   })
 }
 
+/** Searchable, paginated customer options for list filters. `page` is one-based in DataTableAsync. */
+export async function getCustomerFilterOptionsRequest(search: string, page = 1) {
+  const result = await getCustomersRequest(
+    {
+      pagination: { pageIndex: Math.max(0, page - 1), pageSize: 30 },
+      sorting: [],
+      search: search.trim(),
+      filters: {},
+    },
+    { contractId: null },
+  )
+
+  return {
+    items: result.items.map((customer) => ({ id: customer.id, label: customer.name })),
+    total: result.count,
+  }
+}
+
 export async function getCustomerRequest(customerId: string): Promise<Customer> {
   return toCustomer(await apiClient.get<Organization>(`/customers/${customerId}`))
 }

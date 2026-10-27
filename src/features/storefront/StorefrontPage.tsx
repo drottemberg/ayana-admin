@@ -10,8 +10,8 @@ const CART_KEY = 'ayana-storefront-cart'
 
 type ProductOption = { id: string; name: string; price: number }
 type ModifierGroup = { id: string; name: string; required: boolean; minSelect: number; maxSelect: number; options: ProductOption[] }
-type Variant = { id: string; label: string; price: number; stock: number; available: boolean }
-type Product = { id: string; name: string; description?: string | null; categoryId?: string; category: string; imageUrl?: string | null; variants: Variant[]; modifierGroups: ModifierGroup[] }
+type Variant = { id: string; label: string; price: number; originalPrice?: number; discountPercent?: number; stock: number; available: boolean }
+type Product = { id: string; name: string; description?: string | null; categoryId?: string; category: string; imageUrl?: string | null; discountPercent?: number; partnershipName?: string; variants: Variant[]; modifierGroups: ModifierGroup[] }
 type StoreCategory = { id: string; name: string; imageUrl?: string | null; productCount: number }
 type PrefillChoice = { product: Product; variant?: Variant; options: Record<string, string[]>; quantity: number; missingOption: boolean }
 type Catalog = { customer: { name: string; slug: string }; location: { name: string; slug: string; whatsappNumber?: string | null; telegramBotUsername?: string | null }; currency: string; acceptsProductOrders?: boolean; paymentMethods?: { online: boolean; terminal: boolean }; categories?: StoreCategory[]; products: Product[] }
@@ -182,6 +182,13 @@ function StorefrontRoute() {
     setAccessCode('')
     setAccessModal({ view: 'choose', state: { category, ...state, resumeCheckout } })
   }
+  const logoutFromStore = () => {
+    try { localStorage.removeItem(sessionKey(customerSlug, locationSlug)) } catch { /* clear the in-memory session even when storage is unavailable */ }
+    setIdentity({})
+    setCheckoutOpen(false)
+    setAccessModal(null)
+    setAccessError('')
+  }
   const backInAccessFlow = () => {
     if (emailAccessLoading) return
     setAccessError('')
@@ -329,7 +336,9 @@ function StorefrontRoute() {
   useEffect(() => {
     let active = true
     setLoading(true)
-    fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`)
+    const token = readIdentity(customerSlug, locationSlug).token
+    const query = token ? `?token=${encodeURIComponent(token)}` : ''
+    fetch(`${API_URL}/storefront/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}${query}`)
       .then(async (response) => {
         if (!response.ok) throw new Error(response.status === 404 ? tr('Cette boutique est introuvable.', 'This shop could not be found.') : tr('Impossible de charger la boutique.', 'Could not load the shop.'))
         return await response.json() as Catalog
@@ -338,7 +347,22 @@ function StorefrontRoute() {
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : tr('Une erreur est survenue.', 'Something went wrong.')) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [customerSlug, locationSlug])
+  }, [customerSlug, identity.token, locationSlug])
+
+  useEffect(() => {
+    if (!catalog) return
+    const variants = new Map(catalog.products.flatMap((product) => product.variants.map((variant) => [variant.id, { product, variant }] as const)))
+    setCart((current) => current.map((line) => {
+      const currentCatalogItem = variants.get(line.variantId)
+      if (!currentCatalogItem) return line
+      return {
+        ...line,
+        name: currentCatalogItem.product.name,
+        variantLabel: currentCatalogItem.variant.label,
+        unitPrice: currentCatalogItem.variant.price + line.modifierTotal,
+      }
+    }))
+  }, [catalog])
 
   useEffect(() => {
     if (!location.pathname.endsWith('/success')) return
@@ -823,7 +847,7 @@ function StorefrontRoute() {
         </form>}
         <div className="success-connect"><span>{tr('Ou connecte-toi à ton compte', 'Or sign in to your account')}</span>{renderAccessButtons('success-connect-login', { orderId: successOrderId, sessionId: successSessionId, code: orderCode, returnToSuccess: true })}</div>
       </section>}
-      {identity.token && <section className="success-follow-card success-follow-connected"><h2>{tr('Tu es connecté·e', 'You’re connected')}</h2><p>{tr('Ta commande est associée à ton compte Ayana.', 'Your order is linked to your Ayana account.')}</p><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email || identity.phone}</strong></section>}
+      {identity.token && <section className="success-follow-card success-follow-connected"><h2>{tr('Tu es connecté·e', 'You’re connected')}</h2><p>{tr('Ta commande est associée à ton compte Ayana.', 'Your order is linked to your Ayana account.')}</p><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email || identity.phone}</strong><button type="button" className="store-account-logout" aria-label={tr('Se déconnecter', 'Sign out')} title={tr('Se déconnecter', 'Sign out')} onClick={logoutFromStore}>↪</button></section>}
       {accessError && <p className="store-form-error" role="alert">{accessError}</p>}{whatsappReturnUrl && <a className="store-secondary-link" href={whatsappReturnUrl}>{tr('Retourner sur WhatsApp', 'Return to WhatsApp')} ↗</a>}<a className="store-secondary-link" href={storeBasePath}>{tr('Retour à la boutique', 'Back to the shop')}</a>{renderAccessModal()}</section></main>
   }
 
@@ -838,6 +862,12 @@ function StorefrontRoute() {
         <LanguageSelector language={language} onChange={changeLanguage} />
         {catalog.acceptsProductOrders !== false && <button className="store-cart-top" onClick={() => setCartOpen(true)} aria-label={`${tr('Ouvrir le panier', 'Open cart')}, ${totalCount}`}>🛒 <b>{totalCount}</b></button>}
       </header>
+      <section className="store-account-card" aria-label={tr('Compte Ayana', 'Ayana account')}>
+        {identity.token ? <>
+          <div><span>{tr('Connecté·e', 'Signed in')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email || identity.phone || tr('Compte Ayana', 'Ayana account')}</strong></div>
+          <button type="button" className="store-account-logout" onClick={logoutFromStore} aria-label={tr('Se déconnecter', 'Sign out')} title={tr('Se déconnecter', 'Sign out')}>↪</button>
+        </> : <div className="store-account-login"><span>{tr('Retrouve ton compte et tes commandes', 'Access your Ayana account and orders')}</span><button type="button" className="store-login-cta" onClick={() => openAccessModal({})}>{tr('Se connecter', 'Sign in')} <span>→</span></button></div>}
+      </section>
       {catalog.acceptsProductOrders === false && <div className="store-notice" role="status">{tr('La boutique ne prend pas de commandes à emporter pour le moment. Réessaie un peu plus tard.', 'The shop is not taking pickup orders right now. Please try again later.')}</div>}
       {checkoutError && !checkoutOpen && <div className="store-notice">{checkoutError}</div>}
       {!showCategoryListing ? <section className="store-category-home">
@@ -868,7 +898,7 @@ function StorefrontRoute() {
           const hasPriceChoices = product.variants.filter((variant) => variant.available).length > 1 || product.modifierGroups.some((group) => group.options.some((option) => option.price > 0))
           return <button className="store-product" key={product.id} disabled={catalog.acceptsProductOrders === false} onClick={() => openProduct(product)}>
             <span className={`product-art art-${index % 4} ${product.imageUrl ? 'product-art-has-image' : 'product-art-no-image'}`}>{product.imageUrl ? <img src={product.imageUrl} alt="" loading="lazy" /> : <span className="product-fallback-emoji" aria-hidden="true">{productEmoji(product.category, product.name)}</span>}</span>
-            <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}<span className="product-buy">{Number.isFinite(startPrice) ? `${hasPriceChoices ? `${tr('À partir de', 'From')} ` : ''}${money(startPrice, currency, language)}` : tr('Indisponible', 'Unavailable')} <b aria-hidden="true">＋</b></span></span>
+            <span className="product-copy"><span className="product-category">{product.category}</span><strong>{product.name}</strong>{product.description && <span className="product-description">{product.description}</span>}{product.discountPercent ? <small className="store-partnership-discount">−{product.discountPercent}% {product.partnershipName}</small> : null}<span className="product-buy">{Number.isFinite(startPrice) ? <>{hasPriceChoices ? `${tr('À partir de', 'From')} ` : ''}{money(startPrice, currency, language)}{product.variants.some((variant) => variant.originalPrice != null) ? <del>{money(Math.min(...product.variants.filter((variant) => variant.available).map((variant) => variant.originalPrice ?? variant.price)), currency, language)}</del> : null}</> : tr('Indisponible', 'Unavailable')} <b aria-hidden="true">＋</b></span></span>
           </button>
         })}
         {!visibleProducts.length && <div className="store-empty"><h2>{tr('Aucun article disponible', 'No items available')}</h2><p>{tr('La sélection de cette catégorie arrive bientôt.', 'Items in this category will be available soon.')}</p></div>}
@@ -883,7 +913,7 @@ function StorefrontRoute() {
         <div className={`product-sheet-photo ${selectedProduct.imageUrl ? 'product-sheet-photo-has-image' : 'product-sheet-photo-no-image'}`}>{selectedProduct.imageUrl ? <img src={selectedProduct.imageUrl} alt="" /> : <span aria-hidden="true">{productEmoji(selectedProduct.category, selectedProduct.name)}</span>}</div>
         <p className="store-eyebrow">{selectedProduct.category}</p><h2>{selectedProduct.name}</h2>{selectedProduct.description && <p className="sheet-description">{selectedProduct.description}</p>}
         <label className="product-quantity-field">{tr('Quantité', 'Quantity')}<input type="number" min={1} max={50} step={1} value={selectedProductQuantity} onChange={(event) => setSelectedProductQuantity(Math.max(1, Math.min(50, Math.floor(Number(event.target.value) || 1))))} /></label>
-        {selectedProduct.variants.length > 1 && <fieldset className="option-section"><legend>{tr('Choisis ton format', 'Choose a size')}</legend>{selectedProduct.variants.map((variant) => <button type="button" key={variant.id} disabled={!variant.available} onClick={() => setVariantId(variant.id)} className={`option-choice ${variantId === variant.id ? 'chosen' : ''}`}><span>{variant.label}</span><b>{variant.available ? money(variant.price, currency, language) : tr('Épuisé', 'Sold out')}</b></button>)}</fieldset>}
+        {selectedProduct.variants.length > 1 && <fieldset className="option-section"><legend>{tr('Choisis ton format', 'Choose a size')}</legend>{selectedProduct.variants.map((variant) => <button type="button" key={variant.id} disabled={!variant.available} onClick={() => setVariantId(variant.id)} className={`option-choice ${variantId === variant.id ? 'chosen' : ''}`}><span>{variant.label}</span><b>{variant.available ? <>{money(variant.price, currency, language)}{variant.originalPrice != null ? <del>{money(variant.originalPrice, currency, language)}</del> : null}</> : tr('Épuisé', 'Sold out')}</b></button>)}</fieldset>}
         {selectedProduct.modifierGroups.map((group) => <fieldset className="option-section" key={group.id}><legend>{group.name}{group.required || group.minSelect > 0 ? <small> · {tr('obligatoire', 'required')}</small> : <small> · {tr('au choix', 'optional')}</small>}</legend>{group.options.map((option) => <button type="button" key={option.id} className={`option-choice ${(selectedOptions[group.id] ?? []).includes(option.id) ? 'chosen' : ''}`} onClick={() => toggleOption(group, option)}><span>{option.name}</span><b>{option.price ? `+ ${money(option.price, currency, language)}` : tr('Inclus', 'Included')}</b></button>)}</fieldset>)}
         {optionError && <p className="store-form-error">{optionError}</p>}<button className="store-primary product-sheet-primary" disabled={!selectedVariant?.available} onClick={addSelectedProduct}><span>{tr(editingCartKey ? 'Enregistrer les modifications' : 'Ajouter au panier', editingCartKey ? 'Save changes' : 'Add to cart')}</span><b>{money(selectedUnitPrice * selectedProductQuantity, currency, language)}</b></button>
         {isPrefillSelection && <button type="button" className="store-text-button prefill-skip" onClick={skipPrefillChoice}>{tr('Ignorer cet article', 'Skip this item')}</button>}

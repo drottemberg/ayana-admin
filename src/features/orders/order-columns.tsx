@@ -17,6 +17,12 @@ export function getOrderColumns(options: { showCustomer?: boolean; showLocation?
     { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline" className={statusTone[row.original.status]}>{row.original.status}</Badge> },
     { accessorKey: 'paymentStatus', header: 'Payment', cell: ({ row }) => <Badge variant="outline">{row.original.paymentStatus}</Badge> },
     {
+      id: 'discount', header: 'Discount',
+      cell: ({ row }) => row.original.partnershipDiscountSources
+        ? <span className="grid gap-0.5"><Badge variant="outline" className="w-fit border-green-200 text-green-800">Discount{row.original.partnershipDiscountAmount != null ? ` −${new Intl.NumberFormat(undefined, { style: 'currency', currency: row.original.currency || 'EUR' }).format(row.original.partnershipDiscountAmount)}` : ''}</Badge><span className="text-xs text-muted-foreground">{row.original.partnershipDiscountSources}</span></span>
+        : NO_VALUE_STR,
+    },
+    {
       accessorKey: 'shortCode',
       header: 'Order',
       cell: ({ row }) => <Link to={`/orders/${row.original.id}`} className="font-medium underline-offset-2 hover:underline">{row.original.shortCode ?? row.original.id}</Link>,

@@ -37,6 +37,7 @@ const UsersPage = lazy(() => import('@/pages/app/UsersPage'))
 const StaffPage = lazy(() => import('@/pages/app/StaffPage'))
 const InvitesPage = lazy(() => import('@/pages/app/InvitesPage'))
 const PricingOptionsPage = lazy(() => import('@/pages/app/PricingOptionsPage'))
+const PartnershipsPage = lazy(() => import('@/pages/app/PartnershipsPage'))
 const ClassesPage = lazy(() => import('@/pages/app/ClassesPage'))
 const ClassTypePage = lazy(() => import('@/pages/app/ClassTypePage'))
 const ClassSessionsPage = lazy(() => import('@/pages/app/ClassSessionsPage'))
@@ -107,6 +108,7 @@ export const router = createBrowserRouter([
           { path: 'staff', element: <StaffPage /> },
           { path: 'invites', element: <InvitesPage /> },
           { path: 'pricing-options', element: <PricingOptionsPage /> },
+          { path: 'partnerships', element: <PartnershipsPage /> },
           { path: 'classes', element: <ClassesPage /> },
           { path: 'classes/:classTypeId', element: <ClassTypePage /> },
           { path: 'class-sessions', element: <ClassSessionsPage /> },

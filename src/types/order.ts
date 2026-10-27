@@ -27,6 +27,8 @@ export type Order = {
   customer: { id: string; name: string }
   location: { id: string; name: string }
   user: { id: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null
+  partnershipDiscountSources?: string | null
+  partnershipDiscountAmount?: number | null
 }
 
 export type OrderItem = {
@@ -36,6 +38,10 @@ export type OrderItem = {
   variantLabel?: string | null
   quantity: number
   unitPrice: number
+  originalUnitPrice?: number | null
+  discountPercent?: number | null
+  partnershipId?: string | null
+  partnershipName?: string | null
   unitPriceExcl: number
   vatRate: number
   subtotal: number

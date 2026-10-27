@@ -19,6 +19,7 @@ export type AppPermissions = {
   users?: EntityPermissions
   products?: EntityPermissions
   pricingOptions?: EntityPermissions
+  partnerships?: EntityPermissions
   orders?: EntityPermissions
   clientContracts?: EntityPermissions
   classes?: EntityPermissions

@@ -20,6 +20,7 @@ const routeFeatures: FeatureRoute[] = [
   { pathPrefix: '/media', feature: Feature.MEDIA },
   { pathPrefix: '/products', feature: Feature.PRODUCTS },
   { pathPrefix: '/pricing-options', feature: Feature.PRICING_OPTIONS },
+  { pathPrefix: '/partnerships', feature: Feature.PARTNERSHIPS },
   { pathPrefix: '/classes', feature: Feature.CLASSES },
   { pathPrefix: '/class-sessions', feature: Feature.CLASS_SESSIONS },
   { pathPrefix: '/bookings', feature: Feature.BOOKINGS },

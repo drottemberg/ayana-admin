@@ -77,6 +77,9 @@ type PricingOffer = {
   description?: string | null
   type: string
   price: number
+  originalPrice?: number
+  discountPercent?: number
+  partnershipName?: string
   currency: string
   creditsTotal?: number | null
   creditsPerPeriod?: number | null
@@ -831,6 +834,7 @@ function BookingPortalRoute() {
 
   const renderPricingOffer = (offer: PricingOffer, standalone = false) => {
     const price = new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: offer.currency || 'EUR' }).format(offer.price)
+    const originalPrice = offer.originalPrice == null ? null : new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { style: 'currency', currency: offer.currency || 'EUR' }).format(offer.originalPrice)
     const creditsLabel = offer.creditsTotal != null
       ? `${offer.creditsTotal} ${isFrench ? 'crédits au total' : 'total credits'}`
       : offer.creditsPerPeriod != null
@@ -840,7 +844,7 @@ function BookingPortalRoute() {
       ? `${isFrench ? 'Facturation' : 'Billed'} ${offer.billingInterval.toLowerCase()}`
       : (isFrench ? 'Paiement unique' : 'One-time payment')
     return <article className={`booking-offer${standalone ? ' booking-offer-standalone' : ''}`} key={offer.id}>
-      <div><strong>{offer.name}</strong><b>{price}</b></div>
+      <div><strong>{offer.name}</strong><b><span>{price}</span>{originalPrice ? <><del>{originalPrice}</del><small className="booking-partnership-discount">−{offer.discountPercent}% {offer.partnershipName}</small></> : null}</b></div>
       {offer.description && <p>{offer.description}</p>}
       <small>{creditsLabel}{offer.validityDays ? ` · ${offer.validityDays} ${isFrench ? 'jours de validité' : 'days validity'}` : ''} · {billingLabel}{offer.minimumCommitmentMonths ? ` · ${offer.minimumCommitmentMonths} ${isFrench ? 'mois d’engagement minimum' : 'months minimum commitment'}` : ''}</small>
       {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
