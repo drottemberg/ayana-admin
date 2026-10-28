@@ -56,6 +56,8 @@ export type DataTableFilter<TData> = {
   column: keyof TData & string
   selectionMode?: 'single' | 'multiple'
   options?: string[]
+  /** Separate cached option lists when the same filter id has different scopes. */
+  cacheKey?: string
   getValue?: (row: TData) => unknown
   /**
    * Async paginated options — load on open, search-as-you-type, load more on scroll.
@@ -1053,22 +1055,29 @@ function BaseDataTable<TData extends Record<string, unknown>>({
   )
 }
 
-function AsyncFilterDropdown<TData extends Record<string, unknown>>({
+export function AsyncFilterDropdown<TData extends Record<string, unknown>>({
   filter,
   selectedValues,
   onToggle,
+  selectedLabelsById,
 }: {
   filter: DataTableFilter<TData> & { queryFn: NonNullable<DataTableFilter<TData>['queryFn']> }
   selectedValues: string[]
-  onToggle: (value: string, checked: boolean) => void
+  onToggle: (value: string, checked: boolean, label?: string) => void
+  selectedLabelsById?: Record<string, string>
 }) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState('')
-  const [optionLabelsById, setOptionLabelsById] = React.useState<Record<string, string>>({})
+  const [optionLabelsById, setOptionLabelsById] = React.useState<Record<string, string>>(selectedLabelsById ?? {})
   const listRef = React.useRef<HTMLDivElement>(null)
 
+  React.useEffect(() => {
+    if (!selectedLabelsById) return
+    setOptionLabelsById((current) => ({ ...current, ...selectedLabelsById }))
+  }, [selectedLabelsById])
+
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['filter-options', filter.id, search],
+    queryKey: ['filter-options', filter.id, filter.cacheKey ?? '', search],
     queryFn: ({ pageParam }) => filter.queryFn(search, pageParam as number),
     initialPageParam: 1,
     getNextPageParam: (lastPage, pages) => {
@@ -1089,7 +1098,7 @@ function AsyncFilterDropdown<TData extends Record<string, unknown>>({
     if (checked && optionLabelsById[option.id] !== option.label) {
       setOptionLabelsById((current) => ({ ...current, [option.id]: option.label }))
     }
-    onToggle(option.id, checked)
+    onToggle(option.id, checked, option.label)
   }
 
   const handleScroll = React.useCallback(

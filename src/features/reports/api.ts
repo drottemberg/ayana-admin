@@ -43,6 +43,6 @@ export function getSalesReportLocationsRequest(customerId?: string) {
   })
 }
 
-export function getSalesReportRequest(filters: { from: string; to: string; customerId?: string; locationId?: string; page?: number; limit?: number }) {
+export function getSalesReportRequest(filters: { from: string; to: string; customerId?: string; locationId?: string; page?: number; limit?: number; search?: string }) {
   return apiClient.get<SalesReport>('/reports/sales', { params: filters })
 }

@@ -18,6 +18,10 @@ import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ClassSession } from '@/types/class-type'
 import { getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
+import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
+
+const CLASS_SESSION_DATE_FILTER_KEY = 'class-sessions.date-filter'
+type ClassSessionDateFilter = { mode: 'all' | 'today' | 'upcoming' | 'range'; from?: string; to?: string }
 
 function getDateRangeFilters(dateRange?: DateRangeValue) {
   if (!dateRange?.from) return {}
@@ -66,17 +70,76 @@ export default function ClassSessionsPage() {
   const currentUserId = String(session?.user.id ?? '')
   const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
   const searchParamsString = searchParams.toString()
+  const [tableQueryInitialized, setTableQueryInitialized] = useState(false)
+  const [migratedInitialFilters, setMigratedInitialFilters] = useState<Partial<Record<'customerId' | 'locationId' | 'coachId', string[]>>>()
 
   useEffect(() => {
+    if (tableQueryInitialized) return
+
     const params = new URLSearchParams(searchParamsString)
-    if (params.has('dateMode')) return
-    params.set('dateMode', 'upcoming')
-    setSearchParams(params, { replace: true })
-  }, [searchParamsString, setSearchParams])
+    let changed = false
+
+    const savedDateFilter = getLocalStorage<ClassSessionDateFilter>(CLASS_SESSION_DATE_FILTER_KEY)
+    if (!params.has('dateMode')) {
+      params.set('dateMode', savedDateFilter?.mode ?? 'upcoming')
+      if (savedDateFilter?.mode === 'range' && savedDateFilter.from) {
+        params.set('dateFrom', savedDateFilter.from)
+        if (savedDateFilter.to) params.set('dateTo', savedDateFilter.to)
+      }
+      changed = true
+    } else if (
+      params.get('dateMode') === 'range' &&
+      !params.has('dateFrom') &&
+      savedDateFilter?.mode === 'range' &&
+      savedDateFilter.from
+    ) {
+      params.set('dateFrom', savedDateFilter.from)
+      if (savedDateFilter.to) params.set('dateTo', savedDateFilter.to)
+      changed = true
+    }
+
+    // Migrate old filter links before mounting DataTable. It owns the table
+    // query params too, so mounting it during this URL update could race and
+    // overwrite either the saved filters or the date mode.
+    const legacyFilters: Partial<Record<'customerId' | 'locationId' | 'coachId', string[]>> = {}
+    for (const key of ['customerId', 'locationId', 'coachId'] as const) {
+      const legacyKey = `filter${key[0].toUpperCase()}${key.slice(1)}`
+      const legacyValue = params.get(legacyKey)
+      if (
+        legacyValue &&
+        !params.has(`f.${key}`) &&
+        (key !== 'customerId' || isAdminContext)
+      ) {
+        legacyFilters[key] = [legacyValue]
+      }
+      if (params.has(legacyKey)) {
+        params.delete(legacyKey)
+        changed = true
+      }
+    }
+
+    if (Object.keys(legacyFilters).length) setMigratedInitialFilters(legacyFilters)
+    if (changed) {
+      setSearchParams(params, { replace: true })
+      return
+    }
+
+    setTableQueryInitialized(true)
+  }, [isAdminContext, searchParamsString, setSearchParams, tableQueryInitialized])
+
+  useEffect(() => {
+    if (!tableQueryInitialized) return
+    setLocalStorage<ClassSessionDateFilter>(CLASS_SESSION_DATE_FILTER_KEY, {
+      mode: dateFilter,
+      ...(dateFilter === 'range' && dateRange?.from ? { from: dateRange.from } : {}),
+      ...(dateFilter === 'range' && dateRange?.to ? { to: dateRange.to } : {}),
+    })
+  }, [dateFilter, dateRange?.from, dateRange?.to, tableQueryInitialized])
 
   function updateDateFilter(mode: 'all' | 'today' | 'upcoming' | 'range', range?: DateRangeValue) {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('dateMode', mode)
+    nextParams.delete('p')
     if (mode === 'range' && range?.from) {
       nextParams.set('dateFrom', range.from)
       if (range.to) nextParams.set('dateTo', range.to)
@@ -88,14 +151,6 @@ export default function ClassSessionsPage() {
     setSearchParams(nextParams, { replace: true })
   }
 
-  const filterCustomerId = searchParams.get('filterCustomerId')
-  const filterLocationId = searchParams.get('filterLocationId')
-  const filterCoachId = searchParams.get('filterCoachId')
-  const initialFilters = {
-    ...(isAdminContext && filterCustomerId ? { customerId: [filterCustomerId] } : {}),
-    ...(filterLocationId ? { locationId: [filterLocationId] } : {}),
-    ...(filterCoachId ? { coachId: [filterCoachId] } : {}),
-  }
   const columns = useMemo(
     () => getClassSessionColumns({ showCustomer: isAdminContext, showLocation: true }),
     [isAdminContext],
@@ -109,7 +164,9 @@ export default function ClassSessionsPage() {
         primaryAction={{ children: 'Class types and schedules', onClick: () => navigate('/classes') }}
       />
       <section className="p-4 md:p-6">
-        <DataTableAsync
+        {!tableQueryInitialized ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">Loading class sessions...</div>
+        ) : <DataTableAsync
           queryKey={[...classSessionsQueryKeys.all, 'table', dateFilter, dateRange?.from, dateRange?.to]}
           loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(
             state,
@@ -126,7 +183,7 @@ export default function ClassSessionsPage() {
           )}
           refetchOnMount="always"
           tableKey="class-sessions.root"
-          initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
+          initialFilters={migratedInitialFilters}
           columns={columns}
           getRowCommands={(item) => [
             {
@@ -236,6 +293,7 @@ export default function ClassSessionsPage() {
               label: 'Location',
               column: 'locationId' as const,
               selectionMode: 'single' as const,
+              cacheKey: `${isAdminContext ? 'admin' : 'customer'}:${currentCustomerId ?? 'all'}`,
               queryFn: getClassTypeLocationOptions,
               getValue: (item: ClassSession) => item.locationId,
             },
@@ -267,7 +325,7 @@ export default function ClassSessionsPage() {
           loadingMessage="Loading class sessions..."
           emptyMessage="No class sessions found."
           errorMessage="Failed to load class sessions."
-        />
+        />}
       </section>
       {editingSession ? <ClassSessionEditDrawer
         session={editingSession}
