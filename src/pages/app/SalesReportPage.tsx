@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import type { ColumnDef } from '@tanstack/react-table'
 
-import { AsyncFilterDropdown, DataTableAsync, type DataTableFilter, type DataTableState } from '@/components/data-table'
+import { AsyncFilterDropdown, type DataTableFilter } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownActionsMenu } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TablePagination } from '@/components/table-pagination'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
@@ -17,7 +18,6 @@ import { getSalesReportLocationsRequest, getSalesReportRequest, type SalesReport
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
 type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH' | 'YEAR_TO_DATE' | 'LAST_YEAR' | 'CUSTOM'
-type SalesReportRow = SalesReportEntry & Record<string, unknown>
 type SalesReportSavedFilters = { period: PeriodPreset; customerId?: string; customerName?: string; locationId?: string; locationName?: string; dateFrom?: string; dateTo?: string }
 
 const SALES_REPORT_FILTERS_KEY = 'sales-report.filters'
@@ -108,10 +108,11 @@ export default function SalesReportPage() {
   const to = range.to
   const customerId = isAdmin ? searchParams.get('customerId') ?? '' : ''
   const locationId = searchParams.get('locationId') ?? ''
+  const entriesPage = Math.max(1, Number(searchParams.get('p')) || 1)
+  const transactionSearch = searchParams.get('q')?.trim() ?? ''
   const savedFilters = getLocalStorage<SalesReportSavedFilters>(SALES_REPORT_FILTERS_KEY)
   const [savedCustomerName, setSavedCustomerName] = useState(savedFilters?.customerName ?? '')
   const [savedLocationName, setSavedLocationName] = useState(savedFilters?.locationName ?? '')
-  const [report, setReport] = useState<SalesReport>()
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState(false)
   const [filtersInitialized, setFiltersInitialized] = useState(false)
@@ -181,14 +182,29 @@ export default function SalesReportPage() {
     enabled: filtersInitialized,
     staleTime: 30_000,
   })
-  const reportFilters = useMemo<DataTableFilter<SalesReportRow>[]>(() => [
+  const reportQuery = useQuery({
+    queryKey: ['reports', 'sales', from, to, isAdmin ? customerId : activeCustomerId, locationId, entriesPage, transactionSearch],
+    queryFn: () => getSalesReportRequest({
+      from,
+      to,
+      ...(isAdmin && customerId ? { customerId } : {}),
+      ...(locationId ? { locationId } : {}),
+      page: entriesPage,
+      limit: 50,
+      ...(transactionSearch ? { search: transactionSearch } : {}),
+    }),
+    enabled: filtersInitialized && Boolean(from && to && from <= to),
+  })
+  const report = reportQuery.data
+
+  const reportFilters = useMemo<DataTableFilter<SalesReportEntry & Record<string, unknown>>[]>(() => [
     ...(isAdmin ? [{
       id: 'customerId',
       label: 'Customer',
       column: 'customerId',
       selectionMode: 'single' as const,
       queryFn: getCustomerFilterOptionsRequest,
-      getValue: (row: SalesReportRow) => row.customerId,
+      getValue: (row: SalesReportEntry & Record<string, unknown>) => row.customerId,
     }] : []),
     {
       id: 'locationId',
@@ -216,7 +232,7 @@ export default function SalesReportPage() {
           total: filtered.length,
         }
       },
-      getValue: (row: SalesReportRow) => row.locationId,
+      getValue: (row: SalesReportEntry & Record<string, unknown>) => row.locationId,
     },
   ], [activeCustomerId, customerId, isAdmin])
 
@@ -256,48 +272,6 @@ export default function SalesReportPage() {
     next.delete('p')
     setSearchParams(next, { replace: true })
   }, [locationId, locationsQuery.data, searchParams, setSearchParams])
-
-  const reportScope = JSON.stringify([from, to, isAdmin ? customerId : activeCustomerId, locationId])
-  const currentReportScope = useRef(reportScope)
-  currentReportScope.current = reportScope
-
-  useEffect(() => setReport(undefined), [reportScope])
-
-  const columns = useMemo<ColumnDef<SalesReportRow>[]>(() => [
-    { accessorKey: 'date', header: 'Date', cell: ({ row }) => <span className="whitespace-nowrap">{new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.original.date))}</span> },
-    { accessorKey: 'type', header: 'Type', cell: ({ row }) => getRowType(row.original.type) },
-    { accessorKey: 'orderCode', header: 'Order', cell: ({ row }) => row.original.orderId
-      ? <Link to={`/orders/${row.original.orderId}`} className="font-medium underline-offset-2 hover:underline">{row.original.orderCode ?? row.original.orderId}</Link>
-      : row.original.orderCode ?? '—' },
-    { accessorKey: 'customerName', header: 'User', cell: ({ row }) => row.original.userId
-      ? <Link to={`/users/${row.original.userId}`} title={row.original.userId} className="underline-offset-2 hover:underline">{row.original.customerName ?? row.original.userId}</Link>
-      : row.original.customerName ?? 'Guest' },
-    { accessorKey: 'locationName', header: 'Location' },
-    { accessorKey: 'amount', header: 'Amount', cell: ({ row }) => <span className={`block text-right tabular-nums ${row.original.type !== 'SALE' ? 'text-destructive' : ''}`}>{row.original.type !== 'SALE' ? '−' : ''}{currency(row.original.amount, row.original.currency)}</span> },
-    { accessorKey: 'vatAllocated', header: 'VAT detail', cell: ({ row }) => row.original.type === 'STRIPE_FEE' ? 'Processing fee' : row.original.vatAllocated ? 'Order VAT rates' : 'Unallocated' },
-  ], [])
-
-  const loadEntries = async (state: DataTableState<SalesReportRow>) => {
-    if (!from || !to || from > to) return { items: [], count: 0, pageCount: 0 }
-    const requestedCustomerId = isAdmin ? customerId : activeCustomerId ?? ''
-    const requestedLocationId = locationId
-    const requestedScope = JSON.stringify([from, to, requestedCustomerId, requestedLocationId])
-    const result = await getSalesReportRequest({
-      from,
-      to,
-      ...(isAdmin && requestedCustomerId ? { customerId: requestedCustomerId } : {}),
-      ...(requestedLocationId ? { locationId: requestedLocationId } : {}),
-      page: state.pagination.pageIndex + 1,
-      limit: state.pagination.pageSize,
-      search: state.search.trim() || undefined,
-    })
-    if (requestedScope === currentReportScope.current) setReport(result)
-    return {
-      items: result.entries as SalesReportRow[],
-      count: result.pagination.total,
-      pageCount: result.pagination.pageCount,
-    }
-  }
 
   const setCustomer = (value: string) => {
     const next = new URLSearchParams(searchParams)
@@ -351,6 +325,28 @@ export default function SalesReportPage() {
     next.delete('p')
     setSavedCustomerName('')
     setSavedLocationName('')
+    setSearchParams(next, { replace: true })
+  }
+
+  const setTransactionsPage = (page: number) => {
+    const next = new URLSearchParams(searchParams)
+    if (page > 1) next.set('p', String(page))
+    else next.delete('p')
+    setSearchParams(next, { replace: true })
+  }
+
+  useEffect(() => {
+    const pageCount = reportQuery.data?.pagination.pageCount
+    if (pageCount === undefined || entriesPage <= Math.max(pageCount, 1)) return
+    setTransactionsPage(Math.max(pageCount, 1))
+  }, [entriesPage, reportQuery.data])
+
+  const setTransactionSearch = (value: string) => {
+    const next = new URLSearchParams(searchParams)
+    const search = value.trimStart()
+    if (search) next.set('q', search)
+    else next.delete('q')
+    next.delete('p')
     setSearchParams(next, { replace: true })
   }
 
@@ -413,7 +409,7 @@ export default function SalesReportPage() {
           <div className="flex flex-wrap items-center justify-start gap-2">
             <span className="text-sm text-foreground">Filter by:</span>
             {isAdmin ? <AsyncFilterDropdown
-              filter={reportFilters[0] as DataTableFilter<SalesReportRow> & { queryFn: NonNullable<DataTableFilter<SalesReportRow>['queryFn']> }}
+              filter={reportFilters[0] as DataTableFilter<SalesReportEntry & Record<string, unknown>> & { queryFn: NonNullable<DataTableFilter<SalesReportEntry & Record<string, unknown>>['queryFn']> }}
               selectedValues={customerId ? [customerId] : []}
               selectedLabelsById={customerId && selectedLabelsById[customerId] ? { [customerId]: selectedLabelsById[customerId] } : {}}
               onToggle={(value, checked, label) => {
@@ -422,7 +418,7 @@ export default function SalesReportPage() {
               }}
             /> : null}
             <AsyncFilterDropdown
-              filter={reportFilters[isAdmin ? 1 : 0] as DataTableFilter<SalesReportRow> & { queryFn: NonNullable<DataTableFilter<SalesReportRow>['queryFn']> }}
+              filter={reportFilters[isAdmin ? 1 : 0] as DataTableFilter<SalesReportEntry & Record<string, unknown>> & { queryFn: NonNullable<DataTableFilter<SalesReportEntry & Record<string, unknown>>['queryFn']> }}
               selectedValues={locationId ? [locationId] : []}
               selectedLabelsById={locationId && selectedLabelsById[locationId] ? { [locationId]: selectedLabelsById[locationId] } : {}}
               onToggle={(value, checked, label) => {
@@ -482,23 +478,54 @@ export default function SalesReportPage() {
         </> : null}
 
         {filtersInitialized && from && to && from <= to ? <section className="space-y-3">
-          <div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
             <h2 className="text-lg font-semibold">Transactions</h2>
             <p className="text-sm text-muted-foreground">Payments, refunds and payment processing fees recorded during the selected period.</p>
+            </div>
+            <Input value={searchParams.get('q') ?? ''} onChange={(event) => setTransactionSearch(event.target.value)} placeholder="Search order, user, or location" className="w-full md:max-w-80" />
           </div>
-          <DataTableAsync
-            queryKey={['reports', 'sales', 'transactions', from, to, isAdmin ? customerId : activeCustomerId, locationId, locationsQuery.isSuccess]}
-            loadData={loadEntries}
-            refetchOnMount="always"
-            tableKey="sales-report.transactions.v2.root"
-            columns={columns}
-            searchPlaceholder="Search order, user, or location"
-            searchColumns={['orderCode', 'customerName', 'locationName', 'type']}
-            loadingMessage="Loading transactions..."
-            emptyMessage="No transactions found."
-            errorMessage="Could not load transactions."
-            disabledSelection
-          />
+          <Card size="sm" className="gap-0 rounded-lg p-0">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto rounded-lg">
+                <Table>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Order</TableHead><TableHead>User</TableHead><TableHead>Location</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>VAT detail</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report?.pagination.page === entriesPage && report.entries.map((entry) => <TableRow key={entry.id}>
+                      <TableCell className="whitespace-nowrap">{new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(entry.date))}</TableCell>
+                      <TableCell>{getRowType(entry.type)}</TableCell>
+                      <TableCell>{entry.orderId
+                        ? <Link to={`/orders/${entry.orderId}`} className="font-medium underline-offset-2 hover:underline">{entry.orderCode ?? entry.orderId}</Link>
+                        : entry.orderCode ?? '—'}</TableCell>
+                      <TableCell>{entry.userId
+                        ? <Link to={`/users/${entry.userId}`} title={entry.userId} className="underline-offset-2 hover:underline">{entry.customerName ?? entry.userId}</Link>
+                        : entry.customerName ?? 'Guest'}</TableCell>
+                      <TableCell>{entry.locationName}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${entry.type !== 'SALE' ? 'text-destructive' : ''}`}>{entry.type !== 'SALE' ? '−' : ''}{currency(entry.amount, entry.currency)}</TableCell>
+                      <TableCell>{entry.type === 'STRIPE_FEE' ? 'Processing fee' : entry.vatAllocated ? 'Order VAT rates' : 'Unallocated'}</TableCell>
+                    </TableRow>)}
+                    {reportQuery.isFetching && report?.pagination.page !== entriesPage ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Loading transactions…</TableCell></TableRow> : null}
+                    {reportQuery.isError ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-destructive">Could not load transactions.</TableCell></TableRow> : null}
+                    {!reportQuery.isFetching && !reportQuery.isError && report?.pagination.page === entriesPage && !report.entries.length ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No transactions found.</TableCell></TableRow> : null}
+                  </TableBody>
+                </Table>
+              </div>
+              {report?.pagination.page === entriesPage && report.pagination.pageCount > 1 ? <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+                <p className="text-sm text-muted-foreground">{((entriesPage - 1) * report.pagination.limit) + 1}–{Math.min(entriesPage * report.pagination.limit, report.pagination.total)} of {report.pagination.total} transactions</p>
+                <TablePagination
+                  pageIndex={entriesPage - 1}
+                  pageCount={report.pagination.pageCount}
+                  canPreviousPage={entriesPage > 1}
+                  canNextPage={entriesPage < report.pagination.pageCount}
+                  onPreviousPage={() => setTransactionsPage(Math.max(1, entriesPage - 1))}
+                  onNextPage={() => setTransactionsPage(Math.min(report.pagination.pageCount, entriesPage + 1))}
+                  onPageChange={(page) => setTransactionsPage(page + 1)}
+                />
+              </div> : null}
+            </CardContent>
+          </Card>
         </section> : null}
       </div>
     </section>
