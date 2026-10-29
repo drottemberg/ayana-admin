@@ -39,6 +39,7 @@ import {
 } from '@/features/device-types/components/DeviceTypeGroupDrawer'
 import { DeviceGroupDrawer, type DeviceGroupDrawerProps } from '@/features/groups/components/DeviceGroupDrawer'
 import { StoreGroupDrawer, type StoreGroupDrawerProps } from '@/features/groups/components/StoreGroupDrawer'
+import { CreditExpirationDrawer, type CreditExpirationDrawerProps } from '@/features/client-contracts/CreditExpirationDrawer'
 import { DrawerId } from '@/providers/drawer-ids'
 
 type DrawerPropsById = {
@@ -58,6 +59,7 @@ type DrawerPropsById = {
   [DrawerId.AddDevicesToSet]: AddDevicesToSetDrawerProps
   [DrawerId.DeviceGroup]: DeviceGroupDrawerProps
   [DrawerId.StoreGroup]: StoreGroupDrawerProps
+  [DrawerId.CreditExpiration]: CreditExpirationDrawerProps
 }
 
 let registryRegistered = false
@@ -81,6 +83,7 @@ export function registerDrawerRegistry() {
   NiceModal.register(DrawerId.AddDevicesToSet, AddDevicesToSetDrawer)
   NiceModal.register(DrawerId.DeviceGroup, DeviceGroupDrawer)
   NiceModal.register(DrawerId.StoreGroup, StoreGroupDrawer)
+  NiceModal.register(DrawerId.CreditExpiration, CreditExpirationDrawer)
   registryRegistered = true
 }
 

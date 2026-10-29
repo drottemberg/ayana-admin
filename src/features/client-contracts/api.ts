@@ -91,6 +91,18 @@ export async function resumeClientContractRequest(id: string) {
   return apiClient.patch<ClientContract>(`/client-contracts/${id}/resume`, {})
 }
 
+export async function updateClientContractExpirationRequest(id: string, validUntil: string | null) {
+  return apiClient.patch<ClientContract>(`/client-contracts/${id}/expiration`, { validUntil })
+}
+
+export async function updateCreditMovementExpirationRequest(id: string, expiresAt: string | null) {
+  return apiClient.patch<ClientContractCreditMovement>(`/client-contracts/credits/movements/${id}/expiration`, { expiresAt })
+}
+
+export async function updateCreditMovementRequest(id: string, payload: { amount: number; reason: string | null; expiresAt: string | null }) {
+  return apiClient.patch<ClientContractCreditMovement>(`/client-contracts/credits/movements/${id}`, payload)
+}
+
 export async function grantClientContractCreditsRequest(payload: {
   clientContractIds: string[]
   amount: number

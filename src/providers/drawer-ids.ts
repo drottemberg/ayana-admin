@@ -15,6 +15,7 @@ export const DrawerId = {
   AddDevicesToSet: 'add-devices-to-set',
   DeviceGroup: 'device-group',
   StoreGroup: 'store-group',
+  CreditExpiration: 'credit-expiration',
 } as const
 
 export type DrawerId = (typeof DrawerId)[keyof typeof DrawerId]

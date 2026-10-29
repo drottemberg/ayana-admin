@@ -10,6 +10,7 @@ import {
   getClientContractLocationOptions,
 } from '@/features/client-contracts/api'
 import { getCreditMovementColumns } from '@/features/client-contracts/credit-movement-columns'
+import { getCreditMovementRowActions } from '@/features/client-contracts/credit-movement-service'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
@@ -32,6 +33,7 @@ export default function CreditTransactionsPage() {
   const { session } = useConnect()
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
+  const canManage = Boolean(session?.permissions.clientContracts?.edit) && (isAdminContext || Boolean(currentCustomerId))
   const columns = useMemo(() => getCreditMovementColumns({ showCustomer: isAdminContext }), [isAdminContext])
   const initialFilters = {
     ...(isAdminContext && searchParams.get('filterCustomerId') ? { customerId: [searchParams.get('filterCustomerId')!] } : {}),
@@ -49,6 +51,7 @@ export default function CreditTransactionsPage() {
         tableKey="credit-transactions.root"
         initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
         columns={columns}
+        getRowCommands={(movement) => getCreditMovementRowActions(movement, canManage)}
         disabledSelection
         searchPlaceholder="Search by user, customer, location, contract or reason"
         searchColumns={['id', 'reason']}

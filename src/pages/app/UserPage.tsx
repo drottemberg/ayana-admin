@@ -42,6 +42,7 @@ import { formatPhoneNumber } from '@/lib/phone'
 import { getClientContractsRequest, getUserCreditMovementsRequest, getUserCreditWalletBalancesRequest } from '@/features/client-contracts/api'
 import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
 import { getCreditMovementColumns } from '@/features/client-contracts/credit-movement-columns'
+import { getCreditMovementRowActions } from '@/features/client-contracts/credit-movement-service'
 import { ClientContractService } from '@/features/client-contracts/client-contract-service'
 import { clientContractsQueryKeys } from '@/features/client-contracts/query-keys'
 import type { ClientContract, ClientContractCreditMovement } from '@/types/client-contract'
@@ -347,6 +348,7 @@ export default function UserPage() {
         loadData={(state: DataTableState<ClientContractCreditMovement>) => getUserCreditMovementsRequest(state, userId)}
         tableKey={`credit-transactions.user.${userId}`}
         columns={getCreditMovementColumns({ showUser: false, showCustomer: isAdminContext })}
+        getRowCommands={(movement) => getCreditMovementRowActions(movement, canManageCredits)}
         action={canManageCredits && (isAdminContext || currentCustomerId) && user ? {
           label: 'Adjust credits',
           onClick: () => setWalletAdjustmentOpen(true),

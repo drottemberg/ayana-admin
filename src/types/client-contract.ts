@@ -44,6 +44,7 @@ export type ClientContractCreditMovement = {
   contractName?: string
   locationName?: string | null
   expiresAt?: string | null
+  expirationProcessed?: boolean
   sourceMovementId?: string | null
   customer?: { id: string; name: string }
   user?: { id: string; firstName?: string | null; lastName?: string | null; email?: string | null }

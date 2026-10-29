@@ -5,6 +5,7 @@ import { cancelClientContractRequest, resumeClientContractRequest } from './api'
 import { clientContractsQueryKeys } from './query-keys'
 import { queryClient } from '@/lib/query-client'
 import { Modals } from '@/providers/modal'
+import { Drawer, DrawerId } from '@/providers/drawer'
 
 export const ClientContractService = {
   async cancel(contract: ClientContract) {
@@ -38,6 +39,10 @@ export const ClientContractService = {
   ): DropdownActionItem[] {
     const actions: DropdownActionItem[] = []
     if (creditActions?.onHistory) actions.push({ label: 'Credit history', onClick: () => creditActions.onHistory!(contract) })
+    if (canManage) actions.push({
+      label: 'Edit expiration date',
+      onClick: () => { void Drawer.show(DrawerId.CreditExpiration, { kind: 'contract', contract }) },
+    })
     if (canManage && creditActions?.onGrant && contract.status === 'ACTIVE' && contract.creditsRemaining !== null) {
       actions.push({ label: 'Grant credits', onClick: () => creditActions.onGrant!(contract) })
     }

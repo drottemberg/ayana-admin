@@ -648,7 +648,7 @@ export default function CustomerPage() {
                 loadData={(state: DataTableState<ClientContract>) => getClientContractsRequest(state, { customerId: customer.id })}
                 tableKey="customers.detail.modules.client-contracts"
                 columns={getClientContractColumns({ showCustomer: false })}
-                getRowCommands={(contract) => ClientContractService.getRowActions(contract, Boolean(permissions?.edit))}
+                getRowCommands={(contract) => ClientContractService.getRowActions(contract, Boolean(session?.permissions.clientContracts?.edit))}
                 loadingMessage="Loading client contracts..."
                 emptyMessage="No client contracts found."
                 refetchOnMount={false}
