@@ -157,7 +157,10 @@ export default function ProductCategoriesPage() {
     if (!editingCategory || !customerId) return false
     setUploading(true)
     try {
-      await uploadProductCategoryImageRequest(editingCategory.id, customerId, file)
+      const uploaded = await uploadProductCategoryImageRequest(editingCategory.id, customerId, file)
+      setEditingCategory((current) => current?.id === editingCategory.id
+        ? { ...current, imageUrl: uploaded.imageUrl, attachmentId: uploaded.attachmentId }
+        : current)
       await queryClient.invalidateQueries({ queryKey: CATEGORIES_TABLE_QUERY_KEY })
       await queryClient.invalidateQueries({ queryKey: categoriesQueryKey(customerId) })
       await queryClient.invalidateQueries({ queryKey: productsQueryKeys.all })
@@ -278,7 +281,7 @@ export default function ProductCategoriesPage() {
       title={editingCategory ? `Category photo · ${editingCategory.name}` : 'Category photo'}
       open={Boolean(editingCategory)}
       onOpenChange={(open) => { if (!open) setEditingCategory(null) }}
-      contentClassName="sm:max-w-xl"
+      contentClassName="sm:max-w-3xl"
     >
       {editingCategory ? <div className="grid gap-4 overflow-y-auto px-5 pb-6">
         <p className="text-sm text-muted-foreground">This photo appears on the store category card. It is independent from every product photo in this category.</p>

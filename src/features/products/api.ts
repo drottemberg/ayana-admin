@@ -266,11 +266,13 @@ export async function beautifyCatalogImageRequest(input: {
   prompt: string
   customerId: string
   attachmentId?: string
+  file?: File
 }): Promise<{ imageBase64: string; mimeType: string }> {
   const form = new FormData()
   form.append('mode', input.mode)
   form.append('prompt', input.prompt)
   if (input.attachmentId) form.append('attachmentId', input.attachmentId)
+  if (input.file) form.append('file', input.file)
   return apiClient.post<{ imageBase64: string; mimeType: string }>(`/products/images/beautify?customerId=${encodeURIComponent(input.customerId)}`, form)
 }
 
