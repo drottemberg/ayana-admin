@@ -10,6 +10,14 @@ export type ProductCategory = {
   id: string
   name: string
   vatRate: number | string
+  sortOrder?: number
+  customerId?: string
+  customerName?: string | null
+  isActive?: boolean
+  allLocations?: boolean
+  locationIds?: string[]
+  locations?: { id: string; name: string }[]
+  productCount?: number
   attachmentId?: string | null
   imageUrl?: string | null
 }

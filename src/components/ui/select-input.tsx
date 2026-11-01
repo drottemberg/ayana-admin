@@ -289,6 +289,10 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
     const fieldId = React.useId()
     const anchor = useComboboxAnchor()
     const inputRef = React.useRef<HTMLInputElement>(null)
+    const assignInputRef = React.useCallback((node: HTMLInputElement | null) => {
+      inputRef.current = node
+      setRefs([ref], node)
+    }, [ref])
     const skipNextSearchChangeRef = React.useRef(false)
     const inputId = id ?? (typeof props.name === 'string' && props.name.length > 0 ? props.name : fieldId)
     const isInvalid = Boolean(error) || props['aria-invalid'] === true || props['aria-invalid'] === 'true'
@@ -298,6 +302,10 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
     const currentValue = isControlled ? value : internalValue
     const selectedItem = normalizedItems.find((item) => item.value === currentValue) ?? null
     const selectedLabel = findItemLabel(normalizedItems, currentValue)
+    const areItemsEqual = React.useCallback(
+      (item: SelectInputItem, selected: SelectInputItem) => item.value === selected.value,
+      [],
+    )
     const [inputValue, setInputValue] = React.useState<string | null>(null)
     const displayValue = inputValue ?? selectedLabel
     const filterValue = inputValue ?? ''
@@ -327,6 +335,47 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
       },
       [normalizedItems],
     )
+    const handleInputValueChange = React.useCallback((nextInputValue: string) => {
+      if (skipNextSearchChangeRef.current) {
+        skipNextSearchChangeRef.current = false
+        return
+      }
+
+      if (searchable) {
+        setInputValue(nextInputValue)
+        onSearchChange?.(nextInputValue)
+      }
+    }, [onSearchChange, searchable])
+    const handleValueChange = React.useCallback((nextValue: SelectInputItem | null) => {
+      if (!nextValue) return
+      const nextItemValue = nextValue.value
+
+      if (!isControlled) {
+        setInternalValue(nextItemValue)
+      }
+
+      skipNextSearchChangeRef.current = true
+      setInputValue(null)
+      onValueChange?.(nextItemValue)
+      if (inputRef.current) {
+        inputRef.current.value = getValueText(nextItemValue)
+      }
+      onChange?.({
+        type: 'change',
+        target: inputRef.current ?? { name, value: nextItemValue },
+        currentTarget: inputRef.current ?? { name, value: nextItemValue },
+      })
+    }, [isControlled, name, onChange, onValueChange])
+    const handleOpenChange = React.useCallback((open: boolean) => {
+      if (open) return
+
+      setInputValue(null)
+      onBlur?.({
+        type: 'blur',
+        target: { name },
+        currentTarget: { name },
+      })
+    }, [name, onBlur])
 
     return (
       <Field data-slot="select-input-field" data-invalid={isInvalid} className={containerClassName}>
@@ -344,10 +393,7 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
         )}
 
         <Combobox
-          inputRef={(node) => {
-            inputRef.current = node
-            setRefs([ref], node)
-          }}
+          inputRef={assignInputRef}
           id={inputId}
           name={name}
           value={selectedItem}
@@ -360,51 +406,10 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
           filter={searchable ? filterItem : null}
           itemToStringLabel={(item) => getItemLabel(item.value)}
           itemToStringValue={(item) => getValueText(item.value)}
-          isItemEqualToValue={(item, selectedItem) => item.value === selectedItem.value}
-          onInputValueChange={(nextInputValue) => {
-            if (skipNextSearchChangeRef.current) {
-              skipNextSearchChangeRef.current = false
-              return
-            }
-
-            if (searchable) {
-              setInputValue(nextInputValue)
-              onSearchChange?.(nextInputValue)
-            }
-          }}
-          onValueChange={(nextValue) => {
-            if (!nextValue) return
-            const nextItemValue = nextValue.value
-
-            if (!isControlled) {
-              setInternalValue(nextItemValue)
-            }
-
-            skipNextSearchChangeRef.current = true
-            setInputValue(null)
-            onValueChange?.(nextItemValue)
-            if (inputRef.current) {
-              inputRef.current.value = getValueText(nextItemValue)
-            }
-            onChange?.({
-              type: 'change',
-              target: inputRef.current ?? { name, value: nextItemValue },
-              currentTarget: inputRef.current ?? { name, value: nextItemValue },
-            })
-          }}
-          onOpenChange={(open) => {
-            if (open) {
-              return
-            }
-
-            setInputValue(null)
-
-            onBlur?.({
-              type: 'blur',
-              target: { name },
-              currentTarget: { name },
-            })
-          }}
+          isItemEqualToValue={areItemsEqual}
+          onInputValueChange={handleInputValueChange}
+          onValueChange={handleValueChange}
+          onOpenChange={handleOpenChange}
         >
           <div ref={anchor}>
             <ComboboxInput
@@ -490,9 +495,9 @@ function MultiselectInput({
   const inputId = id ?? (typeof name === 'string' && name.length > 0 ? name : fieldId)
   const isInvalid = Boolean(error) || props['aria-invalid'] === true || props['aria-invalid'] === 'true'
   const normalizedItems = React.useMemo(() => normalizeItems(items), [items])
-  const selectedItems = value.map((itemValue) => {
+  const selectedItems = React.useMemo(() => value.map((itemValue) => {
     return normalizedItems.find((item) => item.value === itemValue) ?? { value: itemValue, label: itemValue }
-  })
+  }), [normalizedItems, value])
   const [inputValue, setInputValue] = React.useState('')
   const [autoContainer, setAutoContainer] = React.useState<HTMLElement | null>(null)
   const trimmedInput = inputValue.trim()
@@ -514,6 +519,14 @@ function MultiselectInput({
     () =>
       searchable && filterItems ? normalizedItems.filter((item) => filterItem(item, inputValue)) : normalizedItems,
     [filterItems, inputValue, normalizedItems, searchable],
+  )
+  const getItemLabel = React.useCallback(
+    (item: SelectInputItem) => findItemLabel(comboboxItems, item.value),
+    [comboboxItems],
+  )
+  const areItemsEqual = React.useCallback(
+    (item: SelectInputItem, selected: SelectInputItem) => item.value === selected.value,
+    [],
   )
 
   React.useLayoutEffect(() => {
@@ -556,9 +569,9 @@ function MultiselectInput({
           disabled={disabled}
           items={comboboxItems}
           filter={searchable ? filterItem : null}
-          itemToStringLabel={(item) => findItemLabel(comboboxItems, item.value)}
+          itemToStringLabel={getItemLabel}
           itemToStringValue={(item) => getValueText(item.value)}
-          isItemEqualToValue={(item, selectedItem) => item.value === selectedItem.value}
+          isItemEqualToValue={areItemsEqual}
           onInputValueChange={(nextInputValue) => {
             if (skipNextSearchChangeRef.current) {
               skipNextSearchChangeRef.current = false

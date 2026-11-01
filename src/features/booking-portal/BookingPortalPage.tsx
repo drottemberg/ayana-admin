@@ -230,6 +230,7 @@ function BookingPortalRoute() {
   const [emailAccessLoading, setEmailAccessLoading] = useState(false)
   const restoredSession = useRef(false)
   const restoredOffer = useRef(false)
+  const restoredManageBooking = useRef(false)
   const handledPaymentReturn = useRef('')
   const isFrench = language === 'fr'
   const checkoutFirstName = member ? member.identity.firstName?.trim() || firstNameDraft.trim() : guestFirstName.trim()
@@ -269,6 +270,26 @@ function BookingPortalRoute() {
     setSessionFilter('all')
     setNotice('')
   }
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const params = url.searchParams
+    const syncParam = (key: string, value: string, defaultValue?: string) => {
+      if (!value || value === defaultValue) params.delete(key)
+      else params.set(key, value)
+    }
+
+    syncParam('section', activeSection, 'planning')
+    syncParam('filter', sessionFilter, 'all')
+    syncParam('class', classFilter, 'all')
+    syncParam('time', timeFilter, 'all')
+    syncParam('date', selectedDate)
+    syncParam('layout', sessionLayout, 'list')
+
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextUrl !== currentUrl) window.history.replaceState(window.history.state, '', nextUrl)
+  }, [activeSection, sessionFilter, classFilter, timeFilter, selectedDate, sessionLayout])
 
   useEffect(() => {
     let active = true
@@ -374,7 +395,8 @@ function BookingPortalRoute() {
   const booked = useMemo(() => new Set(member?.bookedSessionIds ?? []), [member?.bookedSessionIds])
   const memberSessions = useMemo(() => {
     const sessions = schedule?.sessions ?? []
-    return member && sessionFilter === 'booked' ? sessions.filter((session) => booked.has(session.id)) : sessions
+    if (sessionFilter !== 'booked') return sessions
+    return member ? sessions.filter((session) => booked.has(session.id)) : []
   }, [schedule, member, sessionFilter, booked])
   const sessionDates = useMemo(() => [...new Set(memberSessions.map((session) => session.localDate))].sort(), [memberSessions])
   const classNames = useMemo(() => [...new Set(memberSessions.map((session) => session.name))].sort((a, b) => a.localeCompare(b)), [memberSessions])
@@ -491,6 +513,7 @@ function BookingPortalRoute() {
     className: classFilter,
     time: timeFilter,
     layout: sessionLayout,
+    ...(searchParams.get('manageBooking') ? { manageBooking: searchParams.get('manageBooking') } : {}),
     ...(resume === 'session' && selected ? { resumeSession: selected.id } : {}),
     ...(resume === 'offer' && offerToPurchase ? { resumeOffer: offerToPurchase.id } : {}),
   })
@@ -663,6 +686,23 @@ function BookingPortalRoute() {
       setBookingError(reason instanceof Error ? reason.message : (isFrench ? 'La politique d’annulation est indisponible.' : 'Cancellation policy could not be loaded.'))
     } finally { setQuoteLoading(false) }
   }
+
+  useEffect(() => {
+    if (!schedule || !member || restoredManageBooking.current) return
+    const bookingId = searchParams.get('manageBooking')
+    if (!bookingId) return
+    const booking = member.bookings.find((item) => item.bookingId === bookingId)
+    const session = booking ? schedule.sessions.find((item) => item.id === booking.sessionId) : null
+    if (!booking || !session) return
+    restoredManageBooking.current = true
+    setActiveSection('planning')
+    setSessionFilter('booked')
+    setSelectedDate(session.localDate)
+    void openCancellation(session, booking.bookingId)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('manageBooking')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [schedule, member, searchParams])
 
   const purchaseOffer = async (pricingOptionId: string) => {
     if (offerPurchaseInFlight.current) return
@@ -873,7 +913,7 @@ function BookingPortalRoute() {
           <div className="booking-member-identity"><span className="booking-avatar">{(member.identity.firstName?.[0] ?? member.identity.lastName?.[0] ?? 'A').toUpperCase()}</span><div><span>{isFrench ? 'Connecté·e' : 'Signed in'}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ')}</strong></div></div>
           <div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(isFrench ? 'fr-FR' : 'en-GB', { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (isFrench ? 'accès illimité' : 'unlimited') : (isFrench ? 'crédits' : 'credits')}</span></div><button type="button" className="booking-member-plans" onClick={() => setActiveSection('offers')}><span aria-hidden="true">▤</span>{isFrench ? 'Packs & abonnements' : 'Packs & memberships'}<b>→</b></button><button type="button" className="booking-logout" onClick={logout} aria-label={isFrench ? 'Se déconnecter' : 'Log out'} title={isFrench ? 'Se déconnecter' : 'Log out'}>↪</button></div>
         </section>
-        : activeSection !== 'offers' && <section className="booking-login-card"><div><strong>{isFrench ? 'Connecte-toi à ton compte Ayana' : 'Sign in to your Ayana account'}</strong><span>{isFrench ? 'Reviens au planning avec tes réservations et tes crédits.' : 'Return to the schedule with your bookings and credits.'}</span></div><div>{renderAccessButtons(accessState(), 'booking-whatsapp-cta')}{accessError && <p className="booking-error" role="alert">{accessError}</p>}</div></section>}
+        : activeSection !== 'offers' && sessionFilter !== 'booked' && <section className="booking-login-card"><div><strong>{isFrench ? 'Connecte-toi à ton compte Ayana' : 'Sign in to your Ayana account'}</strong><span>{isFrench ? 'Reviens au planning avec tes réservations et tes crédits.' : 'Return to the schedule with your bookings and credits.'}</span></div><div>{renderAccessButtons(accessState(), 'booking-whatsapp-cta')}{accessError && <p className="booking-error" role="alert">{accessError}</p>}</div></section>}
       {notice && <div className="booking-notice" role="status">{notice}</div>}
 
       <nav className="booking-section-tabs" role="tablist" aria-label={isFrench ? 'Planning et formules' : 'Schedule and plans'}>
@@ -899,7 +939,7 @@ function BookingPortalRoute() {
           <div className="booking-filterbar">
             <label className="booking-filter-select booking-filter-bookings"><span aria-hidden="true">☷</span><select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value as 'all' | 'booked')} aria-label={isFrench ? 'Afficher les cours ou mes réservations' : 'Show classes or my bookings'}>
               <option value="all">{isFrench ? 'Tous les cours' : 'All classes'}</option>
-              {member && <option value="booked">{isFrench ? 'Mes réservations' : 'My bookings'}</option>}
+              <option value="booked">{isFrench ? 'Mes cours' : 'My classes'}</option>
             </select><span className="booking-select-chevron">⌄</span></label>
             <label className="booking-filter-select"><select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} aria-label={isFrench ? 'Type de cours' : 'Class type'}>
               <option value="all">{isFrench ? 'Tous les types' : 'All class types'}</option>
@@ -920,9 +960,15 @@ function BookingPortalRoute() {
 
         <div className="booking-day-heading"><h2>{selectedDate ? formatDate(selectedDate) : (isFrench ? 'Prochains cours' : 'Upcoming classes')}</h2><span>{selectedDateSessions.length} {isFrench ? 'cours disponibles' : 'classes available'}</span></div>
         {selectedDateSessions.length === 0 ? <section className="booking-empty booking-day-empty">
-          <h2>{member && sessionFilter === 'booked' ? (isFrench ? 'Aucune réservation ce jour-là' : 'No bookings on this day') : (isFrench ? 'Aucun cours disponible ce jour-là' : 'No classes available on this day')}</h2>
-          <p>{isFrench ? 'Choisis un autre jour ou modifie les filtres.' : 'Choose another day or change the filters.'}</p>
-          {member && sessionFilter === 'booked' && <button type="button" className="booking-empty-action" onClick={() => setSessionFilter('all')}>{isFrench ? 'Voir tous les cours' : 'View all classes'}</button>}
+          {!member && sessionFilter === 'booked' ? <>
+            <h2>{isFrench ? 'Connecte-toi pour voir tes cours' : 'Sign in to see your classes'}</h2>
+            <p>{isFrench ? 'Retrouve ici tes réservations et gère-les directement depuis le planning.' : 'Find your bookings here and manage them directly from the schedule.'}</p>
+            {renderAccessButtons(accessState(), 'booking-empty-action')}
+          </> : <>
+            <h2>{sessionFilter === 'booked' ? (isFrench ? 'Aucune réservation ce jour-là' : 'No bookings on this day') : (isFrench ? 'Aucun cours disponible ce jour-là' : 'No classes available on this day')}</h2>
+            <p>{isFrench ? 'Choisis un autre jour ou modifie les filtres.' : 'Choose another day or change the filters.'}</p>
+            {sessionFilter === 'booked' && <button type="button" className="booking-empty-action" onClick={() => setSessionFilter('all')}>{isFrench ? 'Voir tous les cours' : 'View all classes'}</button>}
+          </>}
         </section> : <div className={`booking-session-list booking-session-list-${sessionLayout}`}>
           {selectedDateSessions.map((session) => {
             const alreadyBooked = booked.has(session.id)

@@ -9,6 +9,7 @@ import type {
 } from '@/features/customers/customer-settings-api'
 
 export const customerMessagingConfigColumns: ColumnDef<CustomerMessagingConfigRow>[] = [
+  { accessorKey: 'webChat', header: 'Web chat' },
   { accessorKey: 'whatsapp', header: 'WhatsApp' },
   {
     accessorKey: 'whatsappBusinessPhoneNumber',

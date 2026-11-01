@@ -20,6 +20,8 @@ import { queryClient } from '@/lib/query-client'
 type Target = { kind: CustomerSettingKind; location?: CustomerLocationPolicyRow }
 
 const messagingFields = [
+  { key: 'webChatApiKey', label: 'Public web chat API key' },
+  { key: 'webChatAllowedDomains', label: 'Website domains (one per line)', multiline: true },
   { key: 'whatsappPhoneNumberId', label: 'WhatsApp phone number ID' },
   { key: 'whatsappBusinessPhoneNumber', label: 'WhatsApp business phone number (+33612345678)', type: 'tel' },
   { key: 'whatsappBusinessAccountId', label: 'WhatsApp Business Account ID' },
@@ -132,7 +134,7 @@ export function CustomerSettingsEditDrawer({
           const next: Record<string, string> = {}
           for (const field of messagingFields) {
             const value = (config as Record<string, unknown> | null)?.[field.key]
-            next[field.key] = typeof value === 'string' ? value : ''
+            next[field.key] = Array.isArray(value) ? value.join('\n') : typeof value === 'string' ? value : ''
           }
           if (current) {
             setValues(next)
@@ -183,6 +185,13 @@ export function CustomerSettingsEditDrawer({
         const payload: Record<string, unknown> = {}
         for (const field of messagingFields) {
           const value = values[field.key]?.trim() ?? ''
+          if (field.key === 'webChatAllowedDomains') {
+            const domains = value.split(/[\n,]+/).map((domain) => domain.trim()).filter(Boolean)
+            if (JSON.stringify(domains) !== JSON.stringify((initialValues[field.key] ?? '').split('\n').map((domain) => domain.trim()).filter(Boolean))) {
+              payload[field.key] = domains
+            }
+            continue
+          }
           if ('secret' in field && field.secret) {
             if (value) payload[field.key] = value
           } else if (value !== (initialValues[field.key]?.trim() ?? '')) {
@@ -230,6 +239,18 @@ export function CustomerSettingsEditDrawer({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
           {isLoading ? <div className="py-6 text-sm text-muted-foreground">Loading settings…</div> : null}
           {!isLoading && target?.kind === 'messaging-config' ? <h3 className="font-medium">WhatsApp and Telegram</h3> : null}
+          {!isLoading && target?.kind === 'messaging-config' ? (
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              The API key is public and goes in the website environment variable. Do not place a private secret in browser code. Add each allowed website origin, including the local development origin when needed.
+              <div className="mt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => {
+                  const bytes = crypto.getRandomValues(new Uint8Array(32))
+                  const key = `ayw_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+                  setValues((previous) => ({ ...previous, webChatApiKey: key }))
+                }}>Generate public API key</Button>
+              </div>
+            </div>
+          ) : null}
           {!isLoading && target?.kind === 'prompt-profile' ? <h3 className="font-medium">Assistant behavior and content</h3> : null}
           {!isLoading && target?.kind === 'location-policy' ? <p className="text-sm text-muted-foreground">Leave schedule values empty when no specific hours are set. Hours must be JSON by weekday, for example: {'{"mon":{"open":"09:00","close":"18:00"}}'}.</p> : null}
           {!isLoading ? fields.map((field) => {
@@ -240,7 +261,7 @@ export function CustomerSettingsEditDrawer({
               <label key={field.key} className="grid gap-1.5 text-sm font-medium">
                 <span>{field.label}</span>
                 {'multiline' in field && field.multiline
-                  ? <Textarea value={value} onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={field.key === 'openingHours' || field.key === 'onlineOrderHours' ? 7 : 3} placeholder={placeholder} />
+                  ? <Textarea value={value} onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={field.key === 'openingHours' || field.key === 'onlineOrderHours' ? 7 : field.key === 'webChatAllowedDomains' ? 4 : 3} placeholder={placeholder} />
                   : <Input type={'type' in field ? field.type : 'text'} value={value} onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} placeholder={placeholder} />}
                 {secret && hasExistingSecret[field.key] ? <span className="text-xs font-normal text-muted-foreground">Leave blank to keep the saved value.</span> : null}
               </label>

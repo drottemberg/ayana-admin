@@ -216,6 +216,39 @@ export async function getProductCategoriesRequest(customerId: string): Promise<P
   return apiClient.get<ProductCategory[]>(`/products/types/management?customerId=${encodeURIComponent(customerId)}`)
 }
 
+export async function getProductCategoriesListRequest(
+  tableState: DataTableState<ProductCategory>,
+): Promise<DataTableAsyncResult<ProductCategory>> {
+  const result = await apiClient.post<ApiListResult<ProductCategory>>(
+    '/products/types/list',
+    toApiListDto(tableState),
+  )
+  return toDataTableResult(result)
+}
+
+export async function reorderProductCategoriesRequest(customerId: string, categoryIds: string[]): Promise<ProductCategory[]> {
+  return apiClient.post<ProductCategory[]>(`/products/types/reorder?customerId=${encodeURIComponent(customerId)}`, { categoryIds })
+}
+
+export async function createProductCategoryRequest(
+  customerId: string,
+  input: { name: string; vatRate: number },
+): Promise<ProductCategory> {
+  return apiClient.post<ProductCategory>(`/products/types?customerId=${encodeURIComponent(customerId)}`, input)
+}
+
+export async function updateProductCategoryRequest(
+  category: ProductCategory,
+  input: { name: string; vatRate: number; isActive: boolean; position: number },
+): Promise<ProductCategory> {
+  const customerId = category.customerId
+  if (!customerId) throw new Error('The category customer is missing.')
+  return apiClient.patch<ProductCategory>(
+    `/products/types/${encodeURIComponent(category.id)}/management?customerId=${encodeURIComponent(customerId)}`,
+    input,
+  )
+}
+
 export async function uploadProductImageRequest(productId: string, customerId: string, file: File): Promise<{ attachmentId: string; imageUrl: string }> {
   const form = new FormData()
   form.append('file', file)

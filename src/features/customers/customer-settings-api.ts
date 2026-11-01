@@ -2,6 +2,8 @@ import type { DataTableAsyncResult, DataTableState } from '@/components/data-tab
 import { apiClient } from '@/lib/api-client'
 
 export type CustomerMessagingConfig = {
+  webChatApiKey?: string | null
+  webChatAllowedDomains?: string[]
   whatsappPhoneNumberId?: string | null
   whatsappBusinessPhoneNumber?: string | null
   whatsappBusinessAccountId?: string | null
@@ -30,6 +32,7 @@ export type CustomerMessagingConfigRow = CustomerMessagingConfig & {
   id: string
   whatsapp: string
   telegram: string
+  webChat: string
 }
 
 export type CustomerPromptProfileRow = CustomerPromptProfile & {
@@ -96,6 +99,9 @@ export async function loadCustomerMessagingConfigRow(
   const row: CustomerMessagingConfigRow = {
     ...config,
     id: customerId,
+    webChat: config?.webChatApiKey
+      ? config.webChatAllowedDomains?.join(', ') || 'Key configured'
+      : 'Not configured',
     whatsapp: config?.whatsappPhoneNumberId || config?.whatsappBusinessPhoneNumber || config?.hasWhatsappAccessToken ? 'Configured' : 'Not configured',
     telegram: config?.telegramBotUsername
       ? `@${config.telegramBotUsername}`
