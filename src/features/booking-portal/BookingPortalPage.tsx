@@ -987,8 +987,14 @@ function BookingPortalRoute() {
               <div className="booking-session-copy">
                 <div className="booking-session-title"><h3>{session.name}</h3>{session.category && <span>{session.category}</span>}</div>
                 <div className="booking-session-meta"><span>◷</span>{session.duration} min{session.coachName ? ` · ${session.coachName}` : ''}{session.category && <><i />{session.category}</>}</div>
-                {session.description && <p className="booking-session-description">{session.description}</p>}
-                {session.conditions && <p className="booking-conditions"><span aria-hidden="true">♧</span>{session.conditions}</p>}
+                {session.description && <details className="booking-session-terms">
+                  <summary>Description</summary>
+                  <p className="booking-session-description">{session.description}</p>
+                </details>}
+                {session.conditions && <details className="booking-session-terms">
+                  <summary>Conditions</summary>
+                  <p className="booking-conditions"><span aria-hidden="true">♧</span>{session.conditions}</p>
+                </details>}
                 {schedule?.location.cancellationPolicy && <details className="booking-session-terms">
                   <summary>{isFrench ? 'Conditions d’annulation' : 'Cancellation conditions'}</summary>
                   <ul>{reservationTerms(session, schedule.location.cancellationPolicy, isFrench).map((term) => <li key={term}>{term}</li>)}</ul>
