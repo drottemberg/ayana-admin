@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button'
 import { PageHeader, type PageHeaderProps } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { HugeiconsIcon } from '@hugeicons/react'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 
 export type DetailPanelField = {
   label: ReactNode
@@ -32,6 +35,20 @@ export type DetailPageModule = {
 
 const MODULE_ANCHOR_PREFIX = 'module'
 export const RELATED_ENTITY_MODULE_PAGE_SIZE = 5
+
+function useIsStackedDetailLayout() {
+  const [isStacked, setIsStacked] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 1023px)')
+    const update = () => setIsStacked(mediaQuery.matches)
+    update()
+    mediaQuery.addEventListener('change', update)
+    return () => mediaQuery.removeEventListener('change', update)
+  }, [])
+
+  return isStacked
+}
 
 export function DetailPageLayout({
   children,
@@ -126,12 +143,42 @@ export function DetailSidePanel({
   sections,
   isLoading = false,
   fieldLayout = 'column',
+  collapseWhenStacked = false,
 }: {
   sections: DetailPanelSection[]
   isLoading?: boolean
   fieldLayout?: 'column' | 'row'
+  collapseWhenStacked?: boolean
 }) {
+  const isStackedLayout = useIsStackedDetailLayout()
+  const [openSections, setOpenSections] = useState<Record<number, boolean>>({})
+
+  useEffect(() => {
+    if (isStackedLayout) setOpenSections({})
+  }, [isStackedLayout])
+
   if (isLoading) {
+    if (collapseWhenStacked && isStackedLayout) {
+      const section = sections[0]
+      return (
+        <Collapsible className="rounded-lg border border-border bg-muted">
+          <CollapsibleTrigger className="group/collapsible-trigger flex w-full items-center gap-2 p-4 text-left text-sm font-semibold">
+            {section?.icon ? <HugeiconsIcon icon={section.icon} strokeWidth={2} className="size-5 shrink-0" /> : null}
+            <span className="min-w-0 flex-1">{section?.title ?? 'Details'}</span>
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              strokeWidth={2}
+              className="size-4 shrink-0 transition-transform group-data-panel-open/collapsible-trigger:rotate-180"
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="border-t border-border px-4 py-3">
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-4 w-full" />)}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )
+    }
     return (
       <div className="rounded-lg border bg-muted p-4">
         <Skeleton className="mb-4 h-4 w-24" />
@@ -146,19 +193,50 @@ export function DetailSidePanel({
 
   return (
     <>
-      {sections.map((section, sectionIndex) => (
-        <DetailCard
-          key={sectionIndex}
-          icon={section.icon}
-          title={section.title}
-          actions={section.actions}
-          className="border border-border ring-0"
-        >
+      {sections.map((section, sectionIndex) => {
+        const fields = (
           <dl className="divide-y">
             {section.fields.map((field, fieldIndex) => renderDetailPanelField(field, fieldLayout, fieldIndex))}
           </dl>
-        </DetailCard>
-      ))}
+        )
+
+        if (collapseWhenStacked && isStackedLayout) {
+          return (
+            <Collapsible
+              key={sectionIndex}
+              open={Boolean(openSections[sectionIndex])}
+              onOpenChange={(open) => setOpenSections((current) => ({ ...current, [sectionIndex]: open }))}
+              className="rounded-lg border border-border bg-muted"
+            >
+              <CollapsibleTrigger className="group/collapsible-trigger flex w-full items-center gap-2 p-4 text-left text-sm font-semibold">
+                {section.icon ? <HugeiconsIcon icon={section.icon} strokeWidth={2} className="size-5 shrink-0" /> : null}
+                <span className="min-w-0 flex-1">{section.title}</span>
+                {section.actions}
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  strokeWidth={2}
+                  className="size-4 shrink-0 transition-transform group-data-panel-open/collapsible-trigger:rotate-180"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="border-t border-border px-4 py-3">
+                {fields}
+              </CollapsibleContent>
+            </Collapsible>
+          )
+        }
+
+        return (
+          <DetailCard
+            key={sectionIndex}
+            icon={section.icon}
+            title={section.title}
+            actions={section.actions}
+            className="border border-border ring-0"
+          >
+            {fields}
+          </DetailCard>
+        )
+      })}
     </>
   )
 }

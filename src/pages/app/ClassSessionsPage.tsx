@@ -17,7 +17,7 @@ import { Modals } from '@/providers/modal'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ClassSession } from '@/types/class-type'
-import { getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
+import { claimCoachSessionRequest, getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
 const CLASS_SESSION_DATE_FILTER_KEY = 'class-sessions.date-filter'
@@ -69,6 +69,7 @@ export default function ClassSessionsPage() {
   const isInstructor = session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
   const currentUserId = String(session?.user.id ?? '')
   const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
+  const [claimingSessionId, setClaimingSessionId] = useState<string | null>(null)
   const searchParamsString = searchParams.toString()
   const [tableQueryInitialized, setTableQueryInitialized] = useState(false)
   const [migratedInitialFilters, setMigratedInitialFilters] = useState<Partial<Record<'customerId' | 'locationId' | 'coachId', string[]>>>()
@@ -151,9 +152,32 @@ export default function ClassSessionsPage() {
     setSearchParams(nextParams, { replace: true })
   }
 
+  async function claimSession(item: ClassSession) {
+    if (claimingSessionId) return
+    setClaimingSessionId(item.id)
+    try {
+      await claimCoachSessionRequest(item.id)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+      ])
+      toast.success('Session assigned to you.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
+    } finally {
+      setClaimingSessionId(null)
+    }
+  }
+
   const columns = useMemo(
-    () => getClassSessionColumns({ showCustomer: isAdminContext, showLocation: true }),
-    [isAdminContext],
+    () => getClassSessionColumns({
+      showCustomer: isAdminContext,
+      showLocation: true,
+      allowClaim: isInstructor,
+      claimingSessionId,
+      onClaim: (item) => { void claimSession(item) },
+    }),
+    [claimingSessionId, isAdminContext, isInstructor],
   )
 
   return (
@@ -297,14 +321,12 @@ export default function ClassSessionsPage() {
               queryFn: getClassTypeLocationOptions,
               getValue: (item: ClassSession) => item.locationId,
             },
-            ...(session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
-              ? []
-              : [{
-                  id: 'coachId', label: 'Coach', column: 'coachId' as const,
-                  selectionMode: 'single' as const,
-                  queryFn: getCoachFilterOptionsRequest,
-                  getValue: (item: ClassSession) => item.coachId,
-                }]),
+            {
+              id: 'coachId', label: 'Coach', column: 'coachId' as const,
+              selectionMode: 'single' as const,
+              queryFn: getCoachFilterOptionsRequest,
+              getValue: (item: ClassSession) => item.coachId,
+            },
             {
               id: 'category', label: 'Category', column: 'classCategory' as const,
               selectionMode: 'single' as const,

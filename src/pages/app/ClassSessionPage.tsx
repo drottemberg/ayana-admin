@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/ui/page-header'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
-import { classBookingColumns } from '@/features/classes/class-session-columns'
+import { getClassBookingColumns } from '@/features/classes/class-session-columns'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
 import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
@@ -22,6 +22,7 @@ import { useConnect } from '@/features/app/use-connect'
 import { Modals } from '@/providers/modal'
 import type { ClassPassScheduleInsight, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
+import { claimCoachSessionRequest } from '@/features/coaches/api'
 import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -98,6 +99,8 @@ export default function ClassSessionPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddBookingOpen, setIsAddBookingOpen] = useState(false)
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false)
+  const [attendanceSavingId, setAttendanceSavingId] = useState<string | null>(null)
+  const [isClaimingSession, setIsClaimingSession] = useState(false)
   const [bookingSourceSummary, setBookingSourceSummary] = useState('')
   const [classPassScheduleAction, setClassPassScheduleAction] = useState<ClassPassScheduleAction | null>(null)
   const [spotChange, setSpotChange] = useState<'ADD' | 'REMOVE'>('ADD')
@@ -120,9 +123,17 @@ export default function ClassSessionPage() {
   const instructorMembership = classSession?.customerId
     ? appSession?.user.customerMemberships.find((membership) => membership.customerId === classSession.customerId)
     : undefined
+  const isInstructorContext = instructorMembership?.role === 'INSTRUCTOR'
   const isAssignedInstructor = instructorMembership?.role === 'INSTRUCTOR'
     && classSession?.coachId === appSession?.user.id
   const canTakeAttendance = Boolean(isAssignedInstructor && classSession && ['SCHEDULED', 'COMPLETED'].includes(classSession.status))
+  const canClaimSession = Boolean(
+    isInstructorContext
+    && classSession
+    && !classSession.coachId
+    && classSession.status === 'SCHEDULED'
+    && new Date(classSession.startTime).getTime() >= Date.now(),
+  )
   const canManageClassPassSchedules = Boolean(classSession?.customerId && appSession?.permissions.integrations?.edit)
 
   const invalidateBookingViews = async () => Promise.all([
@@ -130,6 +141,33 @@ export default function ClassSessionPage() {
     queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
     queryClient.invalidateQueries({ queryKey: [...classSessionsQueryKeys.detail(sessionId), 'bookings'] }),
   ])
+
+  const setBookingAttendance = async (bookingId: string, attended: boolean | null) => {
+    setAttendanceSavingId(bookingId)
+    try {
+      await updateBookingAttendance(bookingId, resolvedLocationId, attended, invalidateBookingViews)
+    } finally {
+      setAttendanceSavingId(null)
+    }
+  }
+
+  const claimSession = async () => {
+    if (!classSession || isClaimingSession) return
+    setIsClaimingSession(true)
+    try {
+      await claimCoachSessionRequest(classSession.id)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.detail(sessionId) }),
+        queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+      ])
+      toast.success('Session assigned to you.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
+    } finally {
+      setIsClaimingSession(false)
+    }
+  }
 
   const cancelSession = async () => {
     if (!classSession) return
@@ -300,7 +338,11 @@ export default function ClassSessionPage() {
       { label: 'Starts', value: formatDate(classSession?.startTime, classSession?.timezone) },
       { label: 'Ends', value: formatDate(classSession?.endTime, classSession?.timezone) },
       { label: 'Capacity', value: classSession ? `${classSession.bookedCount} / ${classSession.capacity}` : NO_VALUE_STR },
-      { label: 'Coach', value: classSession?.coachName || (classSession?.coachId ? 'Instructor' : NO_VALUE_STR) },
+      { label: 'Coach', value: classSession?.coachName || classSession?.coachId
+        ? classSession?.coachName || 'Instructor'
+        : canClaimSession
+          ? <Button type="button" size="sm" variant="outline" disabled={isClaimingSession} onClick={() => { void claimSession() }}>{isClaimingSession ? 'Claiming…' : 'Claim'}</Button>
+          : NO_VALUE_STR },
       { label: 'Schedule', value: classSession?.scheduleId ?? NO_VALUE_STR },
       { label: 'Location', value: resolvedLocationId ? <Link to={`/locations/${resolvedLocationId}`} className="underline-offset-2 hover:underline">{classSession?.locationName || 'Location'}</Link> : NO_VALUE_STR },
     ],
@@ -325,31 +367,11 @@ export default function ClassSessionPage() {
         : undefined,
     }}
     modules={[
-      ...(classSession?.classPassSchedules?.length ? [{ key: 'classpass', label: 'ClassPass', count: classSession.classPassSchedules.length }] : []),
       { key: 'bookings', label: 'Bookings', count: classSession?.bookedCount },
+      ...(!isInstructorContext && classSession?.classPassSchedules?.length ? [{ key: 'classpass', label: 'ClassPass', count: classSession.classPassSchedules.length }] : []),
     ]}
-    aside={<DetailSidePanel sections={sections} isLoading={isLoading} fieldLayout="row" />}
+    aside={<DetailSidePanel sections={sections} isLoading={isLoading} fieldLayout="row" collapseWhenStacked />}
   >
-    {classSession?.classPassSchedules?.length ? <RelatedEntityModule<ClassPassScheduleInsight>
-      id="module-classpass"
-      title="ClassPass schedules"
-      icon={EntityIcon.classes}
-      initialTotal={classSession.classPassSchedules.length}
-      queryKey={[...classSessionsQueryKeys.detail(sessionId), 'classpass-schedules']}
-      loadData={async (state) => {
-        const { pageIndex, pageSize } = state.pagination
-        const currentSession = queryClient.getQueryData<ClassSession>(classSessionsQueryKeys.detail(sessionId)) ?? classSession
-        const schedules = currentSession.classPassSchedules ?? []
-        const items = schedules.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
-        return { items, count: schedules.length, pageCount: Math.ceil(schedules.length / pageSize) }
-      }}
-      tableKey={`class-sessions.detail.classpass.${sessionId}`}
-      columns={classPassScheduleColumns}
-      getRowCommands={getClassPassScheduleCommands}
-      emptyMessage="No ClassPass schedule data is available."
-      loadingMessage="Loading ClassPass schedule data..."
-      showPagination
-    /> : null}
     <RelatedEntityModule
       id="module-bookings"
       title={<>Bookings{bookingSourceSummary ? <span className="ml-2 text-sm font-normal text-muted-foreground">{bookingSourceSummary}</span> : null}</>}
@@ -372,15 +394,22 @@ export default function ClassSessionPage() {
         return { items: rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: rows.length, pageCount: Math.ceil(rows.length / pageSize) }
       }}
       tableKey={`class-sessions.detail.bookings.${sessionId}`}
-      columns={classBookingColumns}
+      columns={getClassBookingColumns({
+        canEditAttendance: Boolean(appSession?.permissions.bookings?.edit),
+        isPast: Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now()),
+        instructorView: isInstructorContext,
+        savingBookingId: attendanceSavingId,
+        onSetAttendance: (bookingId, attended) => { void setBookingAttendance(bookingId, attended) },
+      })}
       getRowCommands={(booking) => getBookingRowActions({
         status: booking.status,
         canEdit: Boolean(appSession?.permissions.bookings?.edit),
         canCreate: Boolean(appSession?.permissions.bookings?.create),
         isPast: Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now()),
         source: booking.source,
+        showAttendanceActionsInMenu: false,
         onCancel: () => { void cancelBookingWithChoice(booking.id, resolvedLocationId, invalidateBookingViews) },
-        onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, resolvedLocationId, attended, invalidateBookingViews) },
+        onSetAttendance: (attended) => { void setBookingAttendance(booking.id, attended) },
         onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, resolvedLocationId, invalidateBookingViews) },
         onRebook: () => {
           if (!classSession?.customerId) {
@@ -404,6 +433,26 @@ export default function ClassSessionPage() {
       showPagination
       refetchOnMount="always"
     />
+    {!isInstructorContext && classSession?.classPassSchedules?.length ? <RelatedEntityModule<ClassPassScheduleInsight>
+      id="module-classpass"
+      title="ClassPass schedules"
+      icon={EntityIcon.classes}
+      initialTotal={classSession.classPassSchedules.length}
+      queryKey={[...classSessionsQueryKeys.detail(sessionId), 'classpass-schedules']}
+      loadData={async (state) => {
+        const { pageIndex, pageSize } = state.pagination
+        const currentSession = queryClient.getQueryData<ClassSession>(classSessionsQueryKeys.detail(sessionId)) ?? classSession
+        const schedules = currentSession.classPassSchedules ?? []
+        const items = schedules.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+        return { items, count: schedules.length, pageCount: Math.ceil(schedules.length / pageSize) }
+      }}
+      tableKey={`class-sessions.detail.classpass.${sessionId}`}
+      columns={classPassScheduleColumns}
+      getRowCommands={getClassPassScheduleCommands}
+      emptyMessage="No ClassPass schedule data is available."
+      loadingMessage="Loading ClassPass schedule data..."
+      showPagination
+    /> : null}
     <ClassSessionEditDrawer
       session={classSession ?? null}
       locationId={resolvedLocationId}

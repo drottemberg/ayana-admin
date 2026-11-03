@@ -94,6 +94,7 @@ export function getBookingRowActions(input: {
   onRebook: () => void
   onSetAttendance: (attended: boolean | null) => void
   onCancelClassPass: () => void
+  showAttendanceActionsInMenu?: boolean
 }): DropdownActionItem[] {
   const commands: DropdownActionItem[] = []
   if (input.canEdit && ['CONFIRMED', 'WAITLISTED'].includes(input.status)) {
@@ -102,7 +103,7 @@ export function getBookingRowActions(input: {
   if (input.canCreate && ['CANCELLED', 'LATE_CANCELLED'].includes(input.status)) {
     commands.push({ label: 'Re-add client', onClick: input.onRebook })
   }
-  if (input.canEdit && input.isPast && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(input.status)) {
+  if (input.showAttendanceActionsInMenu !== false && input.canEdit && input.isPast && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(input.status)) {
     commands.push(
       { label: 'Mark attended', onClick: () => input.onSetAttendance(true) },
       { label: 'Mark absent', onClick: () => input.onSetAttendance(false) },
