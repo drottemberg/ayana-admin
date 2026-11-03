@@ -60,7 +60,7 @@ export function getCoachSessionAttendanceRequest(sessionId: string): Promise<{ s
   return apiClient.get<{ sessionId: string; bookings: CoachAttendanceBooking[] }>(`/coaches/me/sessions/${encodeURIComponent(sessionId)}/attendance`)
 }
 
-export function saveCoachSessionAttendanceRequest(sessionId: string, records: Array<{ bookingId: string; present: boolean }>) {
+export function saveCoachSessionAttendanceRequest(sessionId: string, records: Array<{ bookingId: string; present: boolean | null }>) {
   return apiClient.post<{ updated: number }>(`/coaches/me/sessions/${encodeURIComponent(sessionId)}/attendance`, { records })
 }
 

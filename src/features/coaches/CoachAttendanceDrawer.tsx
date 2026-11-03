@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import MoreHorizontalIcon from '@hugeicons/core-free-icons/MoreHorizontalIcon'
+import { HugeiconsIcon } from '@hugeicons/react'
 
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
-import { SelectInput } from '@/components/ui/select-input'
+import { DropdownActionsMenu } from '@/components/ui/dropdown-menu'
 import { getCoachSessionAttendanceRequest, saveCoachSessionAttendanceRequest } from '@/features/coaches/api'
+import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
-
-type AttendanceValue = 'unmarked' | 'present' | 'no-show'
+import { cn } from '@/lib/utils'
 
 export function CoachAttendanceDrawer({
   session,
@@ -21,46 +25,30 @@ export function CoachAttendanceDrawer({
   onOpenChange: (open: boolean) => void
 }) {
   const queryClient = useQueryClient()
-  const [values, setValues] = useState<Record<string, AttendanceValue>>({})
-  const [isSaving, setIsSaving] = useState(false)
+  const [savingBookingId, setSavingBookingId] = useState<string | null>(null)
   const attendance = useQuery({
     queryKey: ['coaches', 'attendance', session.id],
     queryFn: () => getCoachSessionAttendanceRequest(session.id),
     enabled: open,
   })
 
-  useEffect(() => {
-    if (!open || !attendance.data) return
-    setValues(Object.fromEntries(attendance.data.bookings.map((booking) => [
-      booking.bookingId,
-      booking.status === 'ATTENDED' ? 'present' : booking.status === 'NO_SHOW' ? 'no-show' : 'unmarked',
-    ])))
-  }, [open, attendance.data])
+  const invalidateAttendance = async () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['coaches', 'attendance', session.id] }),
+    queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: [...classSessionsQueryKeys.detail(session.id), 'bookings'] }),
+    queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+  ])
 
-  const markedCount = useMemo(() => Object.values(values).filter((value) => value !== 'unmarked').length, [values])
-
-  const save = async () => {
-    const records = Object.entries(values)
-      .filter(([, value]) => value !== 'unmarked')
-      .map(([bookingId, value]) => ({ bookingId, present: value === 'present' }))
-    if (!records.length) {
-      toast.error('Mark at least one attendee before saving.')
-      return
-    }
-    setIsSaving(true)
+  const setAttendance = async (bookingId: string, present: boolean | null) => {
+    setSavingBookingId(bookingId)
     try {
-      await saveCoachSessionAttendanceRequest(session.id, records)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['coaches', 'attendance', session.id] }),
-        queryClient.invalidateQueries({ queryKey: [...classSessionsQueryKeys.detail(session.id), 'bookings'] }),
-        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-      ])
-      toast.success('Attendance saved.')
-      onOpenChange(false)
+      await saveCoachSessionAttendanceRequest(session.id, [{ bookingId, present }])
+      await invalidateAttendance()
+      toast.success(present === true ? 'Booking marked present.' : present === false ? 'Booking marked absent.' : 'Attendance cleared.')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save attendance.')
+      toast.error(error instanceof Error ? error.message : 'Could not update attendance.')
     } finally {
-      setIsSaving(false)
+      setSavingBookingId(null)
     }
   }
 
@@ -68,7 +56,7 @@ export function CoachAttendanceDrawer({
     open={open}
     onOpenChange={onOpenChange}
     title="Take attendance"
-    description="Mark each confirmed booking as present or absent. Unmarked bookings are left unchanged."
+    description="Mark each booking present or absent. Use the row menu to clear an attendance mark. Changes save immediately."
     contentClassName="sm:max-w-2xl"
   >
     <div className="flex min-h-0 flex-1 flex-col">
@@ -78,33 +66,60 @@ export function CoachAttendanceDrawer({
         {attendance.data?.bookings.length === 0 ? <p className="text-sm text-muted-foreground">There are no confirmed bookings for this session.</p> : null}
         {attendance.data?.bookings.map((booking) => {
           const name = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.email || 'Member'
+          const attended = booking.status === 'ATTENDED' ? true : booking.status === 'NO_SHOW' ? false : null
+          const isSaving = savingBookingId === booking.bookingId
           return <div key={booking.bookingId} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="truncate font-medium">{name}</div>
               {booking.email ? <div className="truncate text-sm text-muted-foreground">{booking.email}</div> : null}
               {booking.phone ? <div className="truncate text-sm text-muted-foreground">{booking.phone}</div> : null}
             </div>
-            <SelectInput
-              aria-label={`Attendance for ${name}`}
-              items={[
-                { value: 'unmarked', label: 'Not marked' },
-                { value: 'present', label: 'Present' },
-                { value: 'no-show', label: 'Absent / no-show' },
-              ]}
-              value={values[booking.bookingId] ?? 'unmarked'}
-              onValueChange={(value) => setValues((current) => ({ ...current, [booking.bookingId]: String(value) as AttendanceValue }))}
-            />
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className={cn(
+                  'size-8 rounded-full p-0',
+                  attended === true && 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white',
+                )}
+                aria-label={`Mark ${name} present`}
+                aria-pressed={attended === true}
+                title="Mark present"
+                disabled={isSaving}
+                onClick={() => void setAttendance(booking.bookingId, true)}
+              >
+                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className={cn(
+                  'size-8 rounded-full p-0',
+                  attended === false && 'border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700',
+                )}
+                aria-label={`Mark ${name} absent`}
+                aria-pressed={attended === false}
+                title="Mark absent"
+                disabled={isSaving}
+                onClick={() => void setAttendance(booking.bookingId, false)}
+              >
+                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-4" />
+              </Button>
+              <DropdownActionsMenu
+                items={[{ label: 'Clear attendance', disabled: attended === null || isSaving, onClick: () => void setAttendance(booking.bookingId, null) }]}
+                align="end"
+                triggerRender={<Button type="button" variant="ghost" size="icon-sm" aria-label={`More attendance actions for ${name}`} disabled={isSaving} />}
+              >
+                <HugeiconsIcon icon={MoreHorizontalIcon} size={16} strokeWidth={1} />
+              </DropdownActionsMenu>
+            </div>
           </div>
         })}
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-border p-5">
-        <span className="text-sm text-muted-foreground">{markedCount} marked</span>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>
-          <Button type="button" onClick={() => void save()} disabled={isSaving || attendance.isLoading || attendance.isError || markedCount === 0}>
-            {isSaving ? 'Saving…' : 'Save attendance'}
-          </Button>
-        </div>
+      <div className="flex justify-end border-t border-border p-5">
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
       </div>
     </div>
   </AppDrawer>
