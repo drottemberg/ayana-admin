@@ -370,7 +370,7 @@ export default function ClassSessionPage() {
       { key: 'bookings', label: 'Bookings', count: classSession?.bookedCount },
       ...(!isInstructorContext && classSession?.classPassSchedules?.length ? [{ key: 'classpass', label: 'ClassPass', count: classSession.classPassSchedules.length }] : []),
     ]}
-    aside={<DetailSidePanel sections={sections} isLoading={isLoading} fieldLayout="row" collapseWhenStacked />}
+    aside={<DetailSidePanel sections={sections} isLoading={isLoading} />}
   >
     <RelatedEntityModule
       id="module-bookings"

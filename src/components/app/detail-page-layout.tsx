@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Key, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type Key, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Link } from 'react-router-dom'
@@ -16,7 +16,6 @@ import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 export type DetailPanelField = {
   label: ReactNode
   value?: ReactNode
-  layout?: 'column' | 'row'
   children?: DetailPanelField[]
 }
 
@@ -35,16 +34,30 @@ export type DetailPageModule = {
 
 const MODULE_ANCHOR_PREFIX = 'module'
 export const RELATED_ENTITY_MODULE_PAGE_SIZE = 5
+const DetailLayoutStackedContext = createContext(false)
+
+function getIsStackedDetailLayout() {
+  if (typeof window === 'undefined') return false
+  const main = document.querySelector<HTMLElement>('main[data-slot="sidebar-inset"]')
+  return (main?.clientWidth ?? window.innerWidth) <= 1023
+}
 
 function useIsStackedDetailLayout() {
-  const [isStacked, setIsStacked] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches)
+  const [isStacked, setIsStacked] = useState(getIsStackedDetailLayout)
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 1023px)')
-    const update = () => setIsStacked(mediaQuery.matches)
+    const main = document.querySelector<HTMLElement>('main[data-slot="sidebar-inset"]')
+    const update = () => setIsStacked(getIsStackedDetailLayout())
     update()
-    mediaQuery.addEventListener('change', update)
-    return () => mediaQuery.removeEventListener('change', update)
+    window.addEventListener('resize', update)
+
+    const observer = main ? new ResizeObserver(update) : null
+    observer?.observe(main!)
+
+    return () => {
+      window.removeEventListener('resize', update)
+      observer?.disconnect()
+    }
   }, [])
 
   return isStacked
@@ -63,6 +76,7 @@ export function DetailPageLayout({
   modules?: DetailPageModule[]
   className?: string
 }) {
+  const isStackedLayout = useIsStackedDetailLayout()
   const [activeModule, setActiveModule] = useState(modules?.[0]?.key ?? '')
 
   useEffect(() => {
@@ -117,6 +131,7 @@ export function DetailPageLayout({
   }, [])
 
   return (
+    <DetailLayoutStackedContext.Provider value={isStackedLayout}>
     <>
       {header ? (
         <PageHeader
@@ -131,26 +146,23 @@ export function DetailPageLayout({
           className={cn('sticky top-0 z-30 border-b bg-background', header.className)}
         />
       ) : null}
-      <section className={cn('grid gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,1fr)_400px]', className)}>
+      <section className={cn('grid gap-4 p-4 md:p-6', isStackedLayout ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_400px]', className)}>
         <main className="min-w-0 space-y-4">{children}</main>
-        <aside className="order-first min-w-0 space-y-4 lg:sticky lg:top-32 lg:order-none lg:self-start">{aside}</aside>
+        <aside className={cn('min-w-0 space-y-4', isStackedLayout ? 'order-first' : 'order-none sticky top-32 self-start')}>{aside}</aside>
       </section>
     </>
+    </DetailLayoutStackedContext.Provider>
   )
 }
 
 export function DetailSidePanel({
   sections,
   isLoading = false,
-  fieldLayout = 'column',
-  collapseWhenStacked = false,
 }: {
   sections: DetailPanelSection[]
   isLoading?: boolean
-  fieldLayout?: 'column' | 'row'
-  collapseWhenStacked?: boolean
 }) {
-  const isStackedLayout = useIsStackedDetailLayout()
+  const isStackedLayout = useContext(DetailLayoutStackedContext)
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
@@ -158,7 +170,7 @@ export function DetailSidePanel({
   }, [isStackedLayout])
 
   if (isLoading) {
-    if (collapseWhenStacked && isStackedLayout) {
+    if (isStackedLayout) {
       const section = sections[0]
       return (
         <Collapsible className="rounded-lg border border-border bg-muted">
@@ -196,11 +208,11 @@ export function DetailSidePanel({
       {sections.map((section, sectionIndex) => {
         const fields = (
           <dl className="divide-y">
-            {section.fields.map((field, fieldIndex) => renderDetailPanelField(field, fieldLayout, fieldIndex))}
+            {section.fields.map((field, fieldIndex) => renderDetailPanelField(field, fieldIndex))}
           </dl>
         )
 
-        if (collapseWhenStacked && isStackedLayout) {
+        if (isStackedLayout) {
           return (
             <Collapsible
               key={sectionIndex}
@@ -241,22 +253,18 @@ export function DetailSidePanel({
   )
 }
 
-function renderDetailPanelField(field: DetailPanelField, fieldLayout: 'column' | 'row', key: Key) {
-  const layout = field.layout ?? fieldLayout
-
+function renderDetailPanelField(field: DetailPanelField, key: Key) {
   return (
-    <div key={key} className={getDetailPanelFieldClassName(layout)}>
-      <dt className="text-muted-foreground">{field.label}</dt>
-      <dd className={getDetailPanelValueClassName(layout)}>
+    <div key={key} className="flex items-start justify-between gap-3 py-3 text-sm first:pt-0 last:pb-0">
+      <dt className="shrink-0 whitespace-nowrap text-muted-foreground">{field.label}</dt>
+      <dd className="min-w-0 flex-1 break-words text-right font-medium text-foreground">
         {field.children?.length ? (
           <dl className="grid gap-2">
             {field.children.map((child, childIndex) => {
-              const childLayout = child.layout ?? fieldLayout
-
               return (
-                <div key={childIndex} className={getDetailPanelNestedFieldClassName(childLayout)}>
-                  <dt className="min-w-0 text-muted-foreground">{child.label}</dt>
-                  <dd className={getDetailPanelNestedValueClassName(childLayout)}>{child.value}</dd>
+                <div key={childIndex} className="flex items-start justify-between gap-3">
+                  <dt className="shrink-0 whitespace-nowrap text-muted-foreground">{child.label}</dt>
+                  <dd className="min-w-0 flex-1 break-words text-right text-foreground">{child.value}</dd>
                 </div>
               )
             })}
@@ -267,25 +275,6 @@ function renderDetailPanelField(field: DetailPanelField, fieldLayout: 'column' |
       </dd>
     </div>
   )
-}
-
-function getDetailPanelFieldClassName(layout: 'column' | 'row') {
-  return cn(
-    'grid gap-1 py-3 text-sm first:pt-0 last:pb-0',
-    layout === 'row' && 'grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-3',
-  )
-}
-
-function getDetailPanelValueClassName(layout: 'column' | 'row') {
-  return cn('min-w-0 font-medium break-words text-foreground', layout === 'row' && 'text-right')
-}
-
-function getDetailPanelNestedFieldClassName(layout: 'column' | 'row') {
-  return cn('grid gap-1', layout === 'row' && 'grid-cols-[minmax(0,1fr)_auto] items-start gap-3')
-}
-
-function getDetailPanelNestedValueClassName(layout: 'column' | 'row') {
-  return cn('min-w-0 text-foreground', layout === 'row' && 'text-right')
 }
 
 export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {

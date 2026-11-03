@@ -16,9 +16,19 @@ export function getBookingColumns(options: { showUser?: boolean; showCustomer?: 
       id: 'member', header: 'Member',
       cell: ({ row }) => {
         const user = row.original.user
-        return <Link to={`/users/${user.id}`} className="font-medium underline-offset-2 hover:underline">
-          {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user.id}
-        </Link>
+        return <div className="flex min-w-0 items-center gap-2">
+          <Link to={`/users/${user.id}`} className="min-w-0 truncate font-medium underline-offset-2 hover:underline">
+            {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user.id}
+          </Link>
+          <Badge
+            variant="outline"
+            className="shrink-0"
+            title={`Class visit number ${(row.original.classVisitCount ?? 0) + 1}`}
+            aria-label={`Class visit number ${(row.original.classVisitCount ?? 0) + 1}`}
+          >
+            {(row.original.classVisitCount ?? 0) + 1}
+          </Badge>
+        </div>
       },
     } as ColumnDef<Booking>]),
     {

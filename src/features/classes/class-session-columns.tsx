@@ -124,7 +124,17 @@ export function getClassBookingColumns(options: {
     id: 'member', header: 'Member',
     cell: ({ row }) => {
       const name = [row.original.firstName, row.original.lastName].filter(Boolean).join(' ')
-      return <Link to={`/users/${row.original.userId}`} className="font-medium underline-offset-2 hover:underline">{name || row.original.userId}</Link>
+      return <div className="flex min-w-0 items-center gap-2">
+        <Link to={`/users/${row.original.userId}`} className="min-w-0 truncate font-medium underline-offset-2 hover:underline">{name || row.original.userId}</Link>
+        <Badge
+          variant="outline"
+          className="shrink-0"
+          title={`Class visit number ${(row.original.classVisitCount ?? 0) + 1}`}
+          aria-label={`Class visit number ${(row.original.classVisitCount ?? 0) + 1}`}
+        >
+          {(row.original.classVisitCount ?? 0) + 1}
+        </Badge>
+      </div>
     },
   }
   const attendanceColumn: ColumnDef<ClassBooking> = {

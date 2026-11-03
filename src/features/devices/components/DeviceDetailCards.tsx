@@ -373,7 +373,6 @@ function DeviceInfoCard({ device, config, isLoading = false, onSetPassword }: De
 
     return {
       label: <span className="font-semibold text-foreground">{CATEGORY_LABELS[cat]}</span>,
-      layout: 'column' as const,
       children: [
         ...ungroupedEntries.map((entry) => ({
           label: entry.label,
@@ -388,7 +387,6 @@ function DeviceInfoCard({ device, config, isLoading = false, onSetPassword }: De
         })),
         ...Array.from(groupedEntries.entries()).map(([group, groupEntries]) => ({
           label: formatGroupLabel(group),
-          layout: 'column' as const,
           value: (
             <DeviceMqttGroupValue
               deviceId={device?.id}
@@ -419,7 +417,6 @@ function DeviceInfoCard({ device, config, isLoading = false, onSetPassword }: De
         ...(categoryFields.length ? categoryFields : [{ label: 'Infos', value: NO_VALUE_STR }]),
         {
           label: <span className="font-semibold text-foreground">Connection</span>,
-          layout: 'column',
           children: [
             {
               label: 'Connected device',
@@ -454,7 +451,7 @@ function DeviceInfoCard({ device, config, isLoading = false, onSetPassword }: De
     },
   ]
 
-  return <DetailSidePanel sections={sections} fieldLayout="row" />
+  return <DetailSidePanel sections={sections} />
 }
 
 type RawMqttData = {
