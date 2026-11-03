@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Modals } from '@/providers/modal'
 import { BookingCancellationConfirmation } from './BookingCancellationConfirmation'
-import { cancelBookingForManagementRequest, createManualBookingRequest, getBookingCancellationQuoteRequest } from './api'
+import { cancelBookingForManagementRequest, cancelClassPassBookingForManagementRequest, createManualBookingRequest, getBookingCancellationQuoteRequest, updateBookingAttendanceRequest } from './api'
 
 export async function cancelBookingWithChoice(bookingId: string, locationId: string, invalidate: () => Promise<unknown>) {
   try {
@@ -56,12 +56,44 @@ export async function rebookClientForSession(input: {
   }
 }
 
+export async function updateBookingAttendance(bookingId: string, locationId: string, attended: boolean | null, invalidate: () => Promise<unknown>) {
+  try {
+    await updateBookingAttendanceRequest(bookingId, locationId, attended)
+    await invalidate()
+    toast.success(attended === true ? 'Booking marked present.' : attended === false ? 'Booking marked absent.' : 'Attendance cleared.')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Could not update attendance.')
+  }
+}
+
+export async function cancelClassPassBookingWithConfirmation(bookingId: string, locationId: string, invalidate: () => Promise<unknown>) {
+  const confirmed = await Modals.confirm({
+    title: 'Cancel ClassPass reservation?',
+    content: 'This will cancel the reservation on ClassPass and mark it cancelled in Ayana. Use this to correct a booking imported by mistake.',
+    okText: 'Cancel reservation',
+    cancelText: 'Keep booking',
+    okButtonProps: { variant: 'destructive' },
+  })
+  if (!confirmed) return
+  try {
+    await cancelClassPassBookingForManagementRequest(bookingId, locationId)
+    await invalidate()
+    toast.success('ClassPass reservation cancelled.')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Could not cancel the ClassPass reservation.')
+  }
+}
+
 export function getBookingRowActions(input: {
   status: string
   canEdit: boolean
   canCreate: boolean
+  isPast: boolean
+  source?: string
   onCancel: () => void
   onRebook: () => void
+  onSetAttendance: (attended: boolean | null) => void
+  onCancelClassPass: () => void
 }): DropdownActionItem[] {
   const commands: DropdownActionItem[] = []
   if (input.canEdit && ['CONFIRMED', 'WAITLISTED'].includes(input.status)) {
@@ -69,6 +101,16 @@ export function getBookingRowActions(input: {
   }
   if (input.canCreate && ['CANCELLED', 'LATE_CANCELLED'].includes(input.status)) {
     commands.push({ label: 'Re-add client', onClick: input.onRebook })
+  }
+  if (input.canEdit && input.isPast && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(input.status)) {
+    commands.push(
+      { label: 'Mark attended', onClick: () => input.onSetAttendance(true) },
+      { label: 'Mark absent', onClick: () => input.onSetAttendance(false) },
+      { label: 'Clear attendance', onClick: () => input.onSetAttendance(null) },
+    )
+    if (input.source === 'CLASSPASS') {
+      commands.push({ label: 'Cancel ClassPass reservation…', variant: 'destructive', onClick: input.onCancelClassPass })
+    }
   }
   return commands
 }

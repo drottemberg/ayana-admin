@@ -38,6 +38,7 @@ const routeFeatures: FeatureRoute[] = [
   { pathPrefix: '/device-type-groups', feature: Feature.DEVICE_TYPE },
   { pathPrefix: '/device-types', feature: Feature.DEVICE_TYPE },
   { pathPrefix: '/llm-configs', feature: Feature.LLM_CONFIG },
+  { pathPrefix: '/integrations', feature: Feature.INTEGRATIONS },
 ].sort((a, b) => b.pathPrefix.length - a.pathPrefix.length)
 
 export function getRequiredFeature(pathname: string): FeatureType | null {

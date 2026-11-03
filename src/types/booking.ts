@@ -1,4 +1,5 @@
 export type BookingStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED' | 'LATE_CANCELLED' | 'ATTENDED' | 'NO_SHOW'
+export type BookingSource = 'DIRECT' | 'CLASSPASS'
 
 export type BookingPerson = {
   id: string
@@ -37,6 +38,9 @@ export type Booking = {
   userId: string
   sessionId: string
   status: BookingStatus
+  source?: BookingSource
+  isFreeTrial?: boolean
+  attended?: boolean | null
   checkInAt?: string | null
   cancelledAt?: string | null
   penaltyApplied: boolean

@@ -37,6 +37,7 @@ type UserRecord = {
   position?: string | null
   permissions?: User['permissions'] | null
   customerId?: string | null
+  source?: string | null
   customer?: Customer | null
   status?: UserStatus
   isActive?: boolean
@@ -131,6 +132,7 @@ function toUser(user: UserRecord): User {
     preferences: user.preferences ?? null,
     position: firstMember?.position ?? user.position ?? undefined,
     customerId: user.customerId ?? undefined,
+    source: user.source ?? 'DIRECT',
     customer: user.customer ?? undefined,
     status: user.status ?? undefined,
     isActive: user.isActive ?? undefined,

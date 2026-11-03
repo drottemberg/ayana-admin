@@ -29,6 +29,7 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import { canUseFeature } from '@/features/app/features'
 import { useConnect } from '@/features/app/use-connect'
 import { Feature } from '@/types/feature'
+import { getAppMode } from '@/features/app/app-mode'
 
 const Icon = ({ icon }: { icon: IconSvgElement }) => {
   return <HugeiconsIcon icon={icon} strokeWidth={2} />
@@ -173,6 +174,12 @@ const data = {
       icon: <Icon icon={EntityIcon.issues} />,
       feature: Feature.LLM_CONFIG,
     },
+    {
+      title: 'Integrations',
+      url: '/integrations',
+      icon: <Icon icon={EntityIcon.devices} />,
+      feature: Feature.INTEGRATIONS,
+    },
   ],
 }
 
@@ -217,7 +224,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const hasFeature = React.useCallback((feature: Feature) => Boolean(session?.hasFeature(feature)), [session])
   const manageItems = React.useMemo(() => data.manage.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
-  const settingsItems = React.useMemo(() => data.settings.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
+  const settingsItems = React.useMemo(
+    () => data.settings.filter((item) => canUseFeature(item, hasFeature) && (item.title !== 'Integrations' || getAppMode() === 'customer')),
+    [hasFeature],
+  )
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>

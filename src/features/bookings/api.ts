@@ -42,6 +42,22 @@ export function cancelBookingForManagementRequest(bookingId: string, locationId:
   )
 }
 
+export function updateBookingAttendanceRequest(bookingId: string, locationId: string, attended: boolean | null) {
+  return apiClient.patch<Booking>(
+    `/bookings/manage/${encodeURIComponent(bookingId)}/attendance`,
+    { attended },
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
+export function cancelClassPassBookingForManagementRequest(bookingId: string, locationId: string) {
+  return apiClient.patch<Booking>(
+    `/bookings/manage/${encodeURIComponent(bookingId)}/cancel-external`,
+    {},
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
 export function createManualBookingRequest(payload: {
   customerId: string
   locationId: string

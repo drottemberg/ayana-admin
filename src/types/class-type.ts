@@ -26,6 +26,19 @@ export type ClassType = {
 }
 
 export type ClassSessionStatus = 'SCHEDULED' | 'PAUSED' | 'CANCELLED' | 'COMPLETED'
+export type ClassPassScheduleInsight = {
+  scheduleMappingId: string
+  integrationId: string
+  venueId: string
+  scheduleId: string
+  networkReservations: number | string | null
+  networkReservationsCap: number | string | null
+  totalRevenue: unknown
+  isFull: boolean | null
+  isCancelled: boolean | null
+  isDisabled: boolean | null
+}
+
 export type ClassSession = {
   id: string
   organizationId: string
@@ -47,6 +60,7 @@ export type ClassSession = {
   customerId?: string
   customerName?: string
   timezone: string
+  classPassSchedules?: ClassPassScheduleInsight[]
 }
 
 export type ClassSchedule = {
@@ -79,10 +93,11 @@ export type ClassBooking = {
   userId: string
   firstName?: string | null
   lastName?: string | null
-  email?: string | null
-  phone?: string | null
   sessionId: string
   status: string
+  source: 'DIRECT' | 'CLASSPASS'
+  isFreeTrial?: boolean
+  attended?: boolean | null
   checkInAt?: string | null
   cancelledAt?: string | null
   createdAt: string

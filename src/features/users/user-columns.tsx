@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { NO_VALUE_STR } from '@/constants'
 import { UserScopeCell } from '@/features/users/UserScopeCell'
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { UserService } from '@/features/users/user-service'
 import { StoreScope, type CustomerMembershipRecord } from '@/types/membership'
 import type { User } from '@/types/user'
@@ -26,6 +27,15 @@ export const userColumns: ColumnDef<User>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => <UserStatusBadge status={UserService.getUserStatus(row.original)} />,
+  },
+  {
+    accessorKey: 'source',
+    header: 'Source',
+    cell: ({ row }) => {
+      const source = row.original.source ?? 'DIRECT'
+      const label = source === 'CLASSPASS' ? 'ClassPass' : source === 'DIRECT' ? 'Direct' : source.replaceAll('_', ' ')
+      return <Badge variant="outline">{label}</Badge>
+    },
   },
   {
     id: 'name',

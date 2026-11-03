@@ -69,19 +69,19 @@ export const classScheduleColumns: ColumnDef<ClassSchedule>[] = [
 ]
 
 export const classBookingColumns: ColumnDef<ClassBooking>[] = [
+  { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.status.replaceAll('_', ' ')}</Badge> },
+  { accessorKey: 'source', header: 'Source', cell: ({ row }) => <Badge variant="outline">{row.original.source === 'CLASSPASS' ? 'ClassPass' : 'Direct'}</Badge> },
+  { accessorKey: 'isFreeTrial', header: 'Trial', cell: ({ row }) => row.original.isFreeTrial ? <Badge variant="outline">Free trial</Badge> : '—' },
   {
     id: 'booking', header: 'Booking',
     cell: ({ row }) => <Link to={`/bookings/${row.original.id}`} className="font-medium underline-offset-2 hover:underline">{row.original.id}</Link>,
   },
-  { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.status}</Badge> },
   {
     id: 'member', header: 'Member',
     cell: ({ row }) => {
       const name = [row.original.firstName, row.original.lastName].filter(Boolean).join(' ')
-      return <Link to={`/users/${row.original.userId}`} className="font-medium underline-offset-2 hover:underline">{name || row.original.email || row.original.userId}</Link>
+      return <Link to={`/users/${row.original.userId}`} className="font-medium underline-offset-2 hover:underline">{name || row.original.userId}</Link>
     },
   },
-  { accessorKey: 'email', header: 'Email', cell: ({ row }) => row.original.email || NO_VALUE_STR },
-  { accessorKey: 'phone', header: 'Phone', cell: ({ row }) => row.original.phone || NO_VALUE_STR },
   { accessorKey: 'createdAt', header: 'Booked', cell: ({ row }) => new Date(row.original.createdAt).toLocaleString() },
 ]

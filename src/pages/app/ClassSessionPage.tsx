@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -10,7 +11,7 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { classBookingColumns } from '@/features/classes/class-session-columns'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
-import { cancelBookingWithChoice, getBookingRowActions, rebookClientForSession } from '@/features/bookings/booking-row-actions'
+import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
@@ -19,19 +20,91 @@ import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { useConnect } from '@/features/app/use-connect'
 import { Modals } from '@/providers/modal'
-import type { ClassSession } from '@/types/class-type'
+import type { ClassPassScheduleInsight, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  cancelClassPassScheduleRequest,
+  enableClassPassScheduleRequest,
+  refreshClassPassScheduleInsightsRequest,
+  setClassPassScheduleFullRequest,
+  updateClassPassScheduleSpotsRequest,
+  type ClassPassScheduleCancelReason,
+} from '@/features/integrations/api'
 
 function formatDate(value?: string | null, timeZone?: string | null) {
   return value ? formatClassSessionTime(value, timeZone) : NO_VALUE_STR
 }
+
+const classPassScheduleColumns: ColumnDef<ClassPassScheduleInsight>[] = [
+  { accessorKey: 'scheduleId', header: 'Schedule ID' },
+  {
+    id: 'status',
+    header: 'Status',
+    cell: ({ row }) => {
+      const schedule = row.original
+      return <div className="flex flex-wrap gap-1.5">
+        <Badge variant={schedule.isCancelled === true ? 'destructive' : 'outline'}>{schedule.isCancelled === null ? 'Cancellation unknown' : schedule.isCancelled ? 'Cancelled' : 'Active'}</Badge>
+        <Badge variant={schedule.isDisabled === true ? 'secondary' : 'outline'}>{schedule.isDisabled === null ? 'Availability unknown' : schedule.isDisabled ? 'Disabled' : 'Enabled'}</Badge>
+        {schedule.isFull ? <Badge variant="secondary">Full</Badge> : null}
+      </div>
+    },
+  },
+  { accessorKey: 'networkReservations', header: 'Spots', cell: ({ row }) => row.original.networkReservations ?? NO_VALUE_STR },
+  { accessorKey: 'networkReservationsCap', header: 'Max spots', cell: ({ row }) => row.original.networkReservationsCap ?? NO_VALUE_STR },
+  {
+    accessorKey: 'totalRevenue',
+    header: 'Revenue',
+    cell: ({ row }) => {
+      const value = row.original.totalRevenue
+      if (value == null) return NO_VALUE_STR
+      if (typeof value === 'number') return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)
+      if (typeof value === 'string') return value
+      if (typeof value === 'object') {
+        const amount = value as { currency_code?: unknown; minor_units?: unknown }
+        if (typeof amount.currency_code === 'string' && typeof amount.minor_units === 'number') {
+          return new Intl.NumberFormat(undefined, { style: 'currency', currency: amount.currency_code }).format(amount.minor_units / 100)
+        }
+        return JSON.stringify(value)
+      }
+      return String(value)
+    },
+  },
+]
+
+const scheduleCancelReasons: Array<{ base: string; label: string }> = [
+  { base: 'INSTRUCTOR_UNWELL_NO_SHOW', label: 'Instructor unwell / no-show' },
+  { base: 'OVERBOOKED_CLASS', label: 'Overbooked class' },
+  { base: 'LOW_ATTENDANCE', label: 'Low attendance' },
+  { base: 'SCHEDULE_INCORRECT', label: 'Incorrect schedule' },
+  { base: 'VENUE_TECHNICAL_ISSUE', label: 'Venue technical issue' },
+  { base: 'WEATHER_CONDITIONS', label: 'Weather conditions' },
+  { base: 'OTHER', label: 'Other' },
+]
+
+const classPassCancelReasonLabels: Record<ClassPassScheduleCancelReason, string> = Object.fromEntries(
+  scheduleCancelReasons.flatMap(({ base, label }) => [[base, label], [`POST_${base}`, `${label} (after the class)`]]),
+) as Record<ClassPassScheduleCancelReason, string>
+
+type ClassPassScheduleAction = { kind: 'SPOTS' | 'CANCEL'; schedule: ClassPassScheduleInsight }
 
 export default function ClassSessionPage() {
   const { sessionId = '' } = useParams()
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddBookingOpen, setIsAddBookingOpen] = useState(false)
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false)
+  const [bookingSourceSummary, setBookingSourceSummary] = useState('')
+  const [classPassScheduleAction, setClassPassScheduleAction] = useState<ClassPassScheduleAction | null>(null)
+  const [spotChange, setSpotChange] = useState<'ADD' | 'REMOVE'>('ADD')
+  const [spotCount, setSpotCount] = useState('1')
+  const [scheduleCancelReason, setScheduleCancelReason] = useState<ClassPassScheduleCancelReason | ''>('')
+  const [scheduleCancelMessage, setScheduleCancelMessage] = useState('')
+  const [classPassActionSaving, setClassPassActionSaving] = useState(false)
   const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
@@ -50,6 +123,7 @@ export default function ClassSessionPage() {
   const isAssignedInstructor = instructorMembership?.role === 'INSTRUCTOR'
     && classSession?.coachId === appSession?.user.id
   const canTakeAttendance = Boolean(isAssignedInstructor && classSession && ['SCHEDULED', 'COMPLETED'].includes(classSession.status))
+  const canManageClassPassSchedules = Boolean(classSession?.customerId && appSession?.permissions.integrations?.edit)
 
   const invalidateBookingViews = async () => Promise.all([
     queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
@@ -95,6 +169,124 @@ export default function ClassSessionPage() {
     }
   }
 
+  const refreshClassPassScheduleRows = async () => {
+    const detailKey = classSessionsQueryKeys.detail(sessionId)
+    await queryClient.invalidateQueries({ queryKey: detailKey, exact: true })
+    await queryClient.invalidateQueries({ queryKey: [...detailKey, 'classpass-schedules'] })
+  }
+
+  const refreshClassPassInsights = async (schedule: ClassPassScheduleInsight) => {
+    if (!classSession?.customerId) return
+    setClassPassActionSaving(true)
+    try {
+      await refreshClassPassScheduleInsightsRequest(classSession.customerId, schedule.integrationId, schedule.scheduleMappingId)
+      await refreshClassPassScheduleRows()
+      toast.success('ClassPass insights refreshed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not refresh ClassPass insights.')
+    } finally { setClassPassActionSaving(false) }
+  }
+
+  const runClassPassScheduleAction = async (action: 'FULL' | 'REOPEN' | 'ENABLE', schedule: ClassPassScheduleInsight) => {
+    if (!classSession?.customerId) return
+    if (action === 'FULL') {
+      const confirmed = await Modals.confirm({
+        operation: `mark ClassPass schedule ${schedule.scheduleId} as full`,
+        okText: 'Mark full',
+      })
+      if (!confirmed) return
+    }
+    setClassPassActionSaving(true)
+    try {
+      const result = action === 'FULL'
+        ? await setClassPassScheduleFullRequest(classSession.customerId, schedule.integrationId, schedule.scheduleMappingId, true)
+        : action === 'REOPEN'
+          ? await setClassPassScheduleFullRequest(classSession.customerId, schedule.integrationId, schedule.scheduleMappingId, false)
+          : await enableClassPassScheduleRequest(classSession.customerId, schedule.integrationId, schedule.scheduleMappingId)
+      await refreshClassPassScheduleRows()
+      toast.success(action === 'FULL' ? 'ClassPass schedule marked as full.' : action === 'REOPEN' ? 'ClassPass reservations reopened.' : 'ClassPass schedule enabled.')
+      setClassPassScheduleAction(null)
+      return result
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the ClassPass schedule.')
+    } finally { setClassPassActionSaving(false) }
+  }
+
+  const saveClassPassScheduleSpots = async () => {
+    if (!classSession?.customerId || classPassScheduleAction?.kind !== 'SPOTS') return
+    const count = Number(spotCount)
+    if (!Number.isInteger(count) || count < 1) {
+      toast.error('Choose a whole number greater than zero.')
+      return
+    }
+    setClassPassActionSaving(true)
+    try {
+      const result = await updateClassPassScheduleSpotsRequest(
+        classSession.customerId,
+        classPassScheduleAction.schedule.integrationId,
+        classPassScheduleAction.schedule.scheduleMappingId,
+        spotChange,
+        count,
+      )
+      await refreshClassPassScheduleRows()
+      toast.success(`ClassPass spot limit updated to ${result.networkReservationsCap ?? 'the latest value'}.`)
+      setClassPassScheduleAction(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update ClassPass spots.')
+    } finally { setClassPassActionSaving(false) }
+  }
+
+  const cancelClassPassSchedule = async () => {
+    if (!classSession?.customerId || classPassScheduleAction?.kind !== 'CANCEL' || !scheduleCancelReason) return
+    setClassPassActionSaving(true)
+    try {
+      await cancelClassPassScheduleRequest(
+        classSession.customerId,
+        classPassScheduleAction.schedule.integrationId,
+        classPassScheduleAction.schedule.scheduleMappingId,
+        scheduleCancelReason,
+        scheduleCancelMessage.trim() || undefined,
+      )
+      await refreshClassPassScheduleRows()
+      toast.success('ClassPass schedule cancelled.')
+      setClassPassScheduleAction(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not cancel the ClassPass schedule.')
+    } finally { setClassPassActionSaving(false) }
+  }
+
+  const openClassPassScheduleAction = (kind: ClassPassScheduleAction['kind'], schedule: ClassPassScheduleInsight) => {
+    setClassPassScheduleAction({ kind, schedule })
+    if (kind === 'SPOTS') {
+      setSpotChange('ADD')
+      setSpotCount('1')
+    } else {
+      const isPast = Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now())
+      const reason = isPast ? 'POST_OTHER' : 'OTHER'
+      setScheduleCancelReason(reason)
+      setScheduleCancelMessage('')
+    }
+  }
+
+  const getClassPassScheduleCommands = (schedule: ClassPassScheduleInsight) => {
+    if (!canManageClassPassSchedules) return []
+    return [
+      { label: 'Refresh insights', onClick: () => { void refreshClassPassInsights(schedule) } },
+      { type: 'separator' as const },
+      { label: 'Add or remove spots…', onClick: () => openClassPassScheduleAction('SPOTS', schedule) },
+      { type: 'separator' as const },
+      ...(schedule.isFull === true
+        ? [{ label: 'Reopen reservations', onClick: () => { void runClassPassScheduleAction('REOPEN', schedule) } }]
+        : [{ label: 'Mark as full', onClick: () => { void runClassPassScheduleAction('FULL', schedule) } }]),
+      ...(schedule.isDisabled === true
+        ? [{ label: 'Enable schedule', onClick: () => { void runClassPassScheduleAction('ENABLE', schedule) } }]
+        : []),
+      ...(schedule.isCancelled === true
+        ? []
+        : [{ type: 'separator' as const }, { label: 'Cancel schedule…', variant: 'destructive' as const, onClick: () => openClassPassScheduleAction('CANCEL', schedule) }]),
+    ]
+  }
+
   const sections: DetailPanelSection[] = [{
     title: 'Session details',
     icon: EntityIcon.classes,
@@ -132,12 +324,35 @@ export default function ClassSessionPage() {
         ? { children: 'Cancel session', variant: 'destructive', onClick: cancelSession }
         : undefined,
     }}
-    modules={[{ key: 'bookings', label: 'Bookings', count: classSession?.bookedCount }]}
-    aside={<DetailSidePanel sections={sections} isLoading={isLoading} />}
+    modules={[
+      ...(classSession?.classPassSchedules?.length ? [{ key: 'classpass', label: 'ClassPass', count: classSession.classPassSchedules.length }] : []),
+      { key: 'bookings', label: 'Bookings', count: classSession?.bookedCount },
+    ]}
+    aside={<DetailSidePanel sections={sections} isLoading={isLoading} fieldLayout="row" />}
   >
+    {classSession?.classPassSchedules?.length ? <RelatedEntityModule<ClassPassScheduleInsight>
+      id="module-classpass"
+      title="ClassPass schedules"
+      icon={EntityIcon.classes}
+      initialTotal={classSession.classPassSchedules.length}
+      queryKey={[...classSessionsQueryKeys.detail(sessionId), 'classpass-schedules']}
+      loadData={async (state) => {
+        const { pageIndex, pageSize } = state.pagination
+        const currentSession = queryClient.getQueryData<ClassSession>(classSessionsQueryKeys.detail(sessionId)) ?? classSession
+        const schedules = currentSession.classPassSchedules ?? []
+        const items = schedules.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+        return { items, count: schedules.length, pageCount: Math.ceil(schedules.length / pageSize) }
+      }}
+      tableKey={`class-sessions.detail.classpass.${sessionId}`}
+      columns={classPassScheduleColumns}
+      getRowCommands={getClassPassScheduleCommands}
+      emptyMessage="No ClassPass schedule data is available."
+      loadingMessage="Loading ClassPass schedule data..."
+      showPagination
+    /> : null}
     <RelatedEntityModule
       id="module-bookings"
-      title="Bookings"
+      title={<>Bookings{bookingSourceSummary ? <span className="ml-2 text-sm font-normal text-muted-foreground">{bookingSourceSummary}</span> : null}</>}
       icon={EntityIcon.users}
       action={classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
         ? { label: 'Resume session', onClick: resumeSession }
@@ -149,6 +364,10 @@ export default function ClassSessionPage() {
       queryKey={[...classSessionsQueryKeys.detail(sessionId), 'bookings']}
       loadData={async (state) => {
         const rows = await getClassBookingsRequest(resolvedLocationId, sessionId)
+        const classPassCount = rows.filter((booking) => booking.source === 'CLASSPASS').length
+        const directCount = rows.length - classPassCount
+        const summary = [classPassCount ? `${classPassCount} ClassPass` : '', directCount ? `${directCount} Direct` : ''].filter(Boolean).join(' · ')
+        setBookingSourceSummary((current) => current === summary ? current : summary)
         const { pageIndex, pageSize } = state.pagination
         return { items: rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: rows.length, pageCount: Math.ceil(rows.length / pageSize) }
       }}
@@ -158,13 +377,17 @@ export default function ClassSessionPage() {
         status: booking.status,
         canEdit: Boolean(appSession?.permissions.bookings?.edit),
         canCreate: Boolean(appSession?.permissions.bookings?.create),
+        isPast: Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now()),
+        source: booking.source,
         onCancel: () => { void cancelBookingWithChoice(booking.id, resolvedLocationId, invalidateBookingViews) },
+        onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, resolvedLocationId, attended, invalidateBookingViews) },
+        onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, resolvedLocationId, invalidateBookingViews) },
         onRebook: () => {
           if (!classSession?.customerId) {
             toast.error('Could not determine the customer for this class session.')
             return
           }
-          const clientName = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.email || booking.userId
+          const clientName = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.userId
           void rebookClientForSession({
             customerId: classSession.customerId,
             locationId: resolvedLocationId,
@@ -198,5 +421,71 @@ export default function ClassSessionPage() {
       open={isAttendanceOpen}
       onOpenChange={setIsAttendanceOpen}
     /> : null}
+    <Dialog
+      open={Boolean(classPassScheduleAction)}
+      onOpenChange={(open) => { if (!open && !classPassActionSaving) setClassPassScheduleAction(null) }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        {classPassScheduleAction?.kind === 'SPOTS' ? <>
+          <DialogHeader showCloseButton>
+            <DialogTitle>Update ClassPass spots</DialogTitle>
+            <DialogDescription>
+              Schedule {classPassScheduleAction.schedule.scheduleId}. Current reservations: {classPassScheduleAction.schedule.networkReservations ?? '—'}; limit: {classPassScheduleAction.schedule.networkReservationsCap ?? '—'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <label className="grid gap-2 text-sm font-medium">
+              Change
+              <Select value={spotChange} onValueChange={(value) => setSpotChange(value as 'ADD' | 'REMOVE')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADD">Add spots</SelectItem>
+                  <SelectItem value="REMOVE">Remove spots</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              Number of spots
+              <Input type="number" min="1" step="1" value={spotCount} onChange={(event) => setSpotCount(event.target.value)} />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={classPassActionSaving} onClick={() => setClassPassScheduleAction(null)}>Cancel</Button>
+            <Button disabled={classPassActionSaving} onClick={() => { void saveClassPassScheduleSpots() }}>{classPassActionSaving ? 'Saving…' : 'Update spots'}</Button>
+          </DialogFooter>
+        </> : null}
+        {classPassScheduleAction?.kind === 'CANCEL' ? <>
+          <DialogHeader showCloseButton>
+            <DialogTitle>Cancel ClassPass schedule?</DialogTitle>
+            <DialogDescription>
+              This cancels schedule {classPassScheduleAction.schedule.scheduleId} in ClassPass. Choose the reason sent to ClassPass.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <label className="grid gap-2 text-sm font-medium">
+              Cancellation reason
+              <Select value={scheduleCancelReason} onValueChange={(value) => setScheduleCancelReason(value as ClassPassScheduleCancelReason)}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Choose a reason" /></SelectTrigger>
+                <SelectContent>
+                  {scheduleCancelReasons.map(({ base }) => {
+                    const isPast = Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now())
+                    const value = `${isPast ? 'POST_' : ''}${base}` as ClassPassScheduleCancelReason
+                    return <SelectItem key={value} value={value}>{classPassCancelReasonLabels[value]}</SelectItem>
+                  })}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium">
+              Message to ClassPass users (optional)
+              <Textarea value={scheduleCancelMessage} onChange={(event) => setScheduleCancelMessage(event.target.value)} maxLength={2000} rows={3} />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={classPassActionSaving} onClick={() => setClassPassScheduleAction(null)}>Keep schedule</Button>
+            <Button variant="destructive" disabled={classPassActionSaving || !scheduleCancelReason} onClick={() => { void cancelClassPassSchedule() }}>{classPassActionSaving ? 'Cancelling…' : 'Cancel schedule'}</Button>
+          </DialogFooter>
+        </> : null}
+      </DialogContent>
+    </Dialog>
   </DetailPageLayout>
 }

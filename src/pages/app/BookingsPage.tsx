@@ -11,7 +11,7 @@ import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import type { Booking } from '@/types/booking'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
-import { cancelBookingWithChoice, getBookingRowActions, rebookClientForSession } from '@/features/bookings/booking-row-actions'
+import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { getCoachFilterOptionsRequest } from '@/features/coaches/api'
@@ -57,7 +57,11 @@ export default function BookingsPage() {
           status: booking.status,
           canEdit: canEditBooking,
           canCreate: canCreateBooking,
+          isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
+          source: booking.source,
           onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
+          onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
+          onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
           onRebook: () => {
             const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
             void rebookClientForSession({
@@ -75,6 +79,14 @@ export default function BookingsPage() {
         searchColumns={['id']}
         filters={[
           { id: 'status', label: 'Status', column: 'status' as const, options: statuses, getValue: (booking: Booking) => booking.status },
+          {
+            id: 'source', label: 'Source', column: 'source' as const, options: ['Direct', 'ClassPass'],
+            getValue: (booking: Booking) => booking.source === 'CLASSPASS' ? 'ClassPass' : 'Direct',
+          },
+          {
+            id: 'isFreeTrial', label: 'Free trial', column: 'isFreeTrial' as const, options: ['Yes', 'No'],
+            getValue: (booking: Booking) => booking.isFreeTrial ? 'Yes' : 'No',
+          },
           ...(isAdminContext ? [{
             id: 'customerId', label: 'Customer', column: 'customer' as const, selectionMode: 'single' as const,
             queryFn: async (search: string) => {

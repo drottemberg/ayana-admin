@@ -24,6 +24,7 @@ export const Feature = {
   MESSAGES: 'MESSAGES',
   LLM_CONFIG: 'LLM_CONFIG',
   REPORTS: 'REPORTS',
+  INTEGRATIONS: 'INTEGRATIONS',
 } as const
 
 export type Feature = (typeof Feature)[keyof typeof Feature]

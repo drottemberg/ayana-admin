@@ -111,6 +111,7 @@ import {
   type CustomerSettingKind,
 } from '@/features/customers/customer-settings-api'
 import { CustomerSettingsEditDrawer } from '@/features/customers/CustomerSettingsEditDrawer'
+import { CustomerIntegrationsModule } from '@/features/integrations/CustomerIntegrationsModule'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const CUSTOMER_BATCH_QUERY_KEY = 'customer-detail-batch'
@@ -372,6 +373,7 @@ export default function CustomerPage() {
       ...(canShowUsers ? [{ key: 'users', label: 'Users' }] : []),
       ...(canManageCustomer ? [{ key: 'pricing-options', label: 'Pricing options' }] : []),
       ...(canManageCustomer ? [{ key: 'messaging-config', label: 'Messaging configuration' }] : []),
+      ...(canManageCustomer ? [{ key: 'integrations', label: 'Integrations' }] : []),
       ...(canManageCustomer ? [{ key: 'location-policies', label: 'Location policies' }] : []),
       ...(canManageCustomer ? [{ key: 'customer-prompt-profile', label: 'Customer prompt profile' }] : []),
       ...(canManageCustomer ? [{ key: 'classes', label: 'Classes' }] : []),
@@ -540,6 +542,7 @@ export default function CustomerPage() {
                 refetchOnMount="always"
               />
             ) : null}
+            {canManageCustomer ? <CustomerIntegrationsModule customerId={customer.id} canCreate={Boolean(session?.permissions.integrations?.create)} canEdit={Boolean(session?.permissions.integrations?.edit)} canDelete={Boolean(session?.permissions.integrations?.delete)} /> : null}
             {canManageCustomer ? (
               <RelatedEntityModule
                 id={`${MODULE_ANCHOR_PREFIX}-location-policies`}
