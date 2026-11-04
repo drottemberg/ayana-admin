@@ -298,6 +298,7 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
   loadingMessage?: string
   errorMessage?: string
   pageSize?: number
+  toolbarExtra?: ReactNode
   refetchOnMount?: DataTableAsyncProps<TData>['refetchOnMount']
   showPagination?: boolean
 }
@@ -320,6 +321,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
   loadingMessage,
   errorMessage,
   pageSize = RELATED_ENTITY_MODULE_PAGE_SIZE,
+  toolbarExtra,
   refetchOnMount,
   showPagination = false,
 }: RelatedEntityModuleProps<TData>) {
@@ -352,6 +354,7 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
       }
     >
       <div className="max-w-full min-w-0">
+        {toolbarExtra ? <div className="flex justify-end pb-3">{toolbarExtra}</div> : null}
         <DataTableAsync
           queryKey={queryKey}
           loadData={async (state: DataTableState<TData>) => {

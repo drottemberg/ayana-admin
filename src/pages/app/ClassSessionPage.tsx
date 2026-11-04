@@ -102,6 +102,7 @@ export default function ClassSessionPage() {
   const [attendanceSavingId, setAttendanceSavingId] = useState<string | null>(null)
   const [isClaimingSession, setIsClaimingSession] = useState(false)
   const [bookingSourceSummary, setBookingSourceSummary] = useState('')
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<'CONFIRMED' | 'ALL'>('CONFIRMED')
   const [classPassScheduleAction, setClassPassScheduleAction] = useState<ClassPassScheduleAction | null>(null)
   const [spotChange, setSpotChange] = useState<'ADD' | 'REMOVE'>('ADD')
   const [spotCount, setSpotCount] = useState('1')
@@ -378,6 +379,7 @@ export default function ClassSessionPage() {
     aside={<DetailSidePanel sections={sections} isLoading={isLoading} />}
   >
     <RelatedEntityModule
+      key={`bookings-${bookingStatusFilter}`}
       id="module-bookings"
       title={<>Bookings{bookingSourceSummary ? <span className="ml-2 text-sm font-normal text-muted-foreground">{bookingSourceSummary}</span> : null}</>}
       icon={EntityIcon.users}
@@ -388,18 +390,21 @@ export default function ClassSessionPage() {
         : classSession?.status === 'SCHEDULED' && appSession?.permissions.bookings?.create
           ? { label: 'Add booking', onClick: () => setIsAddBookingOpen(true) }
           : undefined}
-      queryKey={[...classSessionsQueryKeys.detail(sessionId), 'bookings']}
+      queryKey={[...classSessionsQueryKeys.detail(sessionId), 'bookings', bookingStatusFilter]}
       loadData={async (state) => {
         const rows = await getClassBookingsRequest(resolvedLocationId, sessionId)
-        const classPassCount = rows.filter((booking) => booking.source === 'CLASSPASS').length
-        const egymCount = rows.filter((booking) => booking.source === 'EGYM').length
-        const directCount = rows.length - classPassCount - egymCount
+        const filteredRows = bookingStatusFilter === 'ALL'
+          ? rows
+          : rows.filter((booking) => !['CANCELLED', 'LATE_CANCELLED'].includes(booking.status))
+        const classPassCount = filteredRows.filter((booking) => booking.source === 'CLASSPASS').length
+        const egymCount = filteredRows.filter((booking) => booking.source === 'EGYM').length
+        const directCount = filteredRows.length - classPassCount - egymCount
         const summary = [classPassCount ? `${classPassCount} ClassPass` : '', egymCount ? `${egymCount} EGYM` : '', directCount ? `${directCount} Direct` : ''].filter(Boolean).join(' · ')
         setBookingSourceSummary((current) => current === summary ? current : summary)
         const { pageIndex, pageSize } = state.pagination
-        return { items: rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: rows.length, pageCount: Math.ceil(rows.length / pageSize) }
+        return { items: filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: filteredRows.length, pageCount: Math.ceil(filteredRows.length / pageSize) }
       }}
-      tableKey={`class-sessions.detail.bookings.${sessionId}`}
+      tableKey={`class-sessions.detail.bookings.${sessionId}.25.${bookingStatusFilter}`}
       columns={getClassBookingColumns({
         canEditAttendance: Boolean(appSession?.permissions.bookings?.edit),
         isPast: Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now()),
@@ -436,6 +441,20 @@ export default function ClassSessionPage() {
       loadingMessage="Loading bookings..."
       emptyMessage="No bookings for this session."
       errorMessage="Failed to load bookings."
+      pageSize={25}
+      toolbarExtra={(
+        <Select value={bookingStatusFilter} onValueChange={(value) => {
+          if (value === 'CONFIRMED' || value === 'ALL') setBookingStatusFilter(value)
+        }}>
+          <SelectTrigger className="h-8 w-[140px]" aria-label="Filter bookings by status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+            <SelectItem value="ALL">All</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
       showPagination
       refetchOnMount="always"
     />
