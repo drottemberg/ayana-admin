@@ -295,9 +295,9 @@ export class ApiClient {
               throw toApiError(error)
             }
           }
-          this.logoutAfterUnauthorized()
+          this.logoutAfterUnauthorized(requestUrl.includes('/app/connect'))
         } else if (status === 401 && !isAuthEndpoint && request?._authRetry) {
-          this.logoutAfterUnauthorized()
+          this.logoutAfterUnauthorized(requestUrl.includes('/app/connect'))
         }
 
         const apiError = toApiError(error)
@@ -309,12 +309,13 @@ export class ApiClient {
     )
   }
 
-  private logoutAfterUnauthorized(): void {
+  private logoutAfterUnauthorized(clearWithoutSession = false): void {
     const hasSession = Boolean(this.getAuthToken() || this.getRefreshToken())
-    if (!hasSession) return
+    if (!hasSession && !clearWithoutSession) return
 
     this.clearTokens()
     this.clearSettings()
+    if (!hasSession) return
 
     if (this.logoutRedirectPending || window.location.pathname === '/login') return
 

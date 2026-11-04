@@ -45,7 +45,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
   const connectQuery = useQuery({
     queryKey: appQueryKeys.connect,
     queryFn: connectAppRequest,
-    enabled: hasToken && !sessionInvalidated,
+    enabled: !sessionInvalidated,
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 401) && failureCount < 2,
   })
   const session = useMemo(
