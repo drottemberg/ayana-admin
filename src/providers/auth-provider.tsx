@@ -11,7 +11,7 @@ import { AuthContext, type AuthContextValue } from '@/providers/auth-context'
 import { appQueryKeys } from '@/features/app/query-keys'
 import { saveSelectedOrgId } from '@/features/organizations/storage'
 import { connectAppRequest } from '@/lib/api/app'
-import { apiClient, AUTH_TOKEN_REFRESHED_EVENT_NAME } from '@/lib/api-client'
+import { apiClient, AUTH_SESSION_CLEARED_EVENT_NAME, AUTH_TOKEN_REFRESHED_EVENT_NAME, ApiError } from '@/lib/api-client'
 import { AppConnectEntity } from '@/lib/entities/app-connect.entity'
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
@@ -39,19 +39,21 @@ function getRefreshDelay(token: string | null): number {
 export function AuthProvider({ children }: React.PropsWithChildren) {
   const queryClient = useQueryClient()
   const [authVersion, setAuthVersion] = useState(0)
+  const [sessionInvalidated, setSessionInvalidated] = useState(false)
   const token = apiClient.getAuthToken()
   const hasToken = Boolean(token)
   const connectQuery = useQuery({
     queryKey: appQueryKeys.connect,
     queryFn: connectAppRequest,
-    enabled: hasToken,
+    enabled: hasToken && !sessionInvalidated,
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status === 401) && failureCount < 2,
   })
   const session = useMemo(
-    () => (connectQuery.data ? new AppConnectEntity(connectQuery.data) : null),
-    [connectQuery.data],
+    () => (!sessionInvalidated && connectQuery.data ? new AppConnectEntity(connectQuery.data) : null),
+    [connectQuery.data, sessionInvalidated],
   )
   const user = session?.user.toJSON() ?? null
-  const isLoading = hasToken && connectQuery.isLoading
+  const isLoading = hasToken && !sessionInvalidated && connectQuery.isLoading
 
   useEffect(() => {
     if (!session) return
@@ -64,6 +66,19 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     window.addEventListener(AUTH_TOKEN_REFRESHED_EVENT_NAME, handleTokenRefresh)
     return () => window.removeEventListener(AUTH_TOKEN_REFRESHED_EVENT_NAME, handleTokenRefresh)
   }, [])
+
+  useEffect(() => {
+    const handleSessionCleared = () => {
+      setSessionInvalidated(true)
+      setAuthVersion((version) => version + 1)
+    }
+    window.addEventListener(AUTH_SESSION_CLEARED_EVENT_NAME, handleSessionCleared)
+    return () => window.removeEventListener(AUTH_SESSION_CLEARED_EVENT_NAME, handleSessionCleared)
+  }, [])
+
+  useEffect(() => {
+    if (sessionInvalidated) queryClient.clear()
+  }, [queryClient, sessionInvalidated])
 
   useEffect(() => {
     if (!hasToken || !apiClient.getRefreshToken()) return
@@ -108,6 +123,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => loginRequest(email, password),
     onSuccess: async (response) => {
+      setSessionInvalidated(false)
       if (response.organizationId) saveSelectedOrgId(response.organizationId)
       await refreshAppSession()
       setAuthVersion((version) => version + 1)
@@ -127,6 +143,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
       password: string
     }) => signupRequest(requestId, { email, name, password }),
     onSuccess: async () => {
+      setSessionInvalidated(false)
       await refreshAppSession()
       setAuthVersion((version) => version + 1)
     },
@@ -169,8 +186,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
           // Local logout should still clear stale sessions when the API is unavailable.
         }
         apiClient.clearTokens()
-        queryClient.setQueryData(appQueryKeys.connect, null)
-        queryClient.removeQueries({ queryKey: appQueryKeys.connect })
+        setSessionInvalidated(true)
         setAuthVersion((version) => version + 1)
       },
       requestPasswordReset: async (email) => {

@@ -1,5 +1,5 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type Method } from 'axios'
-import { ALL_LOCATIONS_SCOPE, clearOrganizationLocationContext, readSelectedLocationScope, readSelectedOrgId } from '@/features/organizations/storage'
+import { ALL_LOCATIONS_SCOPE, clearAppLocalStorage, readSelectedLocationScope, readSelectedOrgId } from '@/features/organizations/storage'
 import { getAppMode } from '@/features/app/app-mode'
 import {
   deleteCookie,
@@ -18,6 +18,7 @@ const DEFAULT_CULTURE = 'en'
 
 export const API_STATUS_EVENT_NAME = 'gkmanager:api-status'
 export const AUTH_TOKEN_REFRESHED_EVENT_NAME = 'ayana:auth-token-refreshed'
+export const AUTH_SESSION_CLEARED_EVENT_NAME = 'ayana:auth-session-cleared'
 
 export class ApiError extends Error {
   status: number | null
@@ -137,7 +138,8 @@ export class ApiClient {
   clearTokens(): void {
     deleteCookie(AUTH_TOKEN_KEY)
     deleteCookie(AUTH_REFRESH_TOKEN_KEY)
-    clearOrganizationLocationContext()
+    clearAppLocalStorage()
+    window.dispatchEvent(new Event(AUTH_SESSION_CLEARED_EVENT_NAME))
   }
 
   async get<T>(path: string, config?: AxiosRequestConfig): Promise<T> {

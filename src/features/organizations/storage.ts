@@ -22,41 +22,9 @@ export function clearSelectedOrgId(): void {
   removeLocalStorage(SELECTED_ORG_ID_KEY)
 }
 
-export function clearOrganizationLocationContext(): void {
-  clearSelectedOrgId()
-
+export function clearAppLocalStorage(): void {
   try {
-    const keys = Object.keys(window.localStorage)
-    for (const key of keys) {
-      if (
-        key.startsWith(SELECTED_LOCATION_SCOPE_PREFIX)
-        || key.startsWith('ayana:kitchen:location:')
-      ) {
-        window.localStorage.removeItem(key)
-        continue
-      }
-
-      if (key.startsWith('data_table_settings:')) {
-        const value = getLocalStorage<Record<string, unknown>>(key)
-        const filters = value?.f
-        if (filters && typeof filters === 'object' && !Array.isArray(filters)) {
-          for (const filterKey of Object.keys(filters)) {
-            if (/customer|organization|location/i.test(filterKey)) delete (filters as Record<string, unknown>)[filterKey]
-          }
-          setLocalStorage(key, value)
-        }
-      }
-    }
-    window.localStorage.removeItem('ayana:kitchen:customer')
-
-    const reportFilters = getLocalStorage<Record<string, unknown>>('sales-report.filters')
-    if (reportFilters) {
-      delete reportFilters.customerId
-      delete reportFilters.customerName
-      delete reportFilters.locationId
-      delete reportFilters.locationName
-      setLocalStorage('sales-report.filters', reportFilters)
-    }
+    window.localStorage.clear()
   } catch {
     // Keep logout working when browser storage is unavailable.
   }
