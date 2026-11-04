@@ -5,7 +5,7 @@ import { readSelectedOrgId } from '@/features/organizations/storage'
 
 export function connectAppRequest(): Promise<AppConnectDto> {
   const selectedOrganizationId = readSelectedOrgId()
-  const headers = selectedOrganizationId && getAppMode() === 'customer'
+  const headers = selectedOrganizationId && selectedOrganizationId !== 'MASTER' && getAppMode() === 'customer'
     ? { 'x-org-id': selectedOrganizationId }
     : undefined
   return apiClient.get<AppConnectDto>('/app/connect', { headers })

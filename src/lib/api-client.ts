@@ -224,8 +224,15 @@ export class ApiClient {
   private configureInterceptors() {
     this.axios.interceptors.request.use((config) => {
       const token = this.getAuthToken()
-      const selectedCustomerId = token ? readSelectedOrgId() : null
-      const requestedOrgId = config.headers.get('x-org-id')
+      const isCustomerContext = getAppMode() === 'customer'
+      const selectedOrganizationId = token ? readSelectedOrgId() : null
+      const selectedCustomerId = isCustomerContext && selectedOrganizationId === 'MASTER'
+        ? null
+        : selectedOrganizationId
+      const requestedHeaderOrgId = config.headers.get('x-org-id')
+      const requestedOrgId = isCustomerContext && requestedHeaderOrgId === 'MASTER'
+        ? null
+        : requestedHeaderOrgId
       const locationScope = token && selectedCustomerId && getAppMode() === 'customer'
         ? readSelectedLocationScope(selectedCustomerId)
         : null
