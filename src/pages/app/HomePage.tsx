@@ -10,6 +10,7 @@ import {
 } from '@/components/app/detail-page-layout'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import {
@@ -73,31 +74,52 @@ const inviteColumns: ColumnDef<HomeInviteRow>[] = [
   { accessorKey: 'createdAt', header: 'Received', cell: ({ row }) => formatDateTime(row.original.createdAt, '-') },
 ]
 
-const sessionColumns: ColumnDef<HomeSessionRow>[] = [
-  {
-    id: 'class',
-    header: 'Class',
-    cell: ({ row }) => {
-      const session = row.original
-      const locationId = session.locationId || session.organizationId
-      return (
-        <Link
-          to={`/class-sessions/${encodeURIComponent(session.id)}?locationId=${encodeURIComponent(locationId)}`}
-          className="font-medium underline-offset-2 hover:underline"
-        >
-          {session.className || session.classTypeId}
-        </Link>
-      )
+function getHomeSessionColumns(options: {
+  allowClaim?: boolean
+  claimingSessionId?: string | null
+  onClaim?: (session: HomeSessionRow) => void
+} = {}): ColumnDef<HomeSessionRow>[] {
+  return [
+    {
+      id: 'class',
+      header: 'Class',
+      cell: ({ row }) => {
+        const session = row.original
+        const locationId = session.locationId || session.organizationId
+        return (
+          <Link
+            to={`/class-sessions/${encodeURIComponent(session.id)}?locationId=${encodeURIComponent(locationId)}`}
+            className="font-medium underline-offset-2 hover:underline"
+          >
+            {session.className || session.classTypeId}
+          </Link>
+        )
+      },
     },
-  },
-  { id: 'starts', header: 'Starts', cell: ({ row }) => formatClassSessionTime(row.original.startTime, row.original.timezone) },
-  {
-    id: 'capacity',
-    header: 'Bookings',
-    cell: ({ row }) => `${row.original.bookedCount} / ${row.original.capacity}`,
-  },
-  { accessorKey: 'locationName', header: 'Location', cell: ({ row }) => row.original.locationName || '-' },
-]
+    { id: 'starts', header: 'Starts', cell: ({ row }) => formatClassSessionTime(row.original.startTime, row.original.timezone) },
+    {
+      id: 'capacity',
+      header: 'Bookings',
+      cell: ({ row }) => `${row.original.bookedCount} / ${row.original.capacity}`,
+    },
+    {
+      accessorKey: 'coachName',
+      header: 'Coach',
+      cell: ({ row }) => {
+        const session = row.original
+        const canClaim = options.allowClaim
+          && !session.coachId
+          && session.status === 'SCHEDULED'
+          && new Date(session.startTime).getTime() >= Date.now()
+        if (canClaim) {
+          return <Button type="button" size="sm" variant="outline" disabled={options.claimingSessionId === session.id} onClick={(event) => { event.stopPropagation(); options.onClaim?.(session) }}>{options.claimingSessionId === session.id ? 'Claiming…' : 'Claim'}</Button>
+        }
+        return session.coachName || '-'
+      },
+    },
+    { accessorKey: 'locationName', header: 'Location', cell: ({ row }) => row.original.locationName || '-' },
+  ]
+}
 
 const bookingColumns: ColumnDef<HomeBookingRow>[] = [
   {
@@ -145,6 +167,7 @@ export default function HomePage() {
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const [isMyCoachProfileOpen, setIsMyCoachProfileOpen] = useState(false)
+  const [claimingSessionId, setClaimingSessionId] = useState<string | null>(null)
   const customerId = session?.currentOrganization?.id ?? null
   const userId = String(session?.user.id ?? '')
   const membership = session?.user.customerMemberships.find((item) => item.customerId === customerId)
@@ -152,6 +175,28 @@ export default function HomePage() {
   const locationScope = customerId && getAppMode() === 'customer' ? readSelectedLocationScope(customerId) : null
   const locationId = locationScope && locationScope !== ALL_LOCATIONS_SCOPE ? locationScope : null
   const locationQuery = useMemo(() => ({ customerId, locationId }), [customerId, locationId])
+  async function claimSession(item: HomeSessionRow) {
+    if (claimingSessionId) return
+    setClaimingSessionId(item.id)
+    try {
+      await claimCoachSessionRequest(item.id)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+      ])
+      toast.success('Session assigned to you.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
+    } finally {
+      setClaimingSessionId(null)
+    }
+  }
+  const sessionColumns = getHomeSessionColumns()
+  const claimableSessionColumns = getHomeSessionColumns({
+    allowClaim: isCoach,
+    claimingSessionId,
+    onClaim: (item) => { void claimSession(item) },
+  })
   const selectedLocation = useQuery({
     queryKey: ['home', 'location', locationQuery.customerId, locationQuery.locationId],
     queryFn: () => getLocationRequest(locationQuery.locationId!),
@@ -301,7 +346,7 @@ export default function HomePage() {
           id={`${MODULE_ANCHOR_PREFIX}-sessions-to-claim`}
           title="Sessions to claim"
           icon={EntityIcon.classes}
-          columns={sessionColumns}
+          columns={claimableSessionColumns}
           queryKey={['coaches', 'home', 'claimable-sessions', customerId, locationId, userId]}
           loadData={async (state: DataTableState<HomeSessionRow>) => {
             const offers = await getMyCoachCoverageRequestsRequest()
@@ -312,21 +357,6 @@ export default function HomePage() {
             return toTableResult(sessions as HomeSessionRow[], state)
           }}
           tableKey="home.coach-claimable-sessions"
-          getRowCommands={(item) => [{
-            label: 'Claim session',
-            onClick: async () => {
-              try {
-                await claimCoachSessionRequest(item.id)
-                await Promise.all([
-                  queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-                  queryClient.invalidateQueries({ queryKey: ['coaches'] }),
-                ])
-                toast.success('Session assigned to you.')
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
-              }
-            },
-          }]}
           emptyMessage="No sessions are currently available to claim."
           loadingMessage="Loading sessions to claim…"
           errorMessage="Could not load sessions to claim."
