@@ -1,5 +1,5 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig, type Method } from 'axios'
-import { ALL_LOCATIONS_SCOPE, clearSelectedOrgId, readSelectedLocationScope, readSelectedOrgId } from '@/features/organizations/storage'
+import { ALL_LOCATIONS_SCOPE, clearOrganizationLocationContext, readSelectedLocationScope, readSelectedOrgId } from '@/features/organizations/storage'
 import { getAppMode } from '@/features/app/app-mode'
 import {
   deleteCookie,
@@ -137,6 +137,7 @@ export class ApiClient {
   clearTokens(): void {
     deleteCookie(AUTH_TOKEN_KEY)
     deleteCookie(AUTH_REFRESH_TOKEN_KEY)
+    clearOrganizationLocationContext()
   }
 
   async get<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
@@ -312,7 +313,6 @@ export class ApiClient {
 
     this.clearTokens()
     this.clearSettings()
-    clearSelectedOrgId()
 
     if (this.logoutRedirectPending || window.location.pathname === '/login') return
 

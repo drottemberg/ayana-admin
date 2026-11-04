@@ -4,6 +4,7 @@ export type AuthResponse = {
   token: string
   refreshToken: string
   mustChangePassword?: boolean
+  organizationId?: string
 }
 
 export function loginRequest(email: string, password: string): Promise<AuthResponse> {

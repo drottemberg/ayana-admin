@@ -9,7 +9,7 @@ import {
 } from '@/lib/api/auth'
 import { AuthContext, type AuthContextValue } from '@/providers/auth-context'
 import { appQueryKeys } from '@/features/app/query-keys'
-import { clearSelectedOrgId } from '@/features/organizations/storage'
+import { saveSelectedOrgId } from '@/features/organizations/storage'
 import { connectAppRequest } from '@/lib/api/app'
 import { apiClient, AUTH_TOKEN_REFRESHED_EVENT_NAME } from '@/lib/api-client'
 import { AppConnectEntity } from '@/lib/entities/app-connect.entity'
@@ -107,7 +107,8 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
 
   const loginMutation = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) => loginRequest(email, password),
-    onSuccess: async () => {
+    onSuccess: async (response) => {
+      if (response.organizationId) saveSelectedOrgId(response.organizationId)
       await refreshAppSession()
       setAuthVersion((version) => version + 1)
     },
@@ -168,7 +169,6 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
           // Local logout should still clear stale sessions when the API is unavailable.
         }
         apiClient.clearTokens()
-        clearSelectedOrgId()
         queryClient.setQueryData(appQueryKeys.connect, null)
         queryClient.removeQueries({ queryKey: appQueryKeys.connect })
         setAuthVersion((version) => version + 1)
