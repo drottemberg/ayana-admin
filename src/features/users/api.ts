@@ -291,9 +291,7 @@ export async function updateUserRequest(userId: string, payload: CreateUserPaylo
   return toUser(user)
 }
 
-// UpdateUserDto (backend) only accepts firstName/lastName/phone/isActive — email/position/
-// role/permissions sent via updateUserRequest above are silently ignored server-side. This is
-// the real "edit details" call; role/permissions now go through the dedicated
+// Details are updated through UpdateUserDto. Role/permissions are handled by their dedicated
 // updateStaff/updateCustomerMembership calls.
 export async function updateUserDetailsRequest(userId: string, payload: UpdateUserDetailsPayload): Promise<User> {
   const user = await apiClient.patch<UserRecord>(`/users/${userId}`, payload)

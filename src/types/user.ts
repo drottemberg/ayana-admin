@@ -82,6 +82,7 @@ export type CreateUserPayload = {
 export type UpdateUserDetailsPayload = {
   firstName: string
   lastName: string
+  email?: string | null
   phone?: string | null
   isActive?: boolean
 }

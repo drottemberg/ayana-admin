@@ -23,6 +23,7 @@ import type { User } from '@/types/user'
 const detailsFormSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.'),
   lastName: z.string().trim().min(1, 'Last name is required.'),
+  email: z.string().trim().email('Enter a valid email address.').or(z.literal('')),
   phone: z
     .string()
     .optional()
@@ -90,12 +91,13 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
     defaultValues: {
       firstName: user.firstName,
       lastName: user.lastName,
+      email: user.email ?? '',
       phone: user.phone ?? '',
     },
   })
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { firstName: string; lastName: string; phone?: string | null }) =>
+    mutationFn: (payload: { firstName: string; lastName: string; email?: string | null; phone?: string | null }) =>
       updateUserDetailsRequest(String(user.id), payload),
     onSuccess: async (updatedUser) => {
       await Promise.all([
@@ -114,6 +116,7 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
     await updateMutation.mutateAsync({
       firstName: values.firstName.trim(),
       lastName: values.lastName.trim(),
+      email: values.email.trim() || null,
       phone: values.phone ? normalizePhone(values.phone) : null,
     })
   })
@@ -128,8 +131,13 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
             <TextInput label="First name" required error={errors.firstName?.message} {...register('firstName')} />
             <TextInput label="Last name" required error={errors.lastName?.message} {...register('lastName')} />
           </div>
-          {/* Email can't be changed here — UpdateUserDto (backend) doesn't accept it. */}
-          <TextInput label="Email" type="email" value={user.email} disabled />
+          <TextInput
+            label="Email"
+            type="email"
+            placeholder="email@example.com"
+            error={errors.email?.message}
+            {...register('email')}
+          />
           <Controller
             control={control}
             name="phone"
