@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client'
 export type AuthResponse = {
   token: string
   refreshToken: string
+  mustChangePassword?: boolean
 }
 
 export function loginRequest(email: string, password: string): Promise<AuthResponse> {

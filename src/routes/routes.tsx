@@ -1,5 +1,6 @@
 import { lazy } from 'react'
 import { CreatePasswordPage } from '@/pages/auth/CreatePasswordPage'
+import { FirstLoginPasswordPage } from '@/pages/auth/FirstLoginPasswordPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignupPage } from '@/pages/auth/SignupPage'
@@ -69,6 +70,14 @@ export const router = createBrowserRouter([
   {
     element: <RouterLayout />,
     children: [
+      {
+        path: '/change-password',
+        element: (
+          <ProtectedRoute>
+            <FirstLoginPasswordPage />
+          </ProtectedRoute>
+        ),
+      },
       { path: '/store/:customerSlug/:locationSlug/success', element: <StorefrontPage /> },
       { path: '/store/:customerSlug/:locationSlug', element: <StorefrontPage /> },
       { path: '/booking/:customerSlug/:locationSlug', element: <BookingPortalPage /> },

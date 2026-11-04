@@ -41,7 +41,6 @@ type UserRecord = {
   customer?: Customer | null
   status?: UserStatus
   isActive?: boolean
-  isArchived?: boolean
   isDeleted?: boolean
   isStaff?: boolean
   staffRole?: StaffRole | null
@@ -136,7 +135,6 @@ function toUser(user: UserRecord): User {
     customer: user.customer ?? undefined,
     status: user.status ?? undefined,
     isActive: user.isActive ?? undefined,
-    isArchived: user.isArchived ?? undefined,
     isDeleted: user.isDeleted ?? undefined,
     isStaff: user.isStaff ?? undefined,
     staffRole: user.staffRole ?? undefined,
@@ -186,6 +184,23 @@ export async function getUsersListRequest(): Promise<User[]> {
   })
 
   return result.items.map(toUser)
+}
+
+export async function getUserFilterOptionsRequest(search: string, page = 1) {
+  const result = await apiClient.post<ApiListResult<UserRecord>>(USERS_LIST_URL, {
+    search: search.trim() || undefined,
+    page,
+    limit: 20,
+    orderBy: 'firstName',
+    order: SortOrder.asc,
+  })
+  return {
+    items: result.items.map((user) => ({
+      id: user.id,
+      label: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user.phone || user.id,
+    })),
+    total: result.total,
+  }
 }
 
 export async function getUsersRequest(
@@ -299,19 +314,11 @@ export async function deleteUserRequest(userId: string): Promise<void> {
 }
 
 export async function activateUserRequest(userId: string): Promise<User> {
-  return toUser(await apiClient.patch<UserRecord>(`/users/${userId}/activate`))
+  return toUser(await apiClient.patch<UserRecord>(`/users/${userId}`, { isActive: true }))
 }
 
 export async function deactivateUserRequest(userId: string): Promise<User> {
-  return toUser(await apiClient.patch<UserRecord>(`/users/${userId}/deactivate`))
-}
-
-export async function archiveUserRequest(userId: string): Promise<User> {
-  return toUser(await apiClient.post<UserRecord>(`/users/${userId}/archive`))
-}
-
-export async function unarchiveUserRequest(userId: string): Promise<User> {
-  return toUser(await apiClient.post<UserRecord>(`/users/${userId}/unarchive`))
+  return toUser(await apiClient.patch<UserRecord>(`/users/${userId}`, { isActive: false }))
 }
 
 // Super-admin only (backend enforces staffRole === SUPER_ADMIN, ADMIN app context) — forces a

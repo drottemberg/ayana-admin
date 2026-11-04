@@ -11,6 +11,8 @@ import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
 
+const NO_COACH_VALUE = '__no_coach__'
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>
 }
@@ -45,7 +47,7 @@ export function ClassSessionEditDrawer({
     setStartTime(toClassSessionLocalInput(session.startTime, timeZone))
     setEndTime(toClassSessionLocalInput(session.endTime, timeZone))
     setCapacity(String(session.capacity))
-    setCoachId(session.coachId ?? '')
+    setCoachId(session.coachId ?? NO_COACH_VALUE)
   }, [open, session, timeZone])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -73,7 +75,7 @@ export function ClassSessionEditDrawer({
         startTime: startIso,
         endTime: endIso,
         capacity: capacityValue,
-        coachId: coachId || null,
+        coachId: coachId === NO_COACH_VALUE ? null : coachId,
       })
       await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
       toast.success('Class session updated.')
@@ -100,7 +102,7 @@ export function ClassSessionEditDrawer({
         <Field label="Coach">
           <SelectInput
             aria-label="Coach"
-            items={[{ value: '', label: 'No coach' }, ...coaches.map((coach) => ({ value: coach.userId, label: coach.coachName }))]}
+            items={[{ value: NO_COACH_VALUE, label: 'No coach' }, ...coaches.map((coach) => ({ value: coach.userId, label: coach.coachName }))]}
             value={coachId}
             onValueChange={(value) => setCoachId(String(value))}
             isLoading={isLoadingCoaches}

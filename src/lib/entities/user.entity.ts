@@ -19,6 +19,7 @@ export type UserDto = {
   isStaff?: boolean | null
   staffRole?: StaffRole | null
   hasPassword?: boolean | null
+  mustChangePassword?: boolean | null
   mfaEnabled?: boolean | null
   lastLoginAt?: string | null
   createdAt?: string | null
@@ -41,6 +42,7 @@ export class UserEntity {
   readonly isStaff: boolean
   readonly staffRole: StaffRole | null
   readonly hasPassword: boolean
+  readonly mustChangePassword: boolean
   readonly mfaEnabled: boolean
   readonly lastLoginAt?: string
   readonly createdAt: string
@@ -65,6 +67,7 @@ export class UserEntity {
     this.isStaff = dto.isStaff ?? false
     this.staffRole = dto.staffRole ?? null
     this.hasPassword = dto.hasPassword ?? false
+    this.mustChangePassword = dto.mustChangePassword ?? false
     this.mfaEnabled = dto.mfaEnabled ?? false
     this.lastLoginAt = dto.lastLoginAt ?? undefined
     this.createdAt = dto.createdAt ?? ''
@@ -85,6 +88,7 @@ export class UserEntity {
       customerId: this.customerId,
       role: this.role,
       hasPassword: this.hasPassword,
+      mustChangePassword: this.mustChangePassword,
       permissions: this.permissions,
       customerMemberships: this.customerMemberships,
       createdAt: this.createdAt,

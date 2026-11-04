@@ -24,19 +24,16 @@ export type UserOrganizationPermission = {
   parentId?: string
 }
 
-// Backend-computed (UserEntity.getStatus(), not a stored column) from isDeleted/isArchived/
-// isActive — deleted wins over archived, which wins over active/disabled. Matches the exact
-// values gkManager-backend's own UserStatus enum uses, including for filters.status server-side.
+// Backend-computed user status based on deletion and activation state.
 export const UserStatus = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',
-  ARCHIVED: 'ARCHIVED',
   DELETED: 'DELETED',
 } as const
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus]
 
-export const UserStatusValues = [UserStatus.ACTIVE, UserStatus.DISABLED, UserStatus.ARCHIVED, UserStatus.DELETED] as const
+export const UserStatusValues = [UserStatus.ACTIVE, UserStatus.DISABLED, UserStatus.DELETED] as const
 
 export type User = {
   id: number | string
@@ -58,13 +55,13 @@ export type User = {
   avatarUrl?: string
   status?: UserStatus
   isActive?: boolean
-  isArchived?: boolean
   isDeleted?: boolean
   isStaff?: boolean
   staffRole?: StaffRole | null
   customerMemberships?: CustomerMembershipRecord[]
   role: UserRole
   hasPassword?: boolean
+  mustChangePassword?: boolean
   permissions?: UserOrganizationPermission[]
   memberOrganizations?: string[]
   createdAt: string

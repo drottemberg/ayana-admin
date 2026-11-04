@@ -6,7 +6,7 @@ import { getIntegrationProviderLabel, type CustomerIntegration } from './api'
 export function getIntegrationColumns(onSetup?: (integration: CustomerIntegration) => void): ColumnDef<CustomerIntegration>[] {
   return [
     { accessorKey: 'provider', header: 'Service', cell: ({ row }) => getIntegrationProviderLabel(row.original.provider) },
-    { accessorKey: 'username', header: 'Account', cell: ({ row }) => <span className="font-medium">{row.original.username ?? '—'}</span> },
+    { accessorKey: 'username', header: 'Account', cell: ({ row }) => <span className="font-medium">{row.original.provider === 'EGYM' ? row.original.baseUrl ?? '—' : row.original.username ?? '—'}</span> },
     {
       accessorKey: 'setupComplete',
       header: 'Setup',

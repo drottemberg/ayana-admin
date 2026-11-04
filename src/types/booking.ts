@@ -1,5 +1,5 @@
 export type BookingStatus = 'CONFIRMED' | 'WAITLISTED' | 'CANCELLED' | 'LATE_CANCELLED' | 'ATTENDED' | 'NO_SHOW'
-export type BookingSource = 'DIRECT' | 'CLASSPASS'
+export type BookingSource = 'DIRECT' | 'CLASSPASS' | 'EGYM'
 
 export type BookingPerson = {
   id: string

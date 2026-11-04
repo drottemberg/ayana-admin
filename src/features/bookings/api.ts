@@ -11,7 +11,15 @@ export const bookingsListConfig = {
 }
 
 export async function getBookingsRequest(state: DataTableState<Booking>, filters?: Record<string, unknown>) {
-  const result = await apiClient.post<ApiListResult<Booking>>(bookingsListConfig.url, bookingsListConfig.toPayload(state, filters))
+  const { userId, ...tableFilters } = state.filters
+  const requestState = { ...state, filters: tableFilters }
+  const payload = bookingsListConfig.toPayload(requestState, filters)
+  const selectedUsers = userId?.filter(Boolean) ?? []
+  const result = await apiClient.post<ApiListResult<Booking>>(bookingsListConfig.url, {
+    ...payload,
+    ...(selectedUsers.length === 1 ? { userId: selectedUsers[0] } : {}),
+    ...(selectedUsers.length > 1 ? { filters: { ...payload.filters, userId: selectedUsers } } : {}),
+  })
   return toDataTableResult(result)
 }
 

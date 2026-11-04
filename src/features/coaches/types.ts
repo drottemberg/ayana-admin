@@ -14,6 +14,7 @@ export type CoachProfile = {
   specialties: string[]
   languages: string[]
   attachmentId?: string | null
+  imageUrl?: string | null
   classTypes: CoachClassQualification[]
   locationScope: 'ALL' | 'SPECIFIC' | 'NONE'
   locations: Array<{ id: string; name: string }>

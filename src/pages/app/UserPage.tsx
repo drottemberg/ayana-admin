@@ -56,6 +56,9 @@ import { getBookingColumns } from '@/features/bookings/booking-columns'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
 import { EntityIcon } from '@/components/app/entity-icons'
+import { getClassSchedulesRequest, getClassSessionsRequest } from '@/features/classes/api'
+import { getClassSessionColumns } from '@/features/classes/class-session-columns'
+import type { ClassSchedule, ClassSession } from '@/types/class-type'
 import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
 import { getAiSupportIssuesRequest, updateAiSupportIssueRequest } from '@/features/ai-support-issues/api'
 import { aiSupportIssueQueryKeys } from '@/features/ai-support-issues/query-keys'
@@ -135,6 +138,79 @@ async function loadUserLocations(
     pageCount: Math.max(1, Math.ceil(filtered.length / pageSize)),
   }
 }
+
+type UserCoachSchedule = ClassSchedule & { locationId: string; locationName: string }
+
+async function getCoachScheduleLocations(
+  user: User,
+  isAdminContext: boolean,
+  currentCustomerId: string | undefined,
+  allowedLocationIds: string[] | null,
+): Promise<Location[]> {
+  const memberships = (user.customerMemberships ?? []).filter((membership) =>
+    membership.role === 'INSTRUCTOR' && (isAdminContext || membership.customerId === currentCustomerId),
+  )
+  const locations = (await Promise.all(memberships.map(async (membership) => {
+    const scope = membership.locationScope ?? membership.storeScope
+    if (scope === LocationScope.NONE) return []
+    if (scope === LocationScope.SPECIFIC) {
+      return Promise.all((membership.locations ?? []).map((location) => getLocationRequest(location.locationId)))
+    }
+    return getAllLocationsForCustomerRequest(membership.customerId)
+  }))).flat()
+  const uniqueLocations = [...new Map(locations.map((location) => [location.id, location])).values()]
+  return allowedLocationIds === null ? uniqueLocations : uniqueLocations.filter((location) => allowedLocationIds.includes(location.id))
+}
+
+async function loadUserCoachSchedules(
+  user: User | undefined,
+  state: DataTableState<UserCoachSchedule>,
+  isAdminContext: boolean,
+  currentCustomerId: string | undefined,
+  allowedLocationIds: string[] | null,
+): Promise<DataTableAsyncResult<UserCoachSchedule>> {
+  if (!user) return { items: [], count: 0, pageCount: 1 }
+  const locations = await getCoachScheduleLocations(user, isAdminContext, currentCustomerId, allowedLocationIds)
+  const byLocation = await Promise.all(locations.map(async (location) => ({
+    location,
+    schedules: await getClassSchedulesRequest(location.id),
+  })))
+  const schedules = byLocation.flatMap(({ location, schedules }) => schedules
+    .filter((schedule) => schedule.coachId === String(user.id))
+    .map((schedule) => ({ ...schedule, locationId: location.id, locationName: location.name })))
+  const search = state.search.trim().toLocaleLowerCase()
+  const filtered = schedules.filter((schedule) => [
+    schedule.locationName,
+    schedule.dayOfWeek,
+    schedule.coachName,
+    schedule.classTypeId,
+    `${String(schedule.startHour).padStart(2, '0')}:${String(schedule.startMinute).padStart(2, '0')}`,
+  ].some((value) => value?.toLocaleLowerCase().includes(search)))
+  const sort = state.sorting[0]
+  if (sort) filtered.sort((a, b) => String(a[sort.id as keyof UserCoachSchedule] ?? '').localeCompare(String(b[sort.id as keyof UserCoachSchedule] ?? '') ) * (sort.desc ? -1 : 1))
+  const start = state.pagination.pageIndex * state.pagination.pageSize
+  return {
+    items: filtered.slice(start, start + state.pagination.pageSize),
+    count: filtered.length,
+    pageCount: Math.max(1, Math.ceil(filtered.length / state.pagination.pageSize)),
+  }
+}
+
+const userCoachScheduleColumns: ColumnDef<UserCoachSchedule>[] = [
+  {
+    id: 'classType',
+    header: 'Class',
+    cell: ({ row }) => <Link to={`/classes/${encodeURIComponent(row.original.classTypeId)}?locationId=${encodeURIComponent(row.original.locationId)}`} className="font-medium underline-offset-2 hover:underline">{row.original.classTypeId}</Link>,
+  },
+  { accessorKey: 'locationName', header: 'Location' },
+  { accessorKey: 'isActive', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.isActive ? 'Active' : 'Disabled'}</Badge> },
+  { accessorKey: 'dayOfWeek', header: 'Day', cell: ({ row }) => row.original.dayOfWeek ?? NO_VALUE_STR },
+  { id: 'time', header: 'Time', cell: ({ row }) => `${String(row.original.startHour).padStart(2, '0')}:${String(row.original.startMinute).padStart(2, '0')}` },
+  { accessorKey: 'coachName', header: 'Default coach', cell: ({ row }) => row.original.coachName || NO_VALUE_STR },
+  { accessorKey: 'capacity', header: 'Capacity', cell: ({ row }) => row.original.capacity ?? NO_VALUE_STR },
+  { accessorKey: 'validFrom', header: 'Valid from', cell: ({ row }) => new Date(row.original.validFrom).toLocaleDateString() },
+  { accessorKey: 'validUntil', header: 'Until', cell: ({ row }) => row.original.validUntil ? new Date(row.original.validUntil).toLocaleDateString() : 'No end date' },
+]
 
 function getUserDetailSections(
   user: User | undefined,
@@ -225,6 +301,22 @@ export default function UserPage() {
     queryFn: () => getUserRequest(userId),
     enabled: Boolean(userId),
   })
+  const isPartnerCoach = Boolean(user?.customerMemberships?.some((membership) => membership.role === 'INSTRUCTOR'))
+  const canViewCoachSchedules = Boolean(isPartnerCoach && session?.permissions.classSchedules?.view)
+  const canViewCoachSessions = Boolean(isPartnerCoach && session?.permissions.classSessions?.view)
+  const actorCustomerMembership = currentCustomerId
+    ? session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)
+    : undefined
+  const actorLocationScope = actorCustomerMembership?.locationScope ?? actorCustomerMembership?.storeScope
+  const allowedScheduleLocationIds = isAdminContext
+    ? null
+    : actorLocationScope === LocationScope.SPECIFIC
+      ? (actorCustomerMembership?.locations ?? []).map((location) => location.locationId)
+      : actorCustomerMembership?.stores?.length
+        ? actorCustomerMembership.stores.map((store) => store.storeId)
+        : actorLocationScope === LocationScope.NONE || !actorCustomerMembership
+          ? []
+          : null
   const creditWallets = useQuery({
     queryKey: [...clientContractsQueryKeys.all, 'wallet-balances', userId],
     queryFn: () => getUserCreditWalletBalancesRequest(userId),
@@ -240,6 +332,8 @@ export default function UserPage() {
   const modules = [
     ...(isAdminContext ? [{ key: 'customers', label: 'Customers' }] : []),
     ...(hasCustomerMembership ? [{ key: 'locations', label: 'Locations' }] : []),
+    ...(canViewCoachSchedules ? [{ key: 'schedules', label: 'Schedules' }] : []),
+    ...(canViewCoachSessions ? [{ key: 'class-sessions', label: 'Class sessions' }] : []),
     ...(canViewContracts || canViewCreditWallets || canViewBookings || canViewOrders
       ? [
           ...(canViewContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
@@ -306,6 +400,43 @@ export default function UserPage() {
         loadingMessage="Loading locations..."
         emptyMessage="No locations assigned"
         errorMessage="Failed to load locations."
+      /> : null}
+      {canViewCoachSchedules ? <RelatedEntityModule<UserCoachSchedule>
+        id={`${MODULE_ANCHOR_PREFIX}-schedules`}
+        title="Schedules"
+        icon={EntityIcon.classes}
+        queryKey={['class-schedules', 'user', userId, locationMembershipKey, currentCustomerId, isAdminContext]}
+        loadData={(state: DataTableState<UserCoachSchedule>) => loadUserCoachSchedules(
+          user,
+          state,
+          isAdminContext,
+          currentCustomerId,
+          allowedScheduleLocationIds,
+        )}
+        tableKey={`schedules.user.${userId}`}
+        columns={userCoachScheduleColumns}
+        loadingMessage="Loading schedules..."
+        emptyMessage="No schedules assigned to this coach."
+        errorMessage="Failed to load schedules."
+      /> : null}
+      {canViewCoachSessions ? <RelatedEntityModule<ClassSession>
+        id={`${MODULE_ANCHOR_PREFIX}-class-sessions`}
+        title="Class sessions"
+        icon={EntityIcon.classes}
+        viewAllTo={`/class-sessions?${new URLSearchParams({
+          filterCoachId: userId,
+          ...(!isAdminContext && currentCustomerId ? { filterCustomerId: currentCustomerId } : {}),
+        }).toString()}`}
+        queryKey={['class-sessions', 'user', userId, currentCustomerId, isAdminContext]}
+        loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(state, {
+          coachId: [userId],
+          ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
+        })}
+        tableKey={`class-sessions.user.${userId}`}
+        columns={getClassSessionColumns({ showCustomer: isAdminContext, showLocation: true })}
+        loadingMessage="Loading class sessions..."
+        emptyMessage="No class sessions assigned to this coach."
+        errorMessage="Failed to load class sessions."
       /> : null}
       {canViewContracts ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-client-contracts`}

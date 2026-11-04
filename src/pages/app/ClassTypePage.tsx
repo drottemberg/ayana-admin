@@ -260,7 +260,7 @@ export default function ClassTypePage() {
       <RelatedEntityModule<ClassSession & Record<string, unknown>>
         id="module-sessions"
         title="Sessions"
-        viewAllTo={`/class-sessions?${new URLSearchParams({ filterLocationId: locationId }).toString()}`}
+        viewAllTo={`/class-sessions?${new URLSearchParams({ filterLocationId: locationId, filterClassTypeId: classTypeId }).toString()}`}
         queryKey={classSessionsQueryKeys.classType(classTypeId)}
         loadData={(state) => getClassSessionsRequest(state as DataTableState<ClassSession>, {
           locationId,

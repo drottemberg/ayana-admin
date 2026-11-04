@@ -7,7 +7,7 @@ import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getClassSessionColumns } from '@/features/classes/class-session-columns'
-import { cancelClassSessionRequest, getClassCategoryOptions, getClassSessionsRequest, getClassTypeLocationOptions, resumeClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
@@ -72,7 +72,7 @@ export default function ClassSessionsPage() {
   const [claimingSessionId, setClaimingSessionId] = useState<string | null>(null)
   const searchParamsString = searchParams.toString()
   const [tableQueryInitialized, setTableQueryInitialized] = useState(false)
-  const [migratedInitialFilters, setMigratedInitialFilters] = useState<Partial<Record<'customerId' | 'locationId' | 'coachId', string[]>>>()
+  const [migratedInitialFilters, setMigratedInitialFilters] = useState<Partial<Record<'customerId' | 'locationId' | 'coachId' | 'classTypeId', string[]>>>()
 
   useEffect(() => {
     if (tableQueryInitialized) return
@@ -102,8 +102,8 @@ export default function ClassSessionsPage() {
     // Migrate old filter links before mounting DataTable. It owns the table
     // query params too, so mounting it during this URL update could race and
     // overwrite either the saved filters or the date mode.
-    const legacyFilters: Partial<Record<'customerId' | 'locationId' | 'coachId', string[]>> = {}
-    for (const key of ['customerId', 'locationId', 'coachId'] as const) {
+    const legacyFilters: Partial<Record<'customerId' | 'locationId' | 'coachId' | 'classTypeId', string[]>> = {}
+    for (const key of ['customerId', 'locationId', 'coachId', 'classTypeId'] as const) {
       const legacyKey = `filter${key[0].toUpperCase()}${key.slice(1)}`
       const legacyValue = params.get(legacyKey)
       if (
@@ -326,6 +326,12 @@ export default function ClassSessionsPage() {
               selectionMode: 'single' as const,
               queryFn: getCoachFilterOptionsRequest,
               getValue: (item: ClassSession) => item.coachId,
+            },
+            {
+              id: 'classTypeId', label: 'Class', column: 'classTypeId' as const,
+              selectionMode: 'single' as const,
+              queryFn: getClassFilterOptionsRequest,
+              getValue: (item: ClassSession) => item.classTypeId,
             },
             {
               id: 'category', label: 'Category', column: 'classCategory' as const,

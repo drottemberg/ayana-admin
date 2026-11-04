@@ -15,6 +15,7 @@ import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBoo
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { getCoachFilterOptionsRequest } from '@/features/coaches/api'
+import { getUserFilterOptionsRequest } from '@/features/users/api'
 
 const statuses = ['CONFIRMED', 'WAITLISTED', 'ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED']
 
@@ -80,12 +81,17 @@ export default function BookingsPage() {
         filters={[
           { id: 'status', label: 'Status', column: 'status' as const, options: statuses, getValue: (booking: Booking) => booking.status },
           {
-            id: 'source', label: 'Source', column: 'source' as const, options: ['Direct', 'ClassPass'],
-            getValue: (booking: Booking) => booking.source === 'CLASSPASS' ? 'ClassPass' : 'Direct',
+            id: 'source', label: 'Source', column: 'source' as const, options: ['Direct', 'ClassPass', 'EGYM Wellpass'],
+            getValue: (booking: Booking) => booking.source === 'CLASSPASS' ? 'ClassPass' : booking.source === 'EGYM' ? 'EGYM Wellpass' : 'Direct',
           },
           {
             id: 'isFreeTrial', label: 'Free trial', column: 'isFreeTrial' as const, options: ['Yes', 'No'],
             getValue: (booking: Booking) => booking.isFreeTrial ? 'Yes' : 'No',
+          },
+          {
+            id: 'userId', label: 'User', column: 'userId' as const, selectionMode: 'single' as const,
+            queryFn: getUserFilterOptionsRequest,
+            getValue: (booking: Booking) => booking.userId,
           },
           ...(isAdminContext ? [{
             id: 'customerId', label: 'Customer', column: 'customer' as const, selectionMode: 'single' as const,

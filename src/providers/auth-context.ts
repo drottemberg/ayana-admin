@@ -6,7 +6,7 @@ export type AuthContextValue = {
   token: string | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<boolean>
   signup: (requestId: string | undefined, email: string, name: string, password: string) => Promise<void>
   logout: () => Promise<void> | void
   requestPasswordReset: (email: string) => Promise<string | null>

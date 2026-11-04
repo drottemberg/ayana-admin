@@ -126,7 +126,12 @@ export default function ClassSessionPage() {
   const isInstructorContext = instructorMembership?.role === 'INSTRUCTOR'
   const isAssignedInstructor = instructorMembership?.role === 'INSTRUCTOR'
     && classSession?.coachId === appSession?.user.id
-  const canTakeAttendance = Boolean(isAssignedInstructor && classSession && ['SCHEDULED', 'COMPLETED'].includes(classSession.status))
+  const canTakeAttendance = Boolean(
+    isAssignedInstructor
+    && classSession
+    && ['SCHEDULED', 'COMPLETED'].includes(classSession.status)
+    && new Date(classSession.startTime).getTime() < Date.now(),
+  )
   const canClaimSession = Boolean(
     isInstructorContext
     && classSession
@@ -387,8 +392,9 @@ export default function ClassSessionPage() {
       loadData={async (state) => {
         const rows = await getClassBookingsRequest(resolvedLocationId, sessionId)
         const classPassCount = rows.filter((booking) => booking.source === 'CLASSPASS').length
-        const directCount = rows.length - classPassCount
-        const summary = [classPassCount ? `${classPassCount} ClassPass` : '', directCount ? `${directCount} Direct` : ''].filter(Boolean).join(' · ')
+        const egymCount = rows.filter((booking) => booking.source === 'EGYM').length
+        const directCount = rows.length - classPassCount - egymCount
+        const summary = [classPassCount ? `${classPassCount} ClassPass` : '', egymCount ? `${egymCount} EGYM` : '', directCount ? `${directCount} Direct` : ''].filter(Boolean).join(' · ')
         setBookingSourceSummary((current) => current === summary ? current : summary)
         const { pageIndex, pageSize } = state.pagination
         return { items: rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: rows.length, pageCount: Math.ceil(rows.length / pageSize) }

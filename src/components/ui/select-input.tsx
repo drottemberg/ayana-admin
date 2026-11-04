@@ -70,6 +70,7 @@ type SelectInputProps = {
   name?: string
   autoComplete?: string
   value?: SelectInputValue
+  selectedValueLabel?: string
   defaultValue?: SelectInputValue
   required?: boolean
   disabled?: boolean
@@ -269,6 +270,7 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
       id,
       autoComplete,
       value,
+      selectedValueLabel,
       defaultValue = '',
       required,
       disabled,
@@ -301,7 +303,7 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
     const [internalValue, setInternalValue] = React.useState(defaultValue)
     const currentValue = isControlled ? value : internalValue
     const selectedItem = normalizedItems.find((item) => item.value === currentValue) ?? null
-    const selectedLabel = findItemLabel(normalizedItems, currentValue)
+    const selectedLabel = selectedValueLabel ?? findItemLabel(normalizedItems, currentValue)
     const areItemsEqual = React.useCallback(
       (item: SelectInputItem, selected: SelectInputItem) => item.value === selected.value,
       [],
@@ -404,7 +406,7 @@ const SelectInput = React.forwardRef<HTMLInputElement, SelectInputProps>(
           readOnly={readOnly}
           items={normalizedItems}
           filter={searchable ? filterItem : null}
-          itemToStringLabel={(item) => getItemLabel(item.value)}
+          itemToStringLabel={(item) => item.value === currentValue ? selectedLabel : getItemLabel(item.value)}
           itemToStringValue={(item) => getValueText(item.value)}
           isItemEqualToValue={areItemsEqual}
           onInputValueChange={handleInputValueChange}

@@ -7,11 +7,9 @@ import { toast } from 'sonner'
 
 import {
   activateUserRequest,
-  archiveUserRequest,
   deactivateUserRequest,
   deleteUserRequest,
   resetUserPasswordRequest,
-  unarchiveUserRequest,
 } from '@/features/users/api'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { queryClient } from '@/lib/query-client'
@@ -46,7 +44,6 @@ export const CustomerRoleLabel: Record<CustomerRole, string> = {
 export const UserStatusLabel: Record<UserStatus, string> = {
   [UserStatus.ACTIVE]: 'Active',
   [UserStatus.DISABLED]: 'Disabled',
-  [UserStatus.ARCHIVED]: 'Archived',
   [UserStatus.DELETED]: 'Deleted',
 }
 
@@ -83,14 +80,10 @@ export const UserService = {
     return UserStatusLabel[status] ?? status
   },
 
-  // Backend now sends `status` directly (UserEntity.getStatus()) — trust it when present.
-  // Precedence for the client-side fallback: deleted > archived > active/disabled (a user can
-  // be all three flags at once — disabled, then archived, then deleted — only the most
-  // terminal one should show).
+  // Backend sends the computed status; use flags as a fallback for older responses.
   getUserStatus(user: User): UserStatus {
     if (user.status) return user.status
     if (user.isDeleted) return UserStatus.DELETED
-    if (user.isArchived) return UserStatus.ARCHIVED
     return user.isActive ? UserStatus.ACTIVE : UserStatus.DISABLED
   },
 
@@ -112,15 +105,6 @@ export const UserService = {
 
     await Promise.all(
       users.map((user) => (isActive ? activateUserRequest(String(user.id)) : deactivateUserRequest(String(user.id)))),
-    )
-    await queryClient.invalidateQueries({ queryKey: usersQueryKeys.all })
-  },
-
-  async setArchived(users: User[], isArchived: boolean) {
-    if (!users.length) return
-
-    await Promise.all(
-      users.map((user) => (isArchived ? archiveUserRequest(String(user.id)) : unarchiveUserRequest(String(user.id)))),
     )
     await queryClient.invalidateQueries({ queryKey: usersQueryKeys.all })
   },
@@ -154,14 +138,6 @@ export const UserService = {
         user.isActive
           ? { label: 'Disable', onClick: () => void this.setActive([user], false) }
           : { label: 'Enable', onClick: () => void this.setActive([user], true) },
-      )
-    }
-
-    if (permissions?.archive) {
-      actions.push(
-        user.isArchived
-          ? { label: 'Unarchive', onClick: () => void this.setArchived([user], false) }
-          : { label: 'Archive', onClick: () => void this.setArchived([user], true) },
       )
     }
 

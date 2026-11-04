@@ -39,8 +39,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
-      await login(values.email, values.password)
-      navigate('/app')
+      const mustChangePassword = await login(values.email, values.password)
+      navigate(mustChangePassword ? '/change-password' : '/app')
     } catch (error) {
       setError('root', {
         message: error instanceof Error ? error.message : 'Unable to login. Please try again.',

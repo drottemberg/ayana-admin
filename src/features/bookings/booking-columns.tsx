@@ -6,7 +6,7 @@ import type { Booking } from '@/types/booking'
 export function getBookingColumns(options: { showUser?: boolean; showCustomer?: boolean; showLocation?: boolean } = {}): ColumnDef<Booking>[] {
   return [
     { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant="outline">{row.original.status.replaceAll('_', ' ')}</Badge> },
-    { accessorKey: 'source', header: 'Source', cell: ({ row }) => <Badge variant="outline">{row.original.source === 'CLASSPASS' ? 'ClassPass' : 'Direct'}</Badge> },
+    { accessorKey: 'source', header: 'Source', cell: ({ row }) => <Badge variant="outline">{row.original.source === 'CLASSPASS' ? 'ClassPass' : row.original.source === 'EGYM' ? 'EGYM Wellpass' : 'Direct'}</Badge> },
     { accessorKey: 'isFreeTrial', header: 'Trial', cell: ({ row }) => row.original.isFreeTrial ? <Badge variant="outline">Free trial</Badge> : '—' },
     {
       id: 'booking', header: 'Booking',

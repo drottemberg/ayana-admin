@@ -92,6 +92,16 @@ export async function updateMyCoachProfileRequest(customerId: string, payload: {
   return apiClient.patch<CoachProfile>('/coaches/me/profile', payload, customerHeaders(customerId))
 }
 
+export async function uploadMyCoachProfileImageRequest(customerId: string, file: File): Promise<CoachProfile> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<CoachProfile>('/coaches/me/profile/image', form, customerHeaders(customerId))
+}
+
+export async function removeMyCoachProfileImageRequest(customerId: string): Promise<CoachProfile> {
+  return apiClient.delete<CoachProfile>('/coaches/me/profile/image', undefined, customerHeaders(customerId))
+}
+
 export async function getCoachCandidatesRequest(customerId: string): Promise<CoachCandidate[]> {
   return apiClient.get<CoachCandidate[]>('/coaches/candidates', customerHeaders(customerId))
 }
@@ -124,6 +134,16 @@ export async function updateCoachProfileRequest(customerId: string, userId: stri
   classTypeIds?: string[]
 }) {
   return apiClient.patch<CoachProfile>(`/coaches/${encodeURIComponent(userId)}`, payload, customerHeaders(customerId))
+}
+
+export async function uploadCoachProfileImageRequest(customerId: string, userId: string, file: File): Promise<CoachProfile> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post<CoachProfile>(`/coaches/${encodeURIComponent(userId)}/image`, form, customerHeaders(customerId))
+}
+
+export async function removeCoachProfileImageRequest(customerId: string, userId: string): Promise<CoachProfile> {
+  return apiClient.delete<CoachProfile>(`/coaches/${encodeURIComponent(userId)}/image`, undefined, customerHeaders(customerId))
 }
 
 export async function deleteCoachProfileRequest(customerId: string, userId: string) {

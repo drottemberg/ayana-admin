@@ -29,6 +29,8 @@ export function IntegrationEditDrawer({
   const [provider, setProvider] = useState<CustomerIntegrationInput['provider']>('CLASSPASS')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [apiKey, setApiKey] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -37,29 +39,35 @@ export function IntegrationEditDrawer({
     setProvider(integration?.provider ?? 'CLASSPASS')
     setUsername(integration?.username ?? '')
     setPassword('')
+    setBaseUrl(integration?.baseUrl ?? '')
+    setApiKey('')
     setFormError(null)
   }, [integration?.id, open])
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!username.trim() || (!integration && !password.trim())) {
+    if (provider === 'CLASSPASS' && (!username.trim() || (!integration && !password.trim()))) {
       setFormError('Enter the ClassPass username and password.')
+      return
+    }
+    if (provider === 'EGYM' && (!baseUrl.trim() || (!integration && !apiKey.trim()))) {
+      setFormError('Enter the EGYM base URL and API key.')
       return
     }
     setFormError(null)
     const input: CustomerIntegrationInput = {
       provider,
-      username: username.trim(),
-      ...(password.trim() ? { password } : {}),
+      ...(provider === 'CLASSPASS' ? { username: username.trim(), ...(password.trim() ? { password } : {}) } : {}),
+      ...(provider === 'EGYM' ? { baseUrl: baseUrl.trim(), ...(apiKey.trim() ? { apiKey } : {}) } : {}),
     }
     setSaving(true)
     try {
       if (integration) await updateIntegrationRequest(customerId, integration.id, input)
       else await createIntegrationRequest(customerId, input)
-      toast.success('ClassPass credentials verified and saved.')
+      toast.success(`${provider === 'EGYM' ? 'EGYM' : 'ClassPass'} credentials verified and saved.`)
       onSaved()
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Could not verify ClassPass credentials.')
+      setFormError(error instanceof Error ? error.message : 'Could not verify integration credentials.')
     } finally {
       setSaving(false)
     }
@@ -82,7 +90,7 @@ export function IntegrationEditDrawer({
               onValueChange={(value) => setProvider(String(value) as CustomerIntegrationInput['provider'])}
               items={[
                 { value: 'CLASSPASS', label: 'ClassPass' },
-                { value: 'EGYM', label: 'EGYM · coming soon', disabled: true },
+                { value: 'EGYM', label: 'EGYM Wellpass' },
                 { value: 'LASTSPOT', label: 'LastSpot · coming soon', disabled: true },
               ]}
               disabled={Boolean(integration)}
@@ -101,6 +109,22 @@ export function IntegrationEditDrawer({
                 <label className="grid gap-1.5 text-sm font-medium">
                   Password {integration && integration.hasPassword ? <span className="font-normal text-muted-foreground">(saved; leave blank to keep it)</span> : null}
                   <Input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setFormError(null) }} autoComplete={integration ? 'new-password' : 'current-password'} required={!integration} />
+                </label>
+              </div>
+            ) : null}
+            {provider === 'EGYM' ? (
+              <div className="space-y-5 rounded-lg border border-border p-4">
+                <div>
+                  <h3 className="text-sm font-semibold">EGYM Wellpass credentials</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">The API key is encrypted before storage. We verify it before saving.</p>
+                </div>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Base URL
+                  <Input type="url" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setFormError(null) }} placeholder="https://…" required />
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  API key {integration?.hasApiKey ? <span className="font-normal text-muted-foreground">(saved; leave blank to keep it)</span> : null}
+                  <Input type="password" value={apiKey} onChange={(event) => { setApiKey(event.target.value); setFormError(null) }} autoComplete="new-password" required={!integration} />
                 </label>
               </div>
             ) : null}

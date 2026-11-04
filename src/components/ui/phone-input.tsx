@@ -22,6 +22,9 @@ type PhoneInputProps = {
   disabled?: boolean
   required?: boolean
   nativeCountrySelector?: boolean
+  compactCountrySelector?: boolean
+  defaultCountry?: CountryCode
+  controlLayout?: 'default' | 'wide-number'
   onValueChange?: (value: string) => void
   onBlur?: () => void
 }
@@ -93,15 +96,22 @@ function getDisplayParts(value: string, fallbackCountry: CountryCode) {
 }
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
-  ({ id, name, label, value = '', placeholder = 'Phone number', error, disabled, required, nativeCountrySelector, onValueChange, onBlur }, ref) => {
+  ({ id, name, label, value = '', placeholder = 'Phone number', error, disabled, required, nativeCountrySelector, compactCountrySelector, defaultCountry, controlLayout = 'default', onValueChange, onBlur }, ref) => {
     const inputId = id ?? React.useId()
-    const browserCountry = React.useMemo(getBrowserCountry, [])
+    const browserCountry = React.useMemo(
+      () => defaultCountry && isPhoneCountryCode(defaultCountry) ? defaultCountry : getBrowserCountry(),
+      [defaultCountry],
+    )
     const locale = typeof navigator === 'undefined' ? 'en' : navigator.language
     const items = React.useMemo(() => getPhoneCountryItems(locale), [locale])
     const [country, setCountry] = React.useState<CountryCode>(() => {
       const current = getDisplayParts(String(value ?? ''), browserCountry)
       return current.country
     })
+    const selectedCountryLabel = items.find((item) => item.value === country)?.label
+    const compactSelectedCountryLabel = typeof selectedCountryLabel === 'string'
+      ? selectedCountryLabel.split(' · ')[0]
+      : ''
     const [nationalNumber, setNationalNumber] = React.useState(() =>
       getDisplayParts(String(value ?? ''), browserCountry).nationalNumber,
     )
@@ -134,11 +144,20 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
             {label}
           </FieldLabel>
         ) : null}
-        <div className="flex min-w-0 gap-2">
-          {nativeCountrySelector ? (
+        <div
+          className="flex min-w-0 gap-2"
+          style={controlLayout === 'wide-number' ? {
+            display: 'grid',
+            gridTemplateColumns: 'minmax(105px, 0.4fr) minmax(0, 0.6fr)',
+            width: '100%',
+            minWidth: 0,
+          } : undefined}
+        >
+          {nativeCountrySelector && !compactCountrySelector ? (
             <select
               aria-label="Country calling code"
               value={country}
+              style={controlLayout === 'wide-number' ? { width: '100%', minWidth: 0 } : undefined}
               disabled={disabled}
               onChange={(event) => {
                 const nextCountry = event.target.value.toUpperCase()
@@ -156,10 +175,11 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
           ) : (
             <SelectInput
               aria-label="Country calling code"
-              containerClassName="w-[170px] shrink-0"
-              className="h-9"
+              containerClassName={controlLayout === 'wide-number' ? 'min-w-0 w-full' : 'w-[170px] shrink-0'}
+              className={controlLayout === 'wide-number' ? 'h-12 min-w-0 w-full' : 'h-9'}
               items={items}
               value={country}
+              selectedValueLabel={compactCountrySelector ? compactSelectedCountryLabel : undefined}
               searchable
               disabled={disabled}
               onValueChange={(selectedCountry) => {
@@ -177,6 +197,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
             id={inputId}
             name={name}
             type="tel"
+            style={controlLayout === 'wide-number' ? { width: '100%', minWidth: 0 } : undefined}
             inputMode="tel"
             autoComplete="tel-national"
             placeholder={placeholder}

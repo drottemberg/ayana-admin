@@ -39,6 +39,20 @@ export async function getClassCategoryOptions(search: string, page = 1) {
   }
 }
 
+export async function getClassFilterOptionsRequest(search: string, page = 1) {
+  const result = await apiClient.post<ApiListResult<ClassType>>(CLASS_TYPES_LIST_URL, {
+    search: search.trim() || undefined,
+    page,
+    limit: 20,
+    orderBy: 'name',
+    order: 'asc',
+  })
+  return {
+    items: result.items.map((classType) => ({ id: classType.id, label: classType.name })),
+    total: result.total,
+  }
+}
+
 export type UpdateClassTypePayload = {
   name: string
   category?: string
@@ -129,13 +143,20 @@ export async function getClassSessionsRequest(
   tableState: DataTableState<ClassSession>,
   filters?: Record<string, unknown>,
 ): Promise<DataTableAsyncResult<ClassSession>> {
+  const { classTypeId, ...tableFilters } = tableState.filters
+  const requestState = { ...tableState, filters: tableFilters }
   const { from, to, ...queryFilters } = filters ?? {}
   const payload = {
-    ...classSessionsListConfig.toPayload(tableState, queryFilters),
+    ...classSessionsListConfig.toPayload(requestState, queryFilters),
     ...(typeof from === 'string' ? { from } : {}),
     ...(typeof to === 'string' ? { to } : {}),
   }
-  const result = await apiClient.post<ApiListResult<ClassSession>>('/class-sessions/list', payload)
+  const selectedClasses = classTypeId?.filter(Boolean) ?? []
+  const result = await apiClient.post<ApiListResult<ClassSession>>('/class-sessions/list', {
+    ...payload,
+    ...(selectedClasses.length === 1 ? { classTypeId: selectedClasses[0] } : {}),
+    ...(selectedClasses.length > 1 ? { filters: { ...payload.filters, classTypeId: selectedClasses } } : {}),
+  })
   return toDataTableResult(result)
 }
 

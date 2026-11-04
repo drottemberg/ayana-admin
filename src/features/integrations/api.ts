@@ -8,7 +8,9 @@ export type CustomerIntegration = Record<string, unknown> & {
   provider: IntegrationProvider
   name: string
   username: string | null
+  baseUrl?: string | null
   hasPassword: boolean
+  hasApiKey?: boolean
   isEnabled: boolean
   isDeleted: boolean
   setupCompletedAt: string | null
@@ -22,8 +24,10 @@ export type CustomerIntegration = Record<string, unknown> & {
 }
 export type CustomerIntegrationInput = {
   provider: IntegrationProvider
-  username: string
+  username?: string
   password?: string
+  baseUrl?: string
+  apiKey?: string
 }
 export type ExternalVenue = { id: string; name: string }
 export type ExternalClass = { id: string; name: string }
@@ -39,9 +43,11 @@ export type IntegrationSetup = {
     locationId: string
     externalVenueId: string
     externalVenueName: string
+    metadata?: { referencePrice?: number; allowedClassTypeIds?: string[] } | null
     location: { id: string; name: string }
     classMappings: Array<{ id: string; externalClassId: string; externalClassName: string; classTypeId: string; classType: { id: string; name: string } }>
   }>
+  locations?: Array<{ id: string; name: string; classes: Array<{ id: string; name: string }> }>
 }
 export type SyncPreview = {
   applied: boolean
@@ -90,6 +96,9 @@ export function saveIntegrationVenuesRequest(customerId: string, integrationId: 
 }
 export function saveIntegrationClassesRequest(customerId: string, integrationId: string, classes: Array<{ venueMappingId: string; externalClassId: string; classTypeId: string }>) {
   return apiClient.post<IntegrationSetup>(route(customerId, integrationId, '/setup/classes'), { classes })
+}
+export function saveEgymLocationMappingsRequest(customerId: string, integrationId: string, locations: Array<{ locationId: string; clubId: string; referencePrice: number; allowedClassTypeIds: string[] }>) {
+  return apiClient.post<IntegrationSetup>(route(customerId, integrationId, '/egym/setup/locations'), { locations })
 }
 export function previewIntegrationSyncRequest(customerId: string, integrationId: string, fullHistory = false) {
   return apiClient.post<SyncPreview>(route(customerId, integrationId, '/setup/sync/preview'), { fullHistory })
@@ -144,7 +153,7 @@ export async function loadIntegrationRows(customerId: string, state: DataTableSt
   const terms = state.search.trim().toLocaleLowerCase()
   const statuses = state.filters.isEnabled ?? []
   const filtered = all.filter((item) => {
-    const matchesSearch = !terms || [item.name, item.provider, item.username].some((value) => value?.toLocaleLowerCase().includes(terms))
+    const matchesSearch = !terms || [item.name, item.provider, item.username, item.baseUrl].some((value) => value?.toLocaleLowerCase().includes(terms))
     const status = item.isEnabled ? 'Enabled' : 'Disabled'
     return matchesSearch && (!statuses.length || statuses.includes(status))
   })

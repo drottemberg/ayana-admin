@@ -109,7 +109,7 @@ export function getClassBookingColumns(options: {
   const sourceColumn: ColumnDef<ClassBooking> = {
     accessorKey: 'source',
     header: 'Source',
-    cell: ({ row }) => <Badge variant="outline">{row.original.source === 'CLASSPASS' ? 'ClassPass' : 'Direct'}</Badge>,
+    cell: ({ row }) => <Badge variant="outline">{row.original.source === 'CLASSPASS' ? 'ClassPass' : row.original.source === 'EGYM' ? 'EGYM Wellpass' : 'Direct'}</Badge>,
   }
   const trialColumn: ColumnDef<ClassBooking> = {
     accessorKey: 'isFreeTrial',

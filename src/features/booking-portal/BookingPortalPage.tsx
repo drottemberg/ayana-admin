@@ -28,6 +28,7 @@ type ClassSession = {
   bookedCount: number
   availableSpots: number
   isWaitlist: boolean
+  egymAvailable?: boolean
 }
 
 type ClassProductOffer = {
@@ -71,6 +72,8 @@ type MemberState = {
 }
 
 type BookingResult = { bookingId: string; status: 'CONFIRMED' | 'WAITLISTED'; creditBalance: number; shortMessage: string; relatedProducts?: ClassProductOffer[] }
+type EgymBookingResult = { bookingId: string; status: 'CONFIRMED'; sessionToken?: string }
+type EgymMemberPayload = Partial<MemberState> & { message?: string | string[] }
 type PricingOffer = {
   id: string
   name: string
@@ -201,6 +204,9 @@ function BookingPortalRoute() {
   const [selected, setSelected] = useState<ClassSession | null>(null)
   const [selectedAction, setSelectedAction] = useState<'book' | 'cancel'>('book')
   const [bookingError, setBookingError] = useState('')
+  const [egymCode, setEgymCode] = useState('')
+  const [egymEmail, setEgymEmail] = useState('')
+  const [egymPanelOpen, setEgymPanelOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [sessionFilter, setSessionFilter] = useState<'all' | 'booked'>(() => searchParams.get('filter') === 'booked' ? 'booked' : 'all')
   const [classFilter, setClassFilter] = useState(() => searchParams.get('class') ?? 'all')
@@ -661,6 +667,9 @@ function BookingPortalRoute() {
 
   const openBooking = (session: ClassSession) => {
     setBookingError('')
+    setEgymCode('')
+    setEgymEmail(member?.identity.email ?? guestEmail)
+    setEgymPanelOpen(false)
     setBookingUpsell(null)
     setForcedOfferFlow(false)
     setSelectedAction('book')
@@ -670,6 +679,7 @@ function BookingPortalRoute() {
 
   const openCancellation = async (session: ClassSession, bookingId: string) => {
     if (!member) return
+    setEgymPanelOpen(false)
     setBookingUpsell(null)
     setSelected(session)
     setSelectedAction('cancel')
@@ -811,6 +821,92 @@ function BookingPortalRoute() {
       const message = reason instanceof Error ? reason.message : (isFrench ? 'La réservation a échoué. Réessaie.' : 'Booking failed. Please try again.')
       setBookingError(message)
       if (/credit|crédit|balance/i.test(message)) setForcedOfferFlow(true)
+    } finally { setSubmitting(false) }
+  }
+
+  const confirmEgymBooking = async () => {
+    if (!selected || selectedAction !== 'book' || !selected.egymAvailable || selected.isWaitlist || submitting) return
+    const email = member?.identity.email?.trim() || (member ? egymEmail.trim() : guestEmail.trim())
+    if (!egymCode.trim()) {
+      setBookingError(isFrench ? 'Saisis ton code Wellpass.' : 'Enter your Wellpass code.')
+      return
+    }
+    if (!email) {
+      setBookingError(isFrench ? 'Saisis l’adresse e-mail de ton compte Wellpass.' : 'Enter the email address for your Wellpass account.')
+      return
+    }
+    if (!member && (!guestFirstName.trim() || !guestLastName.trim() || !guestPhone.trim() || validatePhone(guestPhone))) {
+      setBookingError(isFrench ? 'Renseigne ton prénom, ton nom et un numéro de téléphone valide.' : 'Enter your first name, last name and a valid phone number.')
+      return
+    }
+    if (member && !member.identity.firstName?.trim() && !firstNameDraft.trim()) {
+      setBookingError(isFrench ? 'Indique ton prénom avant de réserver ce cours.' : 'Enter your first name before booking this class.')
+      return
+    }
+
+    const payload = {
+      sessionId: selected.id,
+      code: egymCode.trim(),
+      email,
+      language,
+      ...(member
+        ? (!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {})
+        : { firstName: guestFirstName.trim(), lastName: guestLastName.trim(), phone: guestPhone.trim() }),
+    }
+    const endpoint = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/bookings/egym`
+    setSubmitting(true)
+    setBookingError('')
+    try {
+      const headers = { 'content-type': 'application/json', ...(member?.token ? { authorization: `Bearer ${member.token}` } : {}) }
+      const validateResponse = await fetch(`${endpoint}/validate`, { method: 'POST', headers, body: JSON.stringify(payload) })
+      const validatePayload = await validateResponse.json().catch(() => ({})) as { message?: string | string[] }
+      if (!validateResponse.ok) throw new Error(responseMessage(validatePayload, isFrench ? 'Le code Wellpass n’a pas pu être vérifié.' : 'Could not verify the Wellpass code.'))
+
+      const response = await fetch(`${endpoint}/confirm`, { method: 'POST', headers, body: JSON.stringify(payload) })
+      const result = await response.json().catch(() => ({})) as EgymBookingResult & { message?: string | string[] }
+      if (!response.ok) throw new Error(responseMessage(result, isFrench ? 'La réservation Wellpass n’a pas pu être confirmée.' : 'The Wellpass booking could not be confirmed.'))
+
+      const sessionToken = result.sessionToken || member?.token
+      if (sessionToken) {
+        const memberResponse = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/me`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${sessionToken}` },
+        })
+        const memberPayload = await memberResponse.json().catch(() => ({})) as EgymMemberPayload
+        if (memberResponse.ok && memberPayload.identity && typeof memberPayload.creditBalance === 'number') {
+          const nextMember = {
+            ...memberPayload,
+            token: sessionToken,
+            hasUnlimitedContract: memberPayload.hasUnlimitedContract === true,
+            bookedSessionIds: memberPayload.bookedSessionIds ?? [],
+            bookings: memberPayload.bookings ?? [],
+          } as MemberState
+          setMember(nextMember)
+          setFirstNameDraft(nextMember.identity.firstName ?? '')
+          setLastNameDraft(nextMember.identity.lastName ?? '')
+          setMemberPhoneDraft(nextMember.identity.phone ?? '')
+          localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
+        }
+      }
+
+      if (!member && sessionToken) {
+        saveGuestDraft(customerSlug, locationSlug, { firstName: guestFirstName, lastName: guestLastName, phone: guestPhone, email })
+      }
+      setSchedule((current) => current ? {
+        ...current,
+        sessions: current.sessions.map((session) => session.id === selected.id ? {
+          ...session,
+          bookedCount: Math.min(session.capacity, session.bookedCount + 1),
+          availableSpots: Math.max(0, session.availableSpots - 1),
+          isWaitlist: session.bookedCount + 1 >= session.capacity,
+        } : session),
+      } : current)
+      setNotice(isFrench ? 'Réservation Wellpass confirmée. La confirmation a été envoyée sur tes canaux liés.' : 'Wellpass booking confirmed. A confirmation was sent to your linked channels.')
+      setSelected(null)
+      setEgymPanelOpen(false)
+      setEgymCode('')
+    } catch (reason) {
+      setBookingError(reason instanceof Error ? reason.message : (isFrench ? 'La réservation Wellpass n’a pas pu être confirmée.' : 'The Wellpass booking could not be confirmed.'))
     } finally { setSubmitting(false) }
   }
 
@@ -1109,6 +1205,23 @@ function BookingPortalRoute() {
           {offersError && <div className="booking-error" role="alert">{offersError}</div>}
         </div>
         : <p className="booking-confirm-hint">{isFrench ? 'Ta réservation sera confirmée après validation.' : 'Your booking will be confirmed after you submit.'}</p>}
+      {!bookingUpsell && selectedAction === 'book' && selected.egymAvailable && !selected.isWaitlist && <section className="booking-egym-section">
+        <button type="button" className="booking-egym-action" aria-expanded={egymPanelOpen} onClick={() => {
+          setEgymPanelOpen((open) => !open)
+          setEgymEmail(member?.identity.email ?? guestEmail)
+          setBookingError('')
+        }}>{egymPanelOpen ? (isFrench ? 'Fermer Wellpass' : 'Close Wellpass') : (isFrench ? 'Réserver avec Wellpass' : 'Reserve with Wellpass')}<span>{egymPanelOpen ? '−' : '→'}</span></button>
+        {egymPanelOpen && <div className="booking-egym-fields">
+          <label className="booking-first-name"><span>{isFrench ? 'Code Wellpass' : 'Wellpass code'}</span><input autoComplete="off" required value={egymCode} onChange={(event) => setEgymCode(event.target.value)} placeholder={isFrench ? 'Saisis ton code' : 'Enter your code'} /></label>
+          {!member && <>
+            <label className="booking-first-name"><span>{isFrench ? 'Prénom' : 'First name'}</span><input autoComplete="given-name" required maxLength={80} value={guestFirstName} onChange={(event) => updateGuestDraft('firstName', event.target.value)} /></label>
+            <label className="booking-first-name"><span>{isFrench ? 'Nom' : 'Last name'}</span><input autoComplete="family-name" required maxLength={80} value={guestLastName} onChange={(event) => updateGuestDraft('lastName', event.target.value)} /></label>
+            <PhoneInput label={isFrench ? 'Téléphone' : 'Phone number'} value={guestPhone} placeholder={isFrench ? 'Numéro de téléphone' : 'Phone number'} required compactCountrySelector defaultCountry={isFrench ? 'FR' : undefined} controlLayout="wide-number" onValueChange={(value) => updateGuestDraft('phone', value)} />
+          </>}
+          {(!member || !member.identity.email?.trim()) && <label className="booking-first-name"><span>{isFrench ? 'E-mail' : 'Email'}</span><input type="email" autoComplete="email" required maxLength={254} value={member ? egymEmail : guestEmail} onChange={(event) => member ? setEgymEmail(event.target.value) : updateGuestDraft('email', event.target.value)} placeholder={isFrench ? 'adresse@exemple.com' : 'name@example.com'} /></label>}
+          <button type="button" className="booking-egym-submit" disabled={submitting} onClick={() => void confirmEgymBooking()}>{submitting ? (isFrench ? 'Vérification…' : 'Checking…') : (isFrench ? 'Confirmer avec Wellpass' : 'Confirm with Wellpass')}<span>→</span></button>
+        </div>}
+      </section>}
       {bookingError && <div className="booking-error" role="alert">{bookingError}</div>}
       <div className={`booking-sheet-actions${bookingUpsell ? ' booking-sheet-actions-done' : ''}`}>{bookingUpsell ? <button type="button" className="booking-confirm" onClick={() => { setBookingUpsell(null); setSelected(null) }}>{isFrench ? 'Terminé' : 'Done'}</button> : <><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</>}</div>
     </section></div>}

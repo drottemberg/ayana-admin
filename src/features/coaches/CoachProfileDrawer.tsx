@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MultiselectInput, SelectInput } from '@/components/ui/select-input'
 import { Textarea } from '@/components/ui/textarea'
-import { createCoachProfileRequest, getCoachCandidatesRequest, getCustomerClassTypesRequest, updateCoachProfileRequest } from '@/features/coaches/api'
+import { createCoachProfileRequest, getCoachCandidatesRequest, getCustomerClassTypesRequest, removeCoachProfileImageRequest, updateCoachProfileRequest, uploadCoachProfileImageRequest } from '@/features/coaches/api'
 import { classTypesQueryKeys } from '@/features/classes/query-keys'
+import { CoachPhotoEditor } from '@/features/coaches/CoachPhotoEditor'
 import type { CoachProfile } from './types'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -39,6 +40,8 @@ export function CoachProfileDrawer({
   const [languages, setLanguages] = useState('')
   const [classTypeIds, setClassTypeIds] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const { data: candidates = [], isLoading: loadingCandidates } = useQuery({
     queryKey: ['coach-candidates', customerId],
     queryFn: () => getCoachCandidatesRequest(customerId),
@@ -66,6 +69,7 @@ export function CoachProfileDrawer({
     setSpecialties(profile?.specialties.join(', ') ?? '')
     setLanguages(profile?.languages.join(', ') ?? '')
     setClassTypeIds(profile?.classTypes.map((classType) => classType.id) ?? [])
+    setPhotoUrl(profile?.imageUrl ?? null)
   }, [open, profile, initialUserId])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -97,6 +101,38 @@ export function CoachProfileDrawer({
     }
   }
 
+  const uploadPhoto = async (file: File): Promise<boolean> => {
+    if (!profile) return false
+    setIsUploadingPhoto(true)
+    try {
+      const updated = await uploadCoachProfileImageRequest(customerId, profile.userId, file)
+      setPhotoUrl(updated.imageUrl ?? null)
+      await queryClient.invalidateQueries({ queryKey: ['coaches'] })
+      toast.success('Coach photo saved.')
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save the coach photo.')
+      return false
+    } finally {
+      setIsUploadingPhoto(false)
+    }
+  }
+
+  const removePhoto = async () => {
+    if (!profile) return
+    setIsUploadingPhoto(true)
+    try {
+      await removeCoachProfileImageRequest(customerId, profile.userId)
+      setPhotoUrl(null)
+      await queryClient.invalidateQueries({ queryKey: ['coaches'] })
+      toast.success('Coach photo removed.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not remove the coach photo.')
+    } finally {
+      setIsUploadingPhoto(false)
+    }
+  }
+
   return <AppDrawer
     open={open}
     onOpenChange={onOpenChange}
@@ -107,6 +143,7 @@ export function CoachProfileDrawer({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
         <Field label="Customer"><Input value={profile?.customerName || customerName || ''} readOnly /></Field>
         {profile ? <Field label="Coach"><Input value={profile.coachName || profile.email || ''} readOnly /></Field> : null}
+        {profile ? <CoachPhotoEditor imageUrl={photoUrl} uploading={isUploadingPhoto} disabled={isSaving} onUpload={uploadPhoto} onRemove={removePhoto} /> : null}
         {!profile && !initialUserId && (
           <Field label="Instructor user">
             <SelectInput

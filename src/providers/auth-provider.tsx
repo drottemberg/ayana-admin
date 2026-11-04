@@ -155,7 +155,8 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
       isLoading,
       isAuthenticated: !isLoading && Boolean(token && user),
       login: async (email, password) => {
-        await loginMutation.mutateAsync({ email, password })
+        const response = await loginMutation.mutateAsync({ email, password })
+        return response.mustChangePassword === true
       },
       signup: async (requestId, email, name, password) => {
         await signupMutation.mutateAsync({ requestId, email, name, password })
