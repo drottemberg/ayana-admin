@@ -153,7 +153,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
             minWidth: 0,
           } : undefined}
         >
-          {nativeCountrySelector && !compactCountrySelector ? (
+          {nativeCountrySelector || compactCountrySelector ? (
             <select
               aria-label="Country calling code"
               value={country}
@@ -168,9 +168,12 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
               }}
               onBlur={onBlur}
             >
-              {items.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
+              {items.map((item) => {
+                const selectedLabel = compactCountrySelector && item.value === country
+                  ? compactSelectedCountryLabel
+                  : item.label
+                return <option key={item.value} value={item.value}>{selectedLabel}</option>
+              })}
             </select>
           ) : (
             <SelectInput
