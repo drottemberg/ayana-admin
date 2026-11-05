@@ -7,7 +7,7 @@ import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getClassSessionColumns } from '@/features/classes/class-session-columns'
-import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, resumeClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
@@ -238,6 +238,20 @@ export default function ClassSessionsPage() {
                   toast.success(`Session cancelled. ${result.bookingCount} booking(s) cancelled; ${result.creditsReturned} credit(s) returned.`)
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : 'Could not cancel the class session.')
+                }
+              },
+            }] : []),
+            ...(canResumeSessions && item.status === 'CANCELLED' && new Date(item.startTime).getTime() > Date.now() ? [{
+              label: 'Reactivate session',
+              onClick: async () => {
+                const confirmed = await Modals.confirm({ operation: 'reactivate this class session' })
+                if (!confirmed) return
+                try {
+                  await reactivateClassSessionRequest(item.id, item.locationId ?? item.organizationId)
+                  await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
+                  toast.success('Session reactivated. Previous bookings remain cancelled.')
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Could not reactivate the session.')
                 }
               },
             }] : []),

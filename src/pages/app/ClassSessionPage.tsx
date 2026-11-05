@@ -15,7 +15,7 @@ import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBoo
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
-import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { useConnect } from '@/features/app/use-connect'
@@ -213,6 +213,23 @@ export default function ClassSessionPage() {
     }
   }
 
+  const reactivateSession = async () => {
+    if (!classSession) return
+    const confirmed = await Modals.confirm({ operation: 'reactivate this class session' })
+    if (!confirmed) return
+    try {
+      await reactivateClassSessionRequest(classSession.id, resolvedLocationId)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.detail(sessionId) }),
+        queryClient.invalidateQueries({ queryKey: [...classSessionsQueryKeys.detail(sessionId), 'bookings'] }),
+      ])
+      toast.success('Session reactivated. Previous bookings remain cancelled.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not reactivate the session.')
+    }
+  }
+
   const refreshClassPassScheduleRows = async () => {
     const detailKey = classSessionsQueryKeys.detail(sessionId)
     await queryClient.invalidateQueries({ queryKey: detailKey, exact: true })
@@ -363,11 +380,15 @@ export default function ClassSessionPage() {
       title: classSession?.className ?? 'Class session',
       subtitle: formatDate(classSession?.startTime, classSession?.timezone),
       backTo: '/class-sessions',
-      primaryAction: classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
-        ? { children: 'Resume session', onClick: resumeSession }
-        : classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
-          ? { children: 'Edit session', onClick: () => setIsEditOpen(true) }
-        : undefined,
+      primaryAction: classSession?.status === 'CANCELLED'
+        && new Date(classSession.startTime).getTime() > Date.now()
+        && appSession?.permissions.classSessions?.edit
+        ? { children: 'Reactivate session', onClick: reactivateSession }
+        : classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
+          ? { children: 'Resume session', onClick: resumeSession }
+          : classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
+            ? { children: 'Edit session', onClick: () => setIsEditOpen(true) }
+            : undefined,
       secondaryAction: (classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
         ? { children: 'Cancel session', variant: 'destructive', onClick: cancelSession }
         : undefined,

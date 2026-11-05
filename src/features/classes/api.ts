@@ -131,6 +131,12 @@ export async function resumeClassSessionRequest(id: string, locationId: string) 
   })
 }
 
+export async function reactivateClassSessionRequest(id: string, locationId: string) {
+  return apiClient.patch<ClassSession>(`/class-sessions/${encodeURIComponent(id)}/reactivate`, {}, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
 export async function cancelClassSessionRequest(id: string, locationId: string, reason?: string) {
   return apiClient.patch<{ sessionId: string; status: 'CANCELLED'; bookingCount: number; emailsAttempted: number; creditsReturned: number }>(
     `/bookings/session/${encodeURIComponent(id)}/cancel`,
