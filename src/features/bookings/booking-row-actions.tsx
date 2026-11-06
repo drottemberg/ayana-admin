@@ -1,5 +1,6 @@
 import { createRef } from 'react'
 import { toast } from 'sonner'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Modals } from '@/providers/modal'
 import { BookingCancellationConfirmation } from './BookingCancellationConfirmation'
@@ -98,7 +99,7 @@ export function getBookingRowActions(input: {
 }): DropdownActionItem[] {
   const commands: DropdownActionItem[] = []
   if (input.canEdit && ['CONFIRMED', 'WAITLISTED'].includes(input.status)) {
-    commands.push({ label: 'Cancel booking…', variant: 'destructive', onClick: input.onCancel })
+    commands.push({ label: 'Cancel booking…', icon: Cancel01Icon, variant: 'destructive', onClick: input.onCancel })
   }
   if (input.canCreate && ['CANCELLED', 'LATE_CANCELLED'].includes(input.status)) {
     commands.push({ label: 'Re-add client', onClick: input.onRebook })
@@ -110,7 +111,7 @@ export function getBookingRowActions(input: {
       { label: 'Clear attendance', onClick: () => input.onSetAttendance(null) },
     )
     if (input.source === 'CLASSPASS') {
-      commands.push({ label: 'Cancel ClassPass reservation…', variant: 'destructive', onClick: input.onCancelClassPass })
+      commands.push({ label: 'Cancel ClassPass reservation…', icon: Cancel01Icon, variant: 'destructive', onClick: input.onCancelClassPass })
     }
   }
   return commands

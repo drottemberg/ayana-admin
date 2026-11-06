@@ -1,5 +1,5 @@
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { OrganizationService } from '@/features/organizations/organization-service'
 import { fetchStoreFilterOptions, getStoresRequest } from '@/features/stores/api'
 import { storeColumns } from '@/features/stores/store-columns'
@@ -25,10 +25,7 @@ export default function StoresPage() {
     <>
       <PageHeader
         title="Stores"
-        primaryAction={{
-          children: 'Create new store',
-          onClick: () => Drawer.show(DrawerId.CreateStore, {}),
-        }}
+        primaryAction={createPageHeaderAction('Create new store', () => Drawer.show(DrawerId.CreateStore, {}))}
       />
 
       <section className="p-4 md:p-6">

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { CreatePricingOptionDialog } from '@/features/pricing-options/CreatePricingOptionDialog'
 import { getPricingOptionsRequest } from '@/features/pricing-options/api'
 import { getPricingOptionColumns } from '@/features/pricing-options/pricing-option-columns'
@@ -44,7 +44,7 @@ export default function PricingOptionsPage() {
         title="Pricing options"
         subtitle="Manage pricing options across customers."
         primaryAction={session?.permissions.pricingOptions?.create
-          ? { children: 'Create pricing option', onClick: openCreate }
+          ? createPageHeaderAction('Create pricing option', openCreate)
           : undefined}
       />
 

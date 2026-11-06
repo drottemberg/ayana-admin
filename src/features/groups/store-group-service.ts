@@ -5,6 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { DataTableAsyncResult, DataTableCommand, DataTableState } from '@/components/data-table'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import type { PageHeaderProps } from '@/components/ui/page-header'
+import { createPageHeaderAction } from '@/components/ui/page-header'
 import { addStoresToGroupRequest, deleteStoreGroupRequest, removeStoreFromGroupRequest } from '@/features/groups/api'
 import { storeGroupsQueryKeys } from '@/features/groups/query-keys'
 import { getStoresRequest } from '@/features/stores/api'
@@ -75,10 +76,7 @@ export const StoreGroupService = {
 
   getListHeaderActions(): Pick<PageHeaderProps, 'primaryAction'> {
     return {
-      primaryAction: {
-        children: '+ Create Group',
-        onClick: () => this.showCreateDrawer(),
-      },
+      primaryAction: createPageHeaderAction('Create Group', () => this.showCreateDrawer()),
     }
   },
 

@@ -126,7 +126,7 @@ export default function StoreGroupPage() {
         icon={EntityIcon.stores}
         initialTotal={storeCount}
         action={{
-          label: 'Add stores',
+          label: 'Add stores', iconOnly: true,
           onClick: () =>
             void StoreGroupService.showAddStoresModal(
               groupId,

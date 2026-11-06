@@ -1,5 +1,5 @@
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { fetchLocationFilterOptions, getLocationsRequest } from '@/features/locations/api'
 import { locationColumns } from '@/features/locations/location-columns'
 import { LocationService } from '@/features/locations/location-service'
@@ -48,10 +48,7 @@ export default function LocationsPage() {
         title="Locations"
         primaryAction={
           canCreateLocation
-            ? {
-                children: 'Create new location',
-                onClick: () => Drawer.show(DrawerId.CreateLocation, { customerId }),
-              }
+            ? createPageHeaderAction('Create new location', () => Drawer.show(DrawerId.CreateLocation, { customerId }))
             : undefined
         }
       />

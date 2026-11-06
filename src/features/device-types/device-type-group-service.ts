@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import type { PageHeaderProps } from '@/components/ui/page-header'
+import { createPageHeaderAction } from '@/components/ui/page-header'
 import {
   archiveDeviceTypeGroupRequest,
   deleteDeviceTypeGroupRequest,
@@ -32,10 +33,7 @@ export const DeviceTypeGroupService = {
 
   getListHeaderActions(): Pick<PageHeaderProps, 'primaryAction' | 'secondaryAction' | 'options'> {
     return {
-      primaryAction: {
-        children: 'Add Device Type Group',
-        onClick: () => this.showCreateDrawer(),
-      },
+      primaryAction: createPageHeaderAction('Add Device Type Group', () => this.showCreateDrawer()),
     }
   },
 

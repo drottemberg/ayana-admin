@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { DataTableFilter, DataTableState } from '@/components/data-table'
 import { DataTableAsync } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Modals } from '@/providers/modal'
 import { toast } from 'sonner'
@@ -78,7 +78,7 @@ export default function IntegrationsPage() {
     <PageHeader
       title="Integrations"
       subtitle="Connect external booking services to your locations."
-      primaryAction={canCreate && customerId ? { children: 'Add integration', onClick: () => { setIntegration(null); setDrawerOpen(true) } } : undefined}
+      primaryAction={canCreate && customerId ? createPageHeaderAction('Add integration', () => { setIntegration(null); setDrawerOpen(true) }) : undefined}
     />
     <section className="space-y-4 p-4 md:p-6">
       <DataTableAsync

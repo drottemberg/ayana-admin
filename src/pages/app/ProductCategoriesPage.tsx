@@ -12,7 +12,7 @@ import DragDropHorizontalIcon from '@hugeicons/core-free-icons/DragDropHorizonta
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { DataTableAsync, type DataTableFilter, type DataTableState } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { getCustomerFilterOptionsRequest } from '@/features/customers/api'
 import { getLocationFilterOptionsRequest } from '@/features/locations/api'
 import { CatalogImageEditor } from '@/features/products/CatalogImageEditor'
@@ -191,7 +191,7 @@ export default function ProductCategoriesPage() {
         { key: 'products', label: 'Products', onClick: () => navigate('/products') },
         { key: 'categories', label: 'Categories', active: true },
       ]}
-      primaryAction={canEdit ? { children: 'Add category', onClick: () => setCreateOpen(true) } : undefined}
+      primaryAction={canEdit ? createPageHeaderAction('Add category', () => setCreateOpen(true)) : undefined}
       secondaryAction={canEdit ? { children: 'Reorder categories', onClick: openReorder } : undefined}
     />
 

@@ -57,7 +57,7 @@ export function CustomerIntegrationsModule({ customerId, canCreate, canEdit, can
       id="module-integrations"
       title="Integrations"
       icon={EntityIcon.devices}
-      action={canCreate ? { label: 'Add integration', onClick: openCreate } : undefined}
+      action={canCreate ? { label: 'Add integration', iconOnly: true, onClick: openCreate } : undefined}
       queryKey={['integrations', customerId]}
       loadData={loadData}
       tableKey="customers.detail.modules.integrations"

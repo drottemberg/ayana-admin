@@ -208,10 +208,10 @@ export function getClassBookingColumns(options: {
         <Badge
           variant="outline"
           className="shrink-0"
-          title={`Class visit number ${(row.original.classVisitCount ?? 0) + 1}`}
-          aria-label={`Class visit number ${(row.original.classVisitCount ?? 0) + 1}`}
+          title={`Studio visit number ${(row.original.studioVisitCount ?? 0) + 1}`}
+          aria-label={`Studio visit number ${(row.original.studioVisitCount ?? 0) + 1}`}
         >
-          {(row.original.classVisitCount ?? 0) + 1}
+          {(row.original.studioVisitCount ?? 0) + 1}
         </Badge>
       </div>
     },

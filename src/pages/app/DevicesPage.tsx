@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { DataTableAsync } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
 import { getAccessDeviceOrganization, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
@@ -28,10 +28,9 @@ export default function DevicesPage() {
     <>
       <PageHeader
         title="Devices"
-        primaryAction={portal === Portal.ADMIN || session?.permissions.devices?.create ? {
-          children: 'Add device',
-          onClick: () => setIsCreateDrawerOpen(true),
-        } : undefined}
+        primaryAction={portal === Portal.ADMIN || session?.permissions.devices?.create
+          ? createPageHeaderAction('Add device', () => setIsCreateDrawerOpen(true))
+          : undefined}
       />
 
       <AccessDeviceDrawer

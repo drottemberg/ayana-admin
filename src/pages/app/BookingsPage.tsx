@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getOrderLocationOptions } from '@/features/orders/api'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
@@ -45,7 +45,7 @@ export default function BookingsPage() {
     <PageHeader
       title="Bookings"
       subtitle="Class bookings across customers and locations."
-      primaryAction={canCreateBooking ? { children: 'Create manual booking', onClick: () => setCreateOpen(true) } : undefined}
+      primaryAction={canCreateBooking ? createPageHeaderAction('Create manual booking', () => setCreateOpen(true)) : undefined}
     />
     <section className="p-4 md:p-6">
       <DataTableAsync

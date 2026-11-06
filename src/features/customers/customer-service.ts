@@ -4,6 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { DataTableAsyncResult, DataTableCommand, DataTableState } from '@/components/data-table'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import type { PageHeaderProps } from '@/components/ui/page-header'
+import { createPageHeaderAction } from '@/components/ui/page-header'
 import { getDevicesRequest } from '@/features/devices/api'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
 import { OrganizationService } from '@/features/organizations/organization-service'
@@ -161,7 +162,7 @@ export const CustomerService = {
     return {
       primaryAction:
         !permissions || permissions.create
-          ? { children: 'Add Customer', onClick: () => this.showCreateDrawer() }
+          ? createPageHeaderAction('Add Customer', () => this.showCreateDrawer())
           : undefined,
     }
   },

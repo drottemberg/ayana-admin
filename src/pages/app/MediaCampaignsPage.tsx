@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { getMediaCampaignsRequest } from '@/features/media-campaigns/api'
 import { getMediaCampaignColumns } from '@/features/media-campaigns/media-campaign-columns'
 import { MediaCampaignService } from '@/features/media-campaigns/media-campaign-service'
@@ -14,10 +14,7 @@ export default function MediaCampaignsPage() {
     <>
       <PageHeader
         title="Media campaigns"
-        primaryAction={{
-          children: '+ Add Campaign',
-          onClick: () => MediaCampaignService.openCreateCampaign(),
-        }}
+        primaryAction={createPageHeaderAction('Add campaign', () => MediaCampaignService.openCreateCampaign())}
       />
       <section className="space-y-5 p-4 md:p-6">
         <MediaCampaignsList />

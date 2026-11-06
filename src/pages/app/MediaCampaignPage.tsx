@@ -170,7 +170,7 @@ export default function MediaCampaignPage() {
         id={`${MODULE_ANCHOR_PREFIX}-media`}
         title="Media"
         icon={EntityIcon.media}
-        action={{ label: 'Add media', onClick: () => void MediaCampaignService.addMedia(campaign) }}
+        action={{ label: 'Add media', iconOnly: true, onClick: () => void MediaCampaignService.addMedia(campaign) }}
         queryKey={[...mediaCampaignQueryKeys.detail(campaign.id), 'media']}
         loadData={(state: DataTableState<Media>) => getMediaCampaignMediaRequest(campaign.id, state)}
         tableKey="media-campaigns.detail.media"
@@ -184,7 +184,7 @@ export default function MediaCampaignPage() {
         id={`${MODULE_ANCHOR_PREFIX}-devices`}
         title="Devices"
         icon={EntityIcon.devices}
-        action={{ label: 'Add devices', onClick: () => void MediaCampaignService.addDevices(campaign) }}
+        action={{ label: 'Add devices', iconOnly: true, onClick: () => void MediaCampaignService.addDevices(campaign) }}
         queryKey={[...mediaCampaignQueryKeys.detail(campaign.id), 'devices']}
         loadData={(state: DataTableState<MediaCampaignDevice>) => getMediaCampaignDevicesRequest(campaign.id, state)}
         tableKey="media-campaigns.detail.devices"

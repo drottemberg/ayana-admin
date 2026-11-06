@@ -448,7 +448,7 @@ export default function CustomerPage() {
                 action={
                   canManageCustomer
                     ? {
-                        label: 'Add location',
+                        label: 'Add location', iconOnly: true,
                         onClick: () => Drawer.show(DrawerId.CreateLocation, { customerId: customer.id }),
                       }
                     : undefined
@@ -508,7 +508,7 @@ export default function CustomerPage() {
                 title="Pricing options"
                 icon={EntityIcon.pricingOptions}
                 viewAllTo={makePricingOptionsViewAllTo(customer)}
-                action={{ label: 'Add pricing option', onClick: () => setIsCreatePricingOptionOpen(true) }}
+                action={{ label: 'Add pricing option', iconOnly: true, onClick: () => setIsCreatePricingOptionOpen(true) }}
                 queryKey={pricingOptionsQueryKeys.customer(customer.id)}
                 loadData={(state: DataTableState<PricingOption>) => getPricingOptionsRequest(state, { customerId: customer.id })}
                 tableKey="customers.detail.modules.pricing-options"
@@ -585,7 +585,7 @@ export default function CustomerPage() {
                   id={`${MODULE_ANCHOR_PREFIX}-classes`}
                   title="Classes"
                   icon={EntityIcon.classes}
-                  action={session?.permissions.classes?.create ? { label: 'Create class', onClick: () => setIsCreateClassDrawerOpen(true) } : undefined}
+                  action={session?.permissions.classes?.create ? { label: 'Create class', iconOnly: true, onClick: () => setIsCreateClassDrawerOpen(true) } : undefined}
                   viewAllTo={`/classes?${new URLSearchParams({ filterCustomerId: customer.id }).toString()}`}
                   queryKey={[...classTypesQueryKeys.customer(customer.id), 'module']}
                   loadData={(state: DataTableState<ClassType>) => getClassTypesRequest(state, { customerId: customer.id })}
@@ -634,7 +634,7 @@ export default function CustomerPage() {
                   columns={getClassSessionColumns({ showLocation: true })}
                   renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
                   getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
-                    ? [{ label: 'Edit session', onClick: () => setEditingClassSession(classSession) }]
+                    ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setEditingClassSession(classSession) }]
                     : []}
                   loadingMessage="Loading class sessions..."
                   emptyMessage="No class sessions found."
@@ -707,7 +707,7 @@ export default function CustomerPage() {
                 initialTotal={getInitialTotal('devices')}
                 viewAllTo={makeViewAllTo('/devices', customer)}
                 action={session?.permissions.devices?.create
-                  ? { label: 'Add device', onClick: () => setIsCreateDeviceOpen(true) }
+                  ? { label: 'Add device', iconOnly: true, onClick: () => setIsCreateDeviceOpen(true) }
                   : undefined}
                 queryKey={[...devicesQueryKeys.all, 'customer-module', customer.id]}
                 loadData={(state: DataTableState<AccessDevice>) => getAccessDevicesRequest(state, { customerId: customer.id })}

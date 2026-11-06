@@ -44,6 +44,7 @@ import type { Product, ProductLocationAssignment, ProductModifierGroup, ProductV
 import { formatDateTime } from '@/utils/date-utils'
 import { HugeiconsIcon } from '@hugeicons/react'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
+import Add01Icon from '@hugeicons/core-free-icons/Add01Icon'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const PRODUCT_BATCH_QUERY_KEY = 'product-detail-batch'
@@ -454,7 +455,7 @@ export default function ProductPage() {
             onClick: () => void ProductManagementService.setVariantActive(product, variant.id, !variant.isActive),
           },
         ]}
-        action={{ label: 'Add variant', onClick: () => openProductEditor('variants', true) }}
+        action={{ label: 'Add variant', iconOnly: true, onClick: () => openProductEditor('variants', true) }}
         loadingMessage="Loading variants..."
         emptyMessage="No variants configured. Add a variant to set a price."
         refetchOnMount="always"
@@ -472,7 +473,7 @@ export default function ProductPage() {
         columns={productOptionColumns}
         getRowCommands={(group): DropdownActionItem[] => [
           { label: 'Edit group and options', onClick: () => openProductEditor('options') },
-          ...(group.id ? [{ label: 'Add option', onClick: () => openProductEditor('options', false, group.id) }] : []),
+          ...(group.id ? [{ label: 'Add option', icon: Add01Icon, onClick: () => openProductEditor('options', false, group.id) }] : []),
           ...(group.id
             ? [
                 {
@@ -482,7 +483,7 @@ export default function ProductPage() {
               ]
             : []),
         ]}
-        action={{ label: 'Add option group', onClick: () => openProductEditor('options', true) }}
+        action={{ label: 'Add option group', iconOnly: true, onClick: () => openProductEditor('options', true) }}
         loadingMessage="Loading option groups..."
         emptyMessage="No option groups linked to this product."
         refetchOnMount="always"
@@ -502,7 +503,7 @@ export default function ProductPage() {
             onClick: () => setEditingLocation({ locationId: location.locationId, settings: location.settings }),
           },
         ]}
-        action={{ label: 'Add location', onClick: () => setEditingScope(product) }}
+        action={{ label: 'Add location', iconOnly: true, onClick: () => setEditingScope(product) }}
         loadingMessage="Loading location settings..."
         emptyMessage="No locations found for this customer."
         refetchOnMount="always"

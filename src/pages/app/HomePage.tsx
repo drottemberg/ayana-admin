@@ -4,6 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Link } from 'react-router-dom'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { toast } from 'sonner'
 
@@ -14,6 +15,7 @@ import {
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PageHeaderIconAction } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import {
@@ -295,8 +297,8 @@ export default function HomePage() {
       header={{
         title: 'Home',
         subtitle: 'Your studio activity.',
-        primaryAction: showCoachModules && myCoachProfile.data
-          ? { children: 'Edit my coach profile', onClick: () => setIsMyCoachProfileOpen(true) }
+        commands: showCoachModules && myCoachProfile.data
+          ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit my coach profile" onClick={() => setIsMyCoachProfileOpen(true)} />
           : undefined,
       }}
       modules={modules}

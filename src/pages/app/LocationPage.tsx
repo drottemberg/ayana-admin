@@ -216,7 +216,7 @@ export default function LocationPage() {
           id="module-classes"
           title="Classes"
           icon={EntityIcon.classes}
-          action={session?.permissions.classes?.create ? { label: 'Create class', onClick: () => setIsCreateClassDrawerOpen(true) } : undefined}
+          action={session?.permissions.classes?.create ? { label: 'Create class', iconOnly: true, onClick: () => setIsCreateClassDrawerOpen(true) } : undefined}
           viewAllTo={`/classes?${new URLSearchParams({ filterLocationId: locationId }).toString()}`}
           queryKey={classTypesQueryKeys.location(locationId)}
           loadData={(state: DataTableState<ClassType>) => getClassTypesRequest(state, { locationId })}
@@ -240,7 +240,7 @@ export default function LocationPage() {
           columns={getClassSessionColumns()}
           renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
           getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
-            ? [{ label: 'Edit session', onClick: () => setEditingClassSession(classSession) }]
+            ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setEditingClassSession(classSession) }]
             : []}
           loadingMessage="Loading class sessions..."
           emptyMessage="No class sessions found for this location."
@@ -266,7 +266,7 @@ export default function LocationPage() {
           icon={EntityIcon.devices}
           queryKey={[...devicesQueryKeys.all, 'location-module', locationId]}
           action={session?.permissions.devices?.create
-            ? { label: 'Add device', onClick: () => setIsCreateDeviceOpen(true) }
+            ? { label: 'Add device', iconOnly: true, onClick: () => setIsCreateDeviceOpen(true) }
             : undefined}
           loadData={(state: DataTableState<AccessDevice>) => getAccessDevicesRequest(state, { locationId })}
           tableKey={`locations.detail.modules.devices.${locationId}`}

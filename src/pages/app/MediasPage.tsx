@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { getMediaRequest } from '@/features/media/api'
 import { getMediaColumns } from '@/features/media/media-columns'
 import { MediaService } from '@/features/media/media-service'
@@ -14,10 +14,7 @@ export default function MediasPage() {
     <>
       <PageHeader
         title="Media"
-        primaryAction={{
-          children: '+ Add Media',
-          onClick: () => MediaService.openCreateMedia(),
-        }}
+        primaryAction={createPageHeaderAction('Add media', () => MediaService.openCreateMedia())}
       />
       <section className="space-y-5 p-4 md:p-6">
         <MediaList />

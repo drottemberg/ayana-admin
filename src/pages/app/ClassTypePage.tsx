@@ -3,11 +3,13 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createColumnHelper } from '@tanstack/react-table'
+import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageHeader, PageHeaderIconAction } from '@/components/ui/page-header'
 import { Input } from '@/components/ui/input'
 import { NO_VALUE_STR } from '@/constants'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
@@ -110,7 +112,9 @@ export default function ClassTypePage() {
     <DetailPageLayout
       header={{
         title: classType?.name ?? 'Class', subtitle: isLoading ? 'Loading...' : classTypeId, backTo: '/classes',
-        primaryAction: editableClassType && canEditClass ? { children: 'Edit class', onClick: () => setEditingClassType(editableClassType) } : undefined,
+        commands: editableClassType && canEditClass
+          ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit class" onClick={() => setEditingClassType(editableClassType)} />
+          : undefined,
       }}
       modules={[{ key: 'products', label: 'Products' }, { key: 'schedules', label: 'Schedules' }, { key: 'sessions', label: 'Sessions' }]}
       aside={<DetailSidePanel sections={sections} isLoading={isLoading} />}
@@ -124,7 +128,7 @@ export default function ClassTypePage() {
         )}
         tableKey={`classes.detail.products.${classTypeId}`}
         columns={classTypeProductColumns as never}
-        action={canEditClass ? { label: 'Add product', onClick: () => { setEditingClassProduct(null); setIsClassProductDrawerOpen(true) } } : undefined}
+        action={canEditClass ? { label: 'Add product', iconOnly: true, onClick: () => { setEditingClassProduct(null); setIsClassProductDrawerOpen(true) } } : undefined}
         getRowCommands={(product) => canEditClass ? [
           { label: 'Edit', onClick: () => { setEditingClassProduct(product); setIsClassProductDrawerOpen(true) } },
           {
@@ -162,7 +166,7 @@ export default function ClassTypePage() {
         }}
         tableKey={`classes.detail.schedules.${classTypeId}`}
         columns={classScheduleColumns as never}
-        action={canEditSchedule ? { label: 'Add schedule', onClick: () => setIsScheduleDrawerOpen(true) } : undefined}
+        action={canEditSchedule ? { label: 'Add schedule', iconOnly: true, onClick: () => setIsScheduleDrawerOpen(true) } : undefined}
         getRowCommands={(schedule) => canEditSchedule ? [
           { label: 'Edit schedule', onClick: () => setEditingSchedule(schedule) },
           ...(schedule.isActive ? [schedule.pauseFrom && (!schedule.pauseUntil || new Date(schedule.pauseUntil).toISOString().slice(0, 10) >= localToday()) ? {
@@ -272,9 +276,10 @@ export default function ClassTypePage() {
         renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
         getRowCommands={(classSession) => [
           { label: 'View session', onClick: () => navigate(`/class-sessions/${classSession.id}?locationId=${encodeURIComponent(locationId)}`) },
-          ...(canEditSession && classSession.status === 'SCHEDULED' ? [{ label: 'Edit session', onClick: () => setEditingSession(classSession) }] : []),
+          ...(canEditSession && classSession.status === 'SCHEDULED' ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setEditingSession(classSession) }] : []),
           ...(canCancelSessions && (classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') ? [{
             label: 'Cancel session',
+            icon: CalendarRemove01Icon,
             variant: 'destructive' as const,
             onClick: async () => {
               let cancellationMessage = ''

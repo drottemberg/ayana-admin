@@ -8,7 +8,7 @@ import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import { DataTable, DataTableAsync, type DataTableState } from '@/components/data-table'
 import { DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -407,7 +407,7 @@ export default function MessagesPage() {
         title={mode === 'LIST' ? 'Message campaigns' : 'New campaign'}
         subtitle={mode === 'LIST' ? 'Review campaigns, recipients, and delivery status.' : 'Choose an audience, review recipients, and compose the message.'}
         primaryAction={mode === 'LIST'
-          ? { children: 'New campaign', onClick: () => { setCampaignRequestKey(createCampaignKey()); setSelectedBroadcastId(''); setMode('CREATE') } }
+          ? createPageHeaderAction('New campaign', () => { setCampaignRequestKey(createCampaignKey()); setSelectedBroadcastId(''); setMode('CREATE') })
           : { children: 'Back to campaigns', variant: 'outline', onClick: backToCampaignList }}
       />
       <main className="space-y-5 p-4 md:p-6">

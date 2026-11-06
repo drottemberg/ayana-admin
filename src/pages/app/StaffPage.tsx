@@ -1,4 +1,4 @@
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { UsersTable } from '@/pages/app/UsersPage'
@@ -18,12 +18,9 @@ export default function StaffPage() {
     <>
       <PageHeader
         title="Staff"
-        primaryAction={canInvite ? {
-          children: 'Invite staff',
-          onClick: () => Drawer.show(DrawerId.CreateUser, isCustomerContext
+        primaryAction={canInvite ? createPageHeaderAction('Invite staff', () => Drawer.show(DrawerId.CreateUser, isCustomerContext
             ? { mode: 'invite', customerId }
-            : { mode: 'invite-staff' }),
-        } : undefined}
+            : { mode: 'invite-staff' })) : undefined}
       />
       <section className="p-4 md:p-6">
         <UsersTable

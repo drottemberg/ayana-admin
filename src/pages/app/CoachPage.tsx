@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Link, useParams } from 'react-router-dom'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
 import { DetailPageLayout, DetailSidePanel, RelatedEntityModule, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageHeader, PageHeaderIconAction } from '@/components/ui/page-header'
 import { NO_VALUE_STR } from '@/constants'
 import { useConnect } from '@/features/app/use-connect'
 import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
@@ -80,7 +81,9 @@ export default function CoachPage() {
         title: coach.coachName || coach.email || 'Instructor',
         subtitle: coach.customerName || undefined,
         backTo: `/customers/${customerId}`,
-        primaryAction: session?.permissions.coaches?.edit ? { children: 'Edit coach', onClick: () => setEditing(true) } : undefined,
+        commands: session?.permissions.coaches?.edit
+          ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit coach" onClick={() => setEditing(true)} />
+          : undefined,
       }}
       modules={[
         { key: 'class-types', label: 'Classes', count: coach.classTypes.length },

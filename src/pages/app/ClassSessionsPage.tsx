@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
@@ -49,7 +51,7 @@ function getDateRangeForOffset(dayOffset: number): DateRangeValue {
 
 function readDateFilter(params: URLSearchParams): ClassSessionDateMode {
   const value = params.get('dateMode')
-  return value === 'all' || value === 'yesterday' || value === 'today' || value === 'range' || value === 'upcoming' || value === 'tomorrow' ? value : 'upcoming'
+  return value === 'all' || value === 'yesterday' || value === 'today' || value === 'range' || value === 'upcoming' || value === 'tomorrow' ? value : 'today'
 }
 
 function readDateRange(params: URLSearchParams): DateRangeValue | undefined {
@@ -103,7 +105,7 @@ export default function ClassSessionsPage() {
 
     const savedDateFilter = getLocalStorage<ClassSessionDateFilter>(CLASS_SESSION_DATE_FILTER_KEY)
     if (!params.has('dateMode')) {
-      params.set('dateMode', savedDateFilter?.mode ?? 'upcoming')
+      params.set('dateMode', savedDateFilter?.mode ?? 'today')
       if (savedDateFilter?.mode === 'range' && savedDateFilter.from) {
         params.set('dateFrom', savedDateFilter.from)
         if (savedDateFilter.to) params.set('dateTo', savedDateFilter.to)
@@ -269,10 +271,12 @@ export default function ClassSessionsPage() {
             },
             ...(canResumeSessions && item.status === 'SCHEDULED' ? [{
               label: 'Edit session',
+              icon: PencilEdit02Icon,
               onClick: () => setEditingSession(item),
             }] : []),
             ...(canCancelSessions && (item.status === 'SCHEDULED' || item.status === 'PAUSED') ? [{
               label: 'Cancel session',
+              icon: CalendarRemove01Icon,
               variant: 'destructive' as const,
               onClick: async () => {
                 let cancellationMessage = ''

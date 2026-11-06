@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { HugeiconsIcon } from '@hugeicons/react'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import Add01Icon from '@hugeicons/core-free-icons/Add01Icon'
 import MoreHorizontalIcon from '@hugeicons/core-free-icons/MoreHorizontalIcon'
 import { useNavigate, type LinkProps } from 'react-router-dom'
 
@@ -10,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from './tabs'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { SidebarTrigger, useSidebar } from './sidebar'
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
 type PageHeaderTab = {
   key: string
@@ -25,6 +27,7 @@ type PageHeaderBreadcrumb = {
 }
 
 type ButtonProps = React.ComponentProps<typeof Button>
+export type PageHeaderActionProps = ButtonProps & { icon?: IconSvgElement; iconOnly?: boolean }
 
 type PageHeaderProps = {
   title: ReactNode
@@ -34,8 +37,8 @@ type PageHeaderProps = {
   leading?: ReactNode
   options?: DropdownActionItem[]
   commands?: ReactNode
-  primaryAction?: ButtonProps
-  secondaryAction?: ButtonProps
+  primaryAction?: PageHeaderActionProps
+  secondaryAction?: PageHeaderActionProps
   tabs?: PageHeaderTab[]
   className?: string
   bodyClassName?: string
@@ -59,6 +62,24 @@ function PageHeader({
   const navigate = useNavigate()
   const hasTabs = Boolean(tabs?.length)
   const hasOptions = Boolean(options?.length)
+  const renderAction = (action: PageHeaderActionProps | undefined, defaultVariant: 'default' | 'outline') => {
+    if (!action) return null
+    const { icon, iconOnly, ...buttonProps } = action
+    if (iconOnly && icon) {
+      const label = ('aria-label' in buttonProps && buttonProps['aria-label'])
+        || (typeof buttonProps.children === 'string' ? buttonProps.children : 'Action')
+      return <PageHeaderIconAction
+        icon={icon}
+        label={label}
+        variant={buttonProps.variant ?? defaultVariant}
+        size={isMobile ? 'icon' : 'icon-lg'}
+        onClick={buttonProps.onClick}
+        disabled={buttonProps.disabled}
+        loading={buttonProps.loading}
+      />
+    }
+    return <Button size={isMobile ? 'sm' : 'lg'} variant={defaultVariant} {...buttonProps} className={cn('whitespace-nowrap', buttonProps.className)} />
+  }
   const handleBack = () => {
     const historyIndex = window.history.state?.idx
 
@@ -98,8 +119,8 @@ function PageHeader({
           {commands || primaryAction || secondaryAction || hasOptions ? (
             <div className="flex max-w-[56%] shrink-0 flex-wrap items-center justify-end gap-1.5 md:max-w-none md:flex-nowrap md:gap-3">
               {commands}
-              {primaryAction ? <Button size={isMobile ? 'sm' : 'lg'} {...primaryAction} className={cn('whitespace-nowrap', primaryAction.className)} /> : null}
-              {secondaryAction ? <Button variant="outline" size={isMobile ? 'sm' : 'lg'} {...secondaryAction} className={cn('whitespace-nowrap', secondaryAction.className)} /> : null}
+              {renderAction(primaryAction, 'default')}
+              {renderAction(secondaryAction, 'outline')}
 
               {hasOptions ? (
                 <DropdownActionsMenu
@@ -143,6 +164,37 @@ function PageHeader({
       </div>
     </header>
   )
+}
+
+export function PageHeaderIconAction({
+  icon,
+  label,
+  onClick,
+  variant = 'default',
+  size = 'icon-lg',
+  disabled,
+  loading,
+}: {
+  icon: IconSvgElement
+  label: string
+  onClick?: ButtonProps['onClick']
+  variant?: ButtonProps['variant']
+  size?: 'icon' | 'icon-lg'
+  disabled?: boolean
+  loading?: boolean
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Button type="button" variant={variant} size={size} aria-label={label} onClick={onClick} disabled={disabled} loading={loading} />}>
+        <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function createPageHeaderAction(label: string, onClick: () => void): PageHeaderActionProps {
+  return { children: label, icon: Add01Icon, iconOnly: true, onClick }
 }
 
 export { PageHeader }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getUserRequestsPageRequest } from '@/features/user-requests/api'
 import { userRequestsQueryKeys } from '@/features/user-requests/query-keys'
@@ -31,7 +31,7 @@ export default function InvitesPage() {
     <PageHeader
       title="Invites"
       subtitle="Review invitations you received and track the ones you sent."
-      primaryAction={canInvite ? { children: 'Send invite', onClick: () => Drawer.show(DrawerId.CreateUser, { mode: 'invite' }) } : undefined}
+      primaryAction={canInvite ? createPageHeaderAction('Send invite', () => Drawer.show(DrawerId.CreateUser, { mode: 'invite' })) : undefined}
       tabs={[
         { key: 'received', label: 'Received', active: direction === 'RECEIVED', onClick: () => setDirection('RECEIVED') },
         { key: 'sent', label: 'Sent', active: direction === 'SENT', onClick: () => setDirection('SENT') },

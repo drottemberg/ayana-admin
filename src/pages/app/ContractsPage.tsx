@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { ContractService } from '@/features/contracts/contract-service'
 import { getContractFilterOptionsRequest, getContractsRequest } from '@/features/contracts/api'
 import { contractColumns } from '@/features/contracts/contract-columns'
@@ -19,10 +19,7 @@ export default function ContractsPage() {
     <>
       <PageHeader
         title="Contracts list"
-        primaryAction={{
-          children: 'Create new contract',
-          onClick: () => Drawer.show(DrawerId.CreateContract, {}),
-        }}
+        primaryAction={createPageHeaderAction('Create new contract', () => Drawer.show(DrawerId.CreateContract, {}))}
       />
 
       <section className="p-4 md:p-6">

@@ -55,7 +55,7 @@ export type Booking = {
   coachId?: string | null
   creditCost?: number
   creditsUsed?: number
-  classVisitCount?: number
+  studioVisitCount?: number
   creditContractNames?: string | null
   user: BookingPerson
   location: BookingOrganization

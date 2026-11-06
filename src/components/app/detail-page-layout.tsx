@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { HugeiconsIcon } from '@hugeicons/react'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import Add01Icon from '@hugeicons/core-free-icons/Add01Icon'
+import { PageHeaderIconAction } from '@/components/ui/page-header'
 
 export type DetailPanelField = {
   label: ReactNode
@@ -367,6 +369,8 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
   action?: {
     label: string
     onClick?: () => void
+    iconOnly?: boolean
+    icon?: IconSvgElement
   }
   columns: ColumnDef<TData>[]
   getCommands?: DataTableAsyncProps<TData>['getCommands']
@@ -436,7 +440,9 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
         )
       }
       actions={
-        action ? (
+        action ? action.iconOnly ? (
+          <PageHeaderIconAction icon={action.icon ?? Add01Icon} label={action.label} onClick={action.onClick} variant="outline" size="icon" />
+        ) : (
           <Button size="sm" variant="outline" onClick={action.onClick}>
             {action.label}
           </Button>
@@ -493,6 +499,8 @@ export function EmptyRelatedEntityModule({
   action?: {
     label: string
     onClick?: () => void
+    iconOnly?: boolean
+    icon?: IconSvgElement
   }
 }) {
   return (
@@ -502,7 +510,9 @@ export function EmptyRelatedEntityModule({
       title={title}
       className="scroll-mt-36"
       actions={
-        action ? (
+        action ? action.iconOnly ? (
+          <PageHeaderIconAction icon={action.icon ?? Add01Icon} label={action.label} onClick={action.onClick} variant="outline" size="icon" />
+        ) : (
           <Button size="sm" variant="outline" onClick={action.onClick}>
             {action.label}
           </Button>

@@ -6,6 +6,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { DataTableAsyncResult, DataTableCommand, DataTableState } from '@/components/data-table'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import type { PageHeaderProps } from '@/components/ui/page-header'
+import { createPageHeaderAction } from '@/components/ui/page-header'
 import {
   addDevicesToGroupRequest,
   deleteDeviceGroupRequest,
@@ -81,10 +82,7 @@ export const DeviceGroupService = {
 
   getListHeaderActions(): Pick<PageHeaderProps, 'primaryAction'> {
     return {
-      primaryAction: {
-        children: '+ Create Group',
-        onClick: () => this.showCreateDrawer(),
-      },
+      primaryAction: createPageHeaderAction('Create Group', () => this.showCreateDrawer()),
     }
   },
 

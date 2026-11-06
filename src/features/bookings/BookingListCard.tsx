@@ -101,6 +101,18 @@ function FreeTrialPill() {
   return <Badge variant="secondary" className="h-6 rounded-full border-0 bg-[#fff0e9] px-3 text-xs font-medium text-[#a85a39]">Free trial</Badge>
 }
 
+function StudioVisitPill({ previousVisits = 0 }: { previousVisits?: number }) {
+  const visitNumber = previousVisits + 1
+  return <Badge
+    variant="outline"
+    className="h-5 min-w-5 shrink-0 justify-center rounded-full px-1 text-[10px] font-medium text-muted-foreground"
+    title={`Studio visit number ${visitNumber}`}
+    aria-label={`Studio visit number ${visitNumber}`}
+  >
+    {visitNumber}
+  </Badge>
+}
+
 export function BookingListCard({
   booking,
   actions,
@@ -124,7 +136,10 @@ export function BookingListCard({
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          {showUser ? <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="block truncate text-base font-semibold leading-5 text-foreground hover:underline">{memberName}</Link> : null}
+          {showUser ? <div className="flex min-w-0 items-center gap-1.5">
+            <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="min-w-0 truncate text-base font-semibold leading-5 text-foreground hover:underline">{memberName}</Link>
+            <StudioVisitPill previousVisits={booking.studioVisitCount} />
+          </div> : null}
           <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.location.id)}`} className={cn('block truncate text-sm leading-5 text-[#625b56] hover:underline', showUser && 'mt-0.5 font-medium')}>
             {booking.className || booking.sessionId}
           </Link>
@@ -201,7 +216,10 @@ export function ClassBookingListCard({
       <div className="flex min-w-0 items-center gap-3">
         <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold', avatarColor(booking.userId))} aria-hidden="true">{getInitials(name)}</div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="truncate text-sm font-semibold text-foreground underline-offset-2 hover:underline">{name}</Link>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="truncate text-sm font-semibold text-foreground underline-offset-2 hover:underline">{name}</Link>
+            <StudioVisitPill previousVisits={booking.studioVisitCount} />
+          </div>
           <StatusText status={booking.status} />
           <SourcePill source={booking.source} />
         </div>
@@ -218,7 +236,10 @@ export function ClassBookingListCard({
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="block truncate text-base font-semibold leading-5 text-foreground hover:underline">{name}</Link>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 truncate text-base font-semibold leading-5 text-foreground hover:underline">{name}</Link>
+            <StudioVisitPill previousVisits={booking.studioVisitCount} />
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
             {booking.isFreeTrial ? <FreeTrialPill /> : null}

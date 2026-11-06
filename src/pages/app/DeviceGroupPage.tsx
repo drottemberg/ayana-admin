@@ -133,7 +133,7 @@ export default function DeviceGroupPage() {
         icon={EntityIcon.devices}
         initialTotal={deviceCount}
         action={{
-          label: 'Add devices',
+          label: 'Add devices', iconOnly: true,
           onClick: () =>
             void DeviceGroupService.showAddDevicesModal(
               groupId,

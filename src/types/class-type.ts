@@ -96,7 +96,7 @@ export type ClassBooking = {
   sessionId: string
   status: string
   source: 'DIRECT' | 'CLASSPASS' | 'EGYM'
-  classVisitCount?: number
+  studioVisitCount?: number
   isFreeTrial?: boolean
   attended?: boolean | null
   checkInAt?: string | null

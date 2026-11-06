@@ -25,6 +25,7 @@ import type { PricingOption } from '@/types/pricing-option'
 import type { Location } from '@/types/location'
 import type { Customer } from '@/types/customer'
 import { SelectInputAsync } from '@/components/ui/select-input'
+import { createPageHeaderAction } from '@/components/ui/page-header'
 
 const EMPTY_FORM: PartnershipInput = {
   name: '', locationScope: 'ALL', isActive: true, locationIds: [], emailRules: [],
@@ -104,7 +105,7 @@ export default function PartnershipsPage() {
     <PageHeader
       title="Partnerships"
       subtitle="Manage email eligibility, locations, and percentage discounts."
-      primaryAction={canCreate && (isAdmin || fixedCustomerId) ? { children: 'Add partnership', onClick: openCreate } : undefined}
+      primaryAction={canCreate && (isAdmin || fixedCustomerId) ? createPageHeaderAction('Add partnership', openCreate) : undefined}
     />
     <section className="space-y-4 p-4 md:p-6">
       <DataTableAsync

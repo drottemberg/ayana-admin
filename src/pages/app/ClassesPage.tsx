@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getClassTypesRequest, getClassTypeLocationOptions, getClassCategoryOptions } from '@/features/classes/api'
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
@@ -36,7 +36,7 @@ export default function ClassesPage() {
       <PageHeader
         title="Classes"
         subtitle="Manage class types across customers and locations."
-        primaryAction={session?.permissions.classes?.create ? { children: 'Create class', onClick: () => setIsCreateDrawerOpen(true) } : undefined}
+        primaryAction={session?.permissions.classes?.create ? createPageHeaderAction('Create class', () => setIsCreateDrawerOpen(true)) : undefined}
       />
       <section className="p-4 md:p-6">
         <DataTableAsync

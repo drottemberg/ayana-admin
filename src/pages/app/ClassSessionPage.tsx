@@ -3,10 +3,12 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import { Badge } from '@/components/ui/badge'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageHeader, PageHeaderIconAction } from '@/components/ui/page-header'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { getClassBookingColumns } from '@/features/classes/class-session-columns'
@@ -357,7 +359,7 @@ export default function ClassSessionPage() {
         : []),
       ...(schedule.isCancelled === true
         ? []
-        : [{ type: 'separator' as const }, { label: 'Cancel schedule…', variant: 'destructive' as const, onClick: () => openClassPassScheduleAction('CANCEL', schedule) }]),
+        : [{ type: 'separator' as const }, { label: 'Cancel schedule…', icon: CalendarRemove01Icon, variant: 'destructive' as const, onClick: () => openClassPassScheduleAction('CANCEL', schedule) }]),
     ]
   }
 
@@ -393,18 +395,24 @@ export default function ClassSessionPage() {
       title: classSession?.className ?? 'Class session',
       subtitle: formatDate(classSession?.startTime, classSession?.timezone),
       backTo: '/class-sessions',
+      commands: (classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit)
+        || ((classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete)
+        ? <>
+            {classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
+              ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
+              : null}
+            {(classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
+              ? <PageHeaderIconAction icon={CalendarRemove01Icon} label="Cancel session" variant="destructive" onClick={cancelSession} />
+              : null}
+          </>
+        : undefined,
       primaryAction: classSession?.status === 'CANCELLED'
         && new Date(classSession.startTime).getTime() > Date.now()
         && appSession?.permissions.classSessions?.edit
         ? { children: 'Reactivate session', onClick: reactivateSession }
         : classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
           ? { children: 'Resume session', onClick: resumeSession }
-          : classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
-            ? { children: 'Edit session', onClick: () => setIsEditOpen(true) }
-            : undefined,
-      secondaryAction: (classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
-        ? { children: 'Cancel session', variant: 'destructive', onClick: cancelSession }
-        : undefined,
+          : undefined,
     }}
     modules={[
       { key: 'bookings', label: 'Bookings', count: classSession?.bookedCount },
@@ -422,7 +430,7 @@ export default function ClassSessionPage() {
         : canTakeAttendance
           ? { label: 'Take attendance', onClick: () => setIsAttendanceOpen(true) }
         : classSession?.status === 'SCHEDULED' && appSession?.permissions.bookings?.create
-          ? { label: 'Add booking', onClick: () => setIsAddBookingOpen(true) }
+          ? { label: 'Add booking', iconOnly: true, onClick: () => setIsAddBookingOpen(true) }
           : undefined}
       queryKey={[...classSessionsQueryKeys.detail(sessionId), 'bookings', bookingStatusFilter]}
       loadData={async (state) => {

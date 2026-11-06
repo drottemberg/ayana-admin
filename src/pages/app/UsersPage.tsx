@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 
 import { DataTableAsync } from '@/components/data-table'
 import type { DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import { getCustomersListRequest } from '@/features/customers/api'
@@ -34,12 +34,9 @@ export default function UsersPage() {
     <>
       <PageHeader
         title="Users"
-        primaryAction={canAddUser ? {
-          children: 'Add user',
-          onClick: () => Drawer.show(DrawerId.CreateUser, isCustomerContext
+        primaryAction={canAddUser ? createPageHeaderAction('Add user', () => Drawer.show(DrawerId.CreateUser, isCustomerContext
             ? { mode: 'customer-user', customerId: currentCustomerId }
-            : { mode: 'invite' }),
-        } : undefined}
+            : { mode: 'invite' })) : undefined}
       />
       <section className="p-4 md:p-6">
         <UsersTable hiddenFilters={hiddenFilters} />
