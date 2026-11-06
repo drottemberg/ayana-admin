@@ -21,6 +21,8 @@ type SavedHomeFilters = {
 const periodOptions: Array<{ value: DashboardPeriod; label: string }> = [
   { value: 'TODAY', label: 'Today' },
   { value: 'YESTERDAY', label: 'Yesterday' },
+  { value: 'THIS_WEEK', label: 'This week' },
+  { value: 'LAST_WEEK', label: 'Last week' },
   { value: 'LAST_7_DAYS', label: 'Last 7 days' },
   { value: 'LAST_30_DAYS', label: 'Last 30 days' },
   { value: 'MONTH_TO_DATE', label: 'This month' },

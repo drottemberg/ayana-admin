@@ -17,7 +17,7 @@ import { getCustomerFilterOptionsRequest, getCustomerRequest } from '@/features/
 import { getSalesReportLocationsRequest, getSalesReportRequest, type SalesReport, type SalesReportEntry } from '@/features/reports/api'
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
-type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH' | 'YEAR_TO_DATE' | 'LAST_YEAR' | 'CUSTOM'
+type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH' | 'YEAR_TO_DATE' | 'LAST_YEAR' | 'CUSTOM'
 type SalesReportSavedFilters = { period: PeriodPreset; customerId?: string; customerName?: string; locationId?: string; locationName?: string; dateFrom?: string; dateTo?: string }
 
 const SALES_REPORT_FILTERS_KEY = 'sales-report.filters'
@@ -25,6 +25,8 @@ const SALES_REPORT_FILTERS_KEY = 'sales-report.filters'
 const periodItems: Array<{ value: PeriodPreset; label: string }> = [
   { value: 'TODAY', label: 'Today' },
   { value: 'YESTERDAY', label: 'Yesterday' },
+  { value: 'THIS_WEEK', label: 'This week' },
+  { value: 'LAST_WEEK', label: 'Last week' },
   { value: 'LAST_7_DAYS', label: 'Last 7 days' },
   { value: 'LAST_30_DAYS', label: 'Last 30 days' },
   { value: 'MONTH_TO_DATE', label: 'Month to date' },
@@ -47,6 +49,15 @@ function datesForPreset(preset: Exclude<PeriodPreset, 'CUSTOM'>, now = new Date(
     case 'YESTERDAY': {
       const yesterday = shiftDate(today, -1)
       return { from: dateString(yesterday), to: dateString(yesterday) }
+    }
+    case 'THIS_WEEK': {
+      const monday = shiftDate(today, -((today.getDay() + 6) % 7))
+      return { from: dateString(monday), to: dateString(shiftDate(monday, 6)) }
+    }
+    case 'LAST_WEEK': {
+      const thisMonday = shiftDate(today, -((today.getDay() + 6) % 7))
+      const monday = shiftDate(thisMonday, -7)
+      return { from: dateString(monday), to: dateString(shiftDate(monday, 6)) }
     }
     case 'LAST_7_DAYS': return { from: dateString(shiftDate(today, -6)), to: dateString(today) }
     case 'LAST_30_DAYS': return { from: dateString(shiftDate(today, -29)), to: dateString(today) }

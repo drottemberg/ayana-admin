@@ -37,7 +37,7 @@ export type SalesReport = {
   note: string
 }
 
-export type DashboardPeriod = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH'
+export type DashboardPeriod = 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH'
 export type DashboardOverview = {
   period: DashboardPeriod
   periodLabel: string
