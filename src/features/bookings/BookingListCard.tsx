@@ -230,7 +230,7 @@ export function ClassBookingListCard({
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
         <Link to={`/bookings/${encodeURIComponent(booking.id)}`} className="max-w-full truncate text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">#{booking.id}</Link>
-        <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">Attendance</span>{attendance}</div>
+        <div className="flex items-center gap-2">{attendance}</div>
       </div>
     </div>
   </article>
