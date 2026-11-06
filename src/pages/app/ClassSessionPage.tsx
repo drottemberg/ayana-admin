@@ -447,9 +447,6 @@ export default function ClassSessionPage() {
         booking={booking}
         actions={actions}
         grouped={grouped}
-        startsAt={classSession?.startTime}
-        timezone={classSession?.timezone}
-        className={classSession?.className}
         locationName={classSession?.locationName}
         instructorView={isInstructorContext}
         canUpdateAttendance={isInstructorContext ? canTakeAttendance : Boolean(appSession?.permissions.bookings?.edit)}

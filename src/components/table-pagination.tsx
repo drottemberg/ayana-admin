@@ -20,15 +20,26 @@ type TablePaginationProps = {
 }
 
 function getVisiblePageIndexes(pageIndex: number, pageCount: number) {
-  if (pageCount <= 4) return Array.from({ length: pageCount }, (_, index) => index)
+  if (pageCount <= 5) return Array.from({ length: pageCount }, (_, index) => index)
 
-  const firstPages = [0, 1, 2]
+  const visible: Array<number | 'ellipsis-start' | 'ellipsis-end'> = [0]
   const lastPage = pageCount - 1
+  let firstMiddlePage = Math.max(1, pageIndex - 1)
+  let lastMiddlePage = Math.min(lastPage - 1, pageIndex + 1)
 
-  if (pageIndex <= 2) return [...firstPages, 'ellipsis' as const, lastPage]
-  if (pageIndex >= pageCount - 3) return [0, 'ellipsis' as const, pageCount - 3, pageCount - 2, lastPage]
+  if (pageIndex <= 1) {
+    firstMiddlePage = 1
+    lastMiddlePage = Math.min(2, lastPage - 1)
+  } else if (pageIndex >= lastPage - 1) {
+    firstMiddlePage = Math.max(1, lastPage - 2)
+    lastMiddlePage = lastPage - 1
+  }
 
-  return [0, 'ellipsis-start' as const, pageIndex, 'ellipsis-end' as const, lastPage]
+  if (firstMiddlePage > 1) visible.push('ellipsis-start')
+  for (let page = firstMiddlePage; page <= lastMiddlePage; page += 1) visible.push(page)
+  if (lastMiddlePage < lastPage - 1) visible.push('ellipsis-end')
+  visible.push(lastPage)
+  return visible
 }
 
 function TablePagination({

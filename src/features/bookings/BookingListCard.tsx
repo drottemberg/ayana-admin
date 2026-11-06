@@ -121,8 +121,9 @@ export function BookingListCard({
         <div className="min-w-0">
           {showUser ? <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="block truncate text-base font-semibold leading-5 text-foreground hover:underline">{memberName}</Link> : null}
           <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.location.id)}`} className={cn('block truncate text-sm leading-5 text-[#625b56] hover:underline', showUser && 'mt-0.5 font-medium')}>
-            {booking.className || booking.sessionId}{classTime ? ` · ${classTime}` : ''}
+            {booking.className || booking.sessionId}
           </Link>
+          {classTime ? <div className="mt-0.5 text-xs leading-4 text-muted-foreground">{classTime}</div> : null}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
             {booking.isFreeTrial ? <FreeTrialPill /> : null}
@@ -165,9 +166,6 @@ function AttendanceButtons({
 export function ClassBookingListCard({
   booking,
   actions,
-  startsAt,
-  timezone,
-  className,
   locationName,
   instructorView = false,
   canUpdateAttendance = false,
@@ -178,9 +176,6 @@ export function ClassBookingListCard({
 }: {
   booking: ClassBooking
   actions: ReactNode
-  startsAt?: string
-  timezone?: string | null
-  className?: string | null
   locationName?: string | null
   instructorView?: boolean
   canUpdateAttendance?: boolean
@@ -192,7 +187,6 @@ export function ClassBookingListCard({
   const canUpdate = canUpdateAttendance && isPast && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(booking.status)
   const isCancelled = booking.status === 'CANCELLED' || booking.status === 'LATE_CANCELLED'
   const name = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.userId
-  const time = classSessionTime(startsAt, timezone)
   const attendance = canUpdate
     ? <AttendanceButtons booking={booking} disabled={saving} onSetAttendance={onSetAttendance} />
     : <span className="text-sm text-muted-foreground">{NO_VALUE_STR}</span>
@@ -220,7 +214,6 @@ export function ClassBookingListCard({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="block truncate text-base font-semibold leading-5 text-foreground hover:underline">{name}</Link>
-          <div className="mt-0.5 truncate text-sm leading-5 text-[#625b56]">{className || booking.sessionId}{time ? ` · ${time}` : ''}</div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
             {booking.isFreeTrial ? <FreeTrialPill /> : null}
