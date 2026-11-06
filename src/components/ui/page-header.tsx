@@ -9,7 +9,7 @@ import { PageBreadcrumbs } from '@/components/ui/breadcrumb'
 import { DropdownActionsMenu, type DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from './tabs'
 import { cn } from '@/lib/utils'
-import { Button } from './button'
+import { Button, type NativeButtonProps } from './button'
 import { SidebarTrigger, useSidebar } from './sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
@@ -26,8 +26,12 @@ type PageHeaderBreadcrumb = {
   to?: string
 }
 
-type ButtonProps = React.ComponentProps<typeof Button>
-export type PageHeaderActionProps = ButtonProps & { icon?: IconSvgElement; iconOnly?: boolean }
+type ButtonProps = NativeButtonProps
+export type PageHeaderActionProps = Omit<NativeButtonProps, 'onClick'> & {
+  icon?: IconSvgElement
+  iconOnly?: boolean
+  onClick?: () => void
+}
 
 type PageHeaderProps = {
   title: ReactNode
@@ -177,7 +181,7 @@ export function PageHeaderIconAction({
 }: {
   icon: IconSvgElement
   label: string
-  onClick?: ButtonProps['onClick']
+  onClick?: () => void
   variant?: ButtonProps['variant']
   size?: 'icon' | 'icon-lg'
   disabled?: boolean
