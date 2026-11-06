@@ -203,7 +203,9 @@ function BookingPortalRoute() {
   const [notice, setNotice] = useState('')
   const [selected, setSelected] = useState<ClassSession | null>(null)
   const [selectedAction, setSelectedAction] = useState<'book' | 'cancel'>('book')
+  const [bookingConfirmation, setBookingConfirmation] = useState<{ session: ClassSession; email: string; terms: string[] } | null>(null)
   const [bookingError, setBookingError] = useState('')
+  const [egymError, setEgymError] = useState('')
   const [egymCode, setEgymCode] = useState('')
   const [egymEmail, setEgymEmail] = useState('')
   const [egymPanelOpen, setEgymPanelOpen] = useState(false)
@@ -828,19 +830,19 @@ function BookingPortalRoute() {
     if (!selected || selectedAction !== 'book' || !selected.egymAvailable || selected.isWaitlist || submitting) return
     const email = member?.identity.email?.trim() || (member ? egymEmail.trim() : guestEmail.trim())
     if (!egymCode.trim()) {
-      setBookingError(isFrench ? 'Saisis ton code Wellpass.' : 'Enter your Wellpass code.')
+      setEgymError(isFrench ? 'Saisis ton code Wellpass.' : 'Enter your Wellpass code.')
       return
     }
     if (!email) {
-      setBookingError(isFrench ? 'Saisis l’adresse e-mail de ton compte Wellpass.' : 'Enter the email address for your Wellpass account.')
+      setEgymError(isFrench ? 'Saisis l’adresse e-mail de ton compte Wellpass.' : 'Enter the email address for your Wellpass account.')
       return
     }
-    if (!member && (!guestFirstName.trim() || !guestLastName.trim() || !guestPhone.trim() || validatePhone(guestPhone))) {
-      setBookingError(isFrench ? 'Renseigne ton prénom, ton nom et un numéro de téléphone valide.' : 'Enter your first name, last name and a valid phone number.')
+    if (!member && (!guestFirstName.trim() || !guestLastName.trim())) {
+      setEgymError(isFrench ? 'Renseigne ton prénom et ton nom.' : 'Enter your first and last name.')
       return
     }
     if (member && !member.identity.firstName?.trim() && !firstNameDraft.trim()) {
-      setBookingError(isFrench ? 'Indique ton prénom avant de réserver ce cours.' : 'Enter your first name before booking this class.')
+      setEgymError(isFrench ? 'Indique ton prénom avant de réserver ce cours.' : 'Enter your first name before booking this class.')
       return
     }
 
@@ -851,11 +853,11 @@ function BookingPortalRoute() {
       language,
       ...(member
         ? (!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {})
-        : { firstName: guestFirstName.trim(), lastName: guestLastName.trim(), phone: guestPhone.trim() }),
+        : { firstName: guestFirstName.trim(), lastName: guestLastName.trim() }),
     }
     const endpoint = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/bookings/egym`
     setSubmitting(true)
-    setBookingError('')
+    setEgymError('')
     try {
       const headers = { 'content-type': 'application/json', ...(member?.token ? { authorization: `Bearer ${member.token}` } : {}) }
       const validateResponse = await fetch(`${endpoint}/validate`, { method: 'POST', headers, body: JSON.stringify(payload) })
@@ -901,12 +903,14 @@ function BookingPortalRoute() {
           isWaitlist: session.bookedCount + 1 >= session.capacity,
         } : session),
       } : current)
-      setNotice(isFrench ? 'Réservation Wellpass confirmée. La confirmation a été envoyée sur tes canaux liés.' : 'Wellpass booking confirmed. A confirmation was sent to your linked channels.')
+      const terms = schedule ? reservationTerms(selected, schedule.location.cancellationPolicy, isFrench) : []
+      setNotice('')
+      setBookingConfirmation({ session: selected, email, terms })
       setSelected(null)
       setEgymPanelOpen(false)
       setEgymCode('')
     } catch (reason) {
-      setBookingError(reason instanceof Error ? reason.message : (isFrench ? 'La réservation Wellpass n’a pas pu être confirmée.' : 'The Wellpass booking could not be confirmed.'))
+      setEgymError(reason instanceof Error ? reason.message : (isFrench ? 'La réservation Wellpass n’a pas pu être confirmée.' : 'The Wellpass booking could not be confirmed.'))
     } finally { setSubmitting(false) }
   }
 
@@ -1210,20 +1214,37 @@ function BookingPortalRoute() {
           setEgymPanelOpen((open) => !open)
           setEgymEmail(member?.identity.email ?? guestEmail)
           setBookingError('')
+          setEgymError('')
         }}>{egymPanelOpen ? (isFrench ? 'Fermer Wellpass' : 'Close Wellpass') : (isFrench ? 'Réserver avec Wellpass' : 'Reserve with Wellpass')}<span>{egymPanelOpen ? '−' : '→'}</span></button>
         {egymPanelOpen && <div className="booking-egym-fields">
           <label className="booking-first-name"><span>{isFrench ? 'Code Wellpass' : 'Wellpass code'}</span><input autoComplete="off" required value={egymCode} onChange={(event) => setEgymCode(event.target.value)} placeholder={isFrench ? 'Saisis ton code' : 'Enter your code'} /></label>
           {!member && <>
             <label className="booking-first-name"><span>{isFrench ? 'Prénom' : 'First name'}</span><input autoComplete="given-name" required maxLength={80} value={guestFirstName} onChange={(event) => updateGuestDraft('firstName', event.target.value)} /></label>
             <label className="booking-first-name"><span>{isFrench ? 'Nom' : 'Last name'}</span><input autoComplete="family-name" required maxLength={80} value={guestLastName} onChange={(event) => updateGuestDraft('lastName', event.target.value)} /></label>
-            <PhoneInput label={isFrench ? 'Téléphone' : 'Phone number'} value={guestPhone} placeholder={isFrench ? 'Numéro de téléphone' : 'Phone number'} required compactCountrySelector defaultCountry="FR" controlLayout="wide-number" onValueChange={(value) => updateGuestDraft('phone', value)} />
           </>}
           {(!member || !member.identity.email?.trim()) && <label className="booking-first-name"><span>{isFrench ? 'E-mail' : 'Email'}</span><input type="email" autoComplete="email" required maxLength={254} value={member ? egymEmail : guestEmail} onChange={(event) => member ? setEgymEmail(event.target.value) : updateGuestDraft('email', event.target.value)} placeholder={isFrench ? 'adresse@exemple.com' : 'name@example.com'} /></label>}
+          {egymError && <div className="booking-error" role="alert">{egymError}</div>}
           <button type="button" className="booking-egym-submit" disabled={submitting} onClick={() => void confirmEgymBooking()}>{submitting ? (isFrench ? 'Vérification…' : 'Checking…') : (isFrench ? 'Confirmer avec Wellpass' : 'Confirm with Wellpass')}<span>→</span></button>
         </div>}
       </section>}
       {bookingError && <div className="booking-error" role="alert">{bookingError}</div>}
       <div className={`booking-sheet-actions${bookingUpsell ? ' booking-sheet-actions-done' : ''}`}>{bookingUpsell ? <button type="button" className="booking-confirm" onClick={() => { setBookingUpsell(null); setSelected(null) }}>{isFrench ? 'Terminé' : 'Done'}</button> : <><button type="button" className="booking-cancel" disabled={submitting} onClick={() => setSelected(null)}>{selectedAction === 'cancel' ? (isFrench ? 'Garder le cours' : 'Keep booking') : (isFrench ? 'Fermer' : 'Close')}</button>{member && selectedAction === 'cancel' && cancellationQuote?.canCancel && <button type="button" className="booking-confirm booking-danger" disabled={submitting || quoteLoading} onClick={() => void cancelBooking()}>{submitting ? (isFrench ? 'Annulation…' : 'Cancelling…') : (isFrench ? 'Confirmer l’annulation' : 'Confirm cancellation')}</button>}{member && selectedAction === 'book' && <button type="button" className="booking-confirm" disabled={submitting || needsCredits || (!member.identity.firstName?.trim() && !firstNameDraft.trim())} onClick={() => void createBooking()}>{submitting ? (isFrench ? 'Réservation…' : 'Booking…') : (isFrench ? 'Confirmer la réservation' : 'Confirm booking')}</button>}</>}</div>
+    </section></div>}
+
+    {bookingConfirmation && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => setBookingConfirmation(null)}><section className="booking-sheet booking-flow-panel booking-success-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-success-title" onClick={(event) => event.stopPropagation()}>
+      <button type="button" className="booking-close" aria-label={isFrench ? 'Fermer' : 'Close'} onClick={() => setBookingConfirmation(null)}>×</button>
+      <p className="booking-eyebrow">{schedule?.location.name ?? 'AYANA'}</p>
+      <span className="booking-success-mark" aria-hidden="true">✓</span>
+      <h2 id="booking-success-title">{isFrench ? 'Ta réservation est confirmée !' : 'Your booking is confirmed!'}</h2>
+      <div className="booking-success-summary">
+        <strong>{bookingConfirmation.session.name}</strong>
+        <span>{new Date(`${bookingConfirmation.session.localDate}T${bookingConfirmation.session.localStartTime}:00`).toLocaleString(isFrench ? 'fr-FR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</span>
+        <span>{schedule?.location.name}</span>
+        {bookingConfirmation.session.conditions && <p>{bookingConfirmation.session.conditions}</p>}
+      </div>
+      <p className="booking-success-email">{isFrench ? `La confirmation a été envoyée par e-mail à ${bookingConfirmation.email}.` : `A confirmation email was sent to ${bookingConfirmation.email}.`}</p>
+      {bookingConfirmation.terms.length > 0 && <ul className="booking-success-terms">{bookingConfirmation.terms.map((term) => <li key={term}>{term}</li>)}</ul>}
+      <button type="button" className="booking-confirm booking-success-done" onClick={() => setBookingConfirmation(null)}>{isFrench ? 'Retour au planning' : 'Back to schedule'}</button>
     </section></div>}
 
     {accessModal && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !emailAccessLoading && setAccessModal(null)}><section className="booking-sheet booking-flow-panel booking-access-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-access-title" onClick={(event) => event.stopPropagation()}>

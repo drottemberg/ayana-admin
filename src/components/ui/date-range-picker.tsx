@@ -62,7 +62,7 @@ export function DateRangePicker({
           >
             <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} className="size-3.5" />
             {range?.from ? (
-              range.to ? (
+              range.to && format(range.from, 'yyyy-MM-dd') !== format(range.to, 'yyyy-MM-dd') ? (
                 <>
                   {format(range.from, 'LLL dd, y')} – {format(range.to, 'LLL dd, y')}
                 </>

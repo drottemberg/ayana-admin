@@ -174,7 +174,7 @@ export const classScheduleColumns: ColumnDef<ClassSchedule>[] = [
 
 export function getClassBookingColumns(options: {
   canEditAttendance: boolean
-  isPast: boolean
+  attendanceAvailable: boolean
   instructorView?: boolean
   canInstructorTakeAttendance?: boolean
   savingBookingId?: string | null
@@ -222,7 +222,7 @@ export function getClassBookingColumns(options: {
     cell: ({ row }) => {
       const booking = row.original
       const canUpdate = (options.instructorView ? options.canInstructorTakeAttendance : options.canEditAttendance)
-        && options.isPast
+        && options.attendanceAvailable
         && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(booking.status)
       if (!canUpdate) return NO_VALUE_STR
       const isSaving = options.savingBookingId === booking.id

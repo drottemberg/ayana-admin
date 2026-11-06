@@ -65,6 +65,11 @@ function bookingTime(value: string) {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
+function bookingDateTime(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
+}
+
 function sourceLabel(source?: string) {
   return source === 'CLASSPASS' ? 'ClassPass' : source === 'EGYM' ? 'EGYM Wellpass' : 'Direct'
 }
@@ -169,7 +174,7 @@ export function ClassBookingListCard({
   locationName,
   instructorView = false,
   canUpdateAttendance = false,
-  isPast = false,
+  attendanceAvailable = false,
   saving = false,
   onSetAttendance,
   grouped = false,
@@ -179,12 +184,12 @@ export function ClassBookingListCard({
   locationName?: string | null
   instructorView?: boolean
   canUpdateAttendance?: boolean
-  isPast?: boolean
+  attendanceAvailable?: boolean
   saving?: boolean
   onSetAttendance: (bookingId: string, attended: boolean | null) => void
   grouped?: boolean
 }) {
-  const canUpdate = canUpdateAttendance && isPast && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(booking.status)
+  const canUpdate = canUpdateAttendance && attendanceAvailable && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(booking.status)
   const isCancelled = booking.status === 'CANCELLED' || booking.status === 'LATE_CANCELLED'
   const name = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.userId
   const attendance = canUpdate
@@ -226,7 +231,7 @@ export function ClassBookingListCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">
         <span>{locationName || NO_VALUE_STR}</span>
-        <time dateTime={booking.createdAt}>{bookingTime(booking.createdAt)}</time>
+        <time dateTime={booking.createdAt}>{bookingDateTime(booking.createdAt)}</time>
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
         <Link to={`/bookings/${encodeURIComponent(booking.id)}`} className="max-w-full truncate text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">#{booking.id}</Link>

@@ -2,9 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
+import { HugeiconsIcon } from '@hugeicons/react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
+import { Button } from '@/components/ui/button'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
@@ -15,13 +19,13 @@ import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import { Modals } from '@/providers/modal'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { ClassSession } from '@/types/class-type'
 import { claimCoachSessionRequest, getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
 const CLASS_SESSION_DATE_FILTER_KEY = 'class-sessions.date-filter'
-type ClassSessionDateFilter = { mode: 'all' | 'today' | 'upcoming' | 'range'; from?: string; to?: string }
+type ClassSessionDateMode = 'all' | 'yesterday' | 'today' | 'upcoming' | 'tomorrow' | 'range'
+type ClassSessionDateFilter = { mode: ClassSessionDateMode; from?: string; to?: string }
 
 function getDateRangeFilters(dateRange?: DateRangeValue) {
   if (!dateRange?.from) return {}
@@ -34,17 +38,18 @@ function getDateRangeFilters(dateRange?: DateRangeValue) {
   return { from: from.toISOString(), to: to.toISOString() }
 }
 
-function getTodayDateRange(): DateRangeValue {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
+function getDateRangeForOffset(dayOffset: number): DateRangeValue {
+  const date = new Date()
+  date.setDate(date.getDate() + dayOffset)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
   return { from: `${year}-${month}-${day}` }
 }
 
-function readDateFilter(params: URLSearchParams): 'all' | 'today' | 'upcoming' | 'range' {
+function readDateFilter(params: URLSearchParams): ClassSessionDateMode {
   const value = params.get('dateMode')
-  return value === 'all' || value === 'today' || value === 'range' || value === 'upcoming' ? value : 'upcoming'
+  return value === 'all' || value === 'yesterday' || value === 'today' || value === 'range' || value === 'upcoming' || value === 'tomorrow' ? value : 'upcoming'
 }
 
 function readDateRange(params: URLSearchParams): DateRangeValue | undefined {
@@ -62,6 +67,22 @@ export default function ClassSessionsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const dateFilter = readDateFilter(searchParams)
   const dateRange = readDateRange(searchParams)
+  const datePickerValue = dateFilter === 'range'
+    ? dateRange
+    : dateFilter === 'yesterday'
+      ? getDateRangeForOffset(-1)
+      : dateFilter === 'today'
+        ? getDateRangeForOffset(0)
+        : dateFilter === 'tomorrow'
+          ? getDateRangeForOffset(1)
+          : undefined
+  const isSingleDayRange = dateFilter === 'range'
+    && Boolean(dateRange?.from)
+    && (!dateRange?.to || dateRange.to === dateRange.from)
+  const showDayNavigation = isSingleDayRange || ['yesterday', 'today', 'tomorrow'].includes(dateFilter)
+  const selectedDateIsToday = datePickerValue?.from === getDateRangeForOffset(0).from
+    && (!datePickerValue?.to || datePickerValue.to === datePickerValue.from)
+  const showTodayButton = !selectedDateIsToday
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
@@ -137,7 +158,7 @@ export default function ClassSessionsPage() {
     })
   }, [dateFilter, dateRange?.from, dateRange?.to, tableQueryInitialized])
 
-  function updateDateFilter(mode: 'all' | 'today' | 'upcoming' | 'range', range?: DateRangeValue) {
+  function updateDateFilter(mode: ClassSessionDateMode, range?: DateRangeValue) {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('dateMode', mode)
     nextParams.delete('p')
@@ -150,6 +171,24 @@ export default function ClassSessionsPage() {
       nextParams.delete('dateTo')
     }
     setSearchParams(nextParams, { replace: true })
+  }
+
+  function shiftSelectedDay(offset: number) {
+    const selectedDate = datePickerValue?.from
+    if (!selectedDate) return
+    const date = new Date(`${selectedDate}T00:00:00`)
+    date.setDate(date.getDate() + offset)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const shiftedDate = `${year}-${month}-${day}`
+    if (dateFilter !== 'range') {
+      const preset = ([-1, 0, 1] as const).find((dayOffset) => getDateRangeForOffset(dayOffset).from === shiftedDate)
+      if (preset === -1) return updateDateFilter('yesterday')
+      if (preset === 0) return updateDateFilter('today')
+      if (preset === 1) return updateDateFilter('tomorrow')
+    }
+    updateDateFilter('range', { from: shiftedDate })
   }
 
   async function claimSession(item: ClassSession) {
@@ -198,11 +237,15 @@ export default function ClassSessionsPage() {
               ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
               ...(dateFilter === 'upcoming'
                 ? { from: new Date().toISOString() }
-                : dateFilter === 'today'
-                  ? getDateRangeFilters(getTodayDateRange())
-                  : dateFilter === 'range'
-                  ? getDateRangeFilters(dateRange)
-                  : {}),
+                : dateFilter === 'yesterday'
+                  ? getDateRangeFilters(getDateRangeForOffset(-1))
+                  : dateFilter === 'today'
+                    ? getDateRangeFilters(getDateRangeForOffset(0))
+                    : dateFilter === 'tomorrow'
+                      ? getDateRangeFilters(getDateRangeForOffset(1))
+                      : dateFilter === 'range'
+                        ? getDateRangeFilters(dateRange)
+                        : {}),
             },
           )}
           refetchOnMount="always"
@@ -301,28 +344,25 @@ export default function ClassSessionsPage() {
           searchColumns={['id', 'className', 'coachName']}
           toolbarExtra={(
             <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={dateFilter}
-                onValueChange={(value) => updateDateFilter(value as 'all' | 'today' | 'upcoming' | 'range')}
-              >
-                <SelectTrigger className="h-9 w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All dates</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="upcoming">Upcoming</SelectItem>
-                  <SelectItem value="range">Date range</SelectItem>
-                </SelectContent>
-              </Select>
-              {dateFilter === 'range' && (
-                <DateRangePicker
-                  value={dateRange}
-                  placeholder="Choose dates"
-                  className="w-[220px]"
-                  onValueChange={(range) => updateDateFilter('range', range)}
-                />
-              )}
+              <div className="flex w-fit shrink-0 flex-nowrap items-center gap-2">
+                {showTodayButton && <Button type="button" variant="outline" size="lg" onClick={() => updateDateFilter('today')}>
+                  Today
+                </Button>}
+                <div className="flex w-fit shrink-0 flex-nowrap items-center gap-1">
+                  {showDayNavigation && <Button type="button" variant="outline" size="icon" aria-label="Previous day" title="Previous day" onClick={() => shiftSelectedDay(-1)}>
+                    <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+                  </Button>}
+                  <DateRangePicker
+                    value={datePickerValue}
+                    placeholder="Choose dates"
+                    className="h-9 w-fit min-w-0 shrink-0 whitespace-nowrap px-2"
+                    onValueChange={(range) => updateDateFilter(range ? 'range' : 'upcoming', range)}
+                  />
+                  {showDayNavigation && <Button type="button" variant="outline" size="icon" aria-label="Next day" title="Next day" onClick={() => shiftSelectedDay(1)}>
+                    <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+                  </Button>}
+                </div>
+              </div>
             </div>
           )}
           filters={[

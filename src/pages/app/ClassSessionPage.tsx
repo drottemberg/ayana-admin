@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { getClassBookingColumns } from '@/features/classes/class-session-columns'
-import { BookingCardDayGroup, ClassBookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
+import { ClassBookingListCard } from '@/features/bookings/BookingListCard'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
 import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
@@ -128,11 +128,15 @@ export default function ClassSessionPage() {
   const isInstructorContext = instructorMembership?.role === 'INSTRUCTOR'
   const isAssignedInstructor = instructorMembership?.role === 'INSTRUCTOR'
     && classSession?.coachId === appSession?.user.id
+  const attendanceAvailable = Boolean(
+    classSession?.startTime
+    && new Date(classSession.startTime).getTime() <= Date.now() + 90 * 60 * 1000,
+  )
   const canTakeAttendance = Boolean(
     isAssignedInstructor
     && classSession
     && ['SCHEDULED', 'COMPLETED'].includes(classSession.status)
-    && new Date(classSession.startTime).getTime() < Date.now(),
+    && attendanceAvailable,
   )
   const canClaimSession = Boolean(
     isInstructorContext
@@ -426,18 +430,23 @@ export default function ClassSessionPage() {
         const filteredRows = bookingStatusFilter === 'ALL'
           ? rows
           : rows.filter((booking) => !['CANCELLED', 'LATE_CANCELLED'].includes(booking.status))
+        const sortedRows = [...filteredRows].sort((left, right) =>
+          (left.firstName ?? '').localeCompare(right.firstName ?? '', undefined, { sensitivity: 'base' })
+          || (left.lastName ?? '').localeCompare(right.lastName ?? '', undefined, { sensitivity: 'base' })
+          || left.userId.localeCompare(right.userId),
+        )
         const classPassCount = filteredRows.filter((booking) => booking.source === 'CLASSPASS').length
         const egymCount = filteredRows.filter((booking) => booking.source === 'EGYM').length
         const directCount = filteredRows.length - classPassCount - egymCount
         const summary = [classPassCount ? `${classPassCount} ClassPass` : '', egymCount ? `${egymCount} EGYM` : '', directCount ? `${directCount} Direct` : ''].filter(Boolean).join(' · ')
         setBookingSourceSummary((current) => current === summary ? current : summary)
         const { pageIndex, pageSize } = state.pagination
-        return { items: filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: filteredRows.length, pageCount: Math.ceil(filteredRows.length / pageSize) }
+        return { items: sortedRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), count: sortedRows.length, pageCount: Math.ceil(sortedRows.length / pageSize) }
       }}
       tableKey={`class-sessions.detail.bookings.${sessionId}.25.${bookingStatusFilter}`}
       columns={getClassBookingColumns({
         canEditAttendance: Boolean(appSession?.permissions.bookings?.edit),
-        isPast: Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now()),
+        attendanceAvailable,
         instructorView: isInstructorContext,
         canInstructorTakeAttendance: canTakeAttendance,
         savingBookingId: attendanceSavingId,
@@ -450,16 +459,10 @@ export default function ClassSessionPage() {
         locationName={classSession?.locationName}
         instructorView={isInstructorContext}
         canUpdateAttendance={isInstructorContext ? canTakeAttendance : Boolean(appSession?.permissions.bookings?.edit)}
-        isPast={Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now())}
+        attendanceAvailable={attendanceAvailable}
         saving={attendanceSavingId === booking.id}
         onSetAttendance={(bookingId, attended) => { void setBookingAttendance(bookingId, attended) }}
       />}
-      getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
-      sortCardGroups={(left, right) => right.localeCompare(left)}
-      sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}
-      renderCardGroup={(dateKey, items) => <BookingCardDayGroup dateKey={dateKey} count={items.length}>
-        {items.map((item) => <div key={item.key}>{item.content}</div>)}
-      </BookingCardDayGroup>}
       getRowCommands={(booking) => getBookingRowActions({
         status: booking.status,
         canEdit: Boolean(appSession?.permissions.bookings?.edit),
