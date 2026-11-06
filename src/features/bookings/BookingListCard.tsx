@@ -61,6 +61,20 @@ function classSessionTime(value?: string, timezone?: string | null) {
   return new Intl.DateTimeFormat(undefined, { timeZone: timezone || undefined, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
+function bookingSessionDateParts(value?: string) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', weekday: 'short' }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(({ type, value: part }) => [type, part]))
+  return {
+    month: (values.month ?? '').toUpperCase(),
+    day: values.day ?? '',
+    weekday: values.weekday ?? '',
+    time: new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date),
+  }
+}
+
 function bookingCreatedDateTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
@@ -100,22 +114,31 @@ export function BookingListCard({
   actions,
   showUser = true,
   showCustomer = false,
+  showSessionDateAside = false,
   grouped = false,
 }: {
   booking: Booking
   actions: ReactNode
   showUser?: boolean
   showCustomer?: boolean
+  showSessionDateAside?: boolean
   grouped?: boolean
 }) {
   const memberName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
   const classTime = classSessionTime(booking.startsAt)
+  const sessionDate = showSessionDateAside ? bookingSessionDateParts(booking.startsAt) : null
   const secondaryDetails = [booking.location.name, showCustomer ? booking.customer.name : null].filter(Boolean).join(' · ')
   const isCancelled = booking.status === 'CANCELLED' || booking.status === 'LATE_CANCELLED'
 
-  return <article className={cn('flex min-w-0 items-start gap-3 px-4 py-3.5 sm:gap-4 sm:px-5', !grouped && 'rounded-2xl bg-card shadow-sm', isCancelled && 'opacity-60')}>
+  return <article className={cn('flex min-w-0 items-stretch gap-3 sm:gap-4', !sessionDate && 'px-4 py-3.5 sm:px-5', !grouped && (sessionDate ? 'overflow-hidden rounded-2xl border border-border bg-card shadow-sm' : 'rounded-2xl bg-card shadow-sm'), isCancelled && 'opacity-60')}>
+    {sessionDate ? <div className="flex w-[72px] shrink-0 flex-col items-center justify-start gap-0.5 border-r border-border bg-background px-2 pt-3 text-center">
+      <span className="text-[10px] font-semibold leading-none tracking-wide text-muted-foreground">{sessionDate.month}</span>
+      <span className="text-xl font-bold leading-tight text-foreground">{sessionDate.day}</span>
+      <span className="text-xs leading-none text-muted-foreground">{sessionDate.weekday}</span>
+      <span className="mt-1 whitespace-nowrap text-xs font-semibold leading-4 text-foreground">{sessionDate.time}</span>
+    </div> : null}
     {showUser ? <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', avatarColor(booking.user.id))} aria-hidden="true">{getInitials(memberName)}</div> : null}
-    <div className="min-w-0 flex-1">
+    <div className={cn('min-w-0 flex-1', sessionDate && 'py-3.5 pr-4 sm:pr-5')}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           {showUser ? <div className="flex min-w-0 items-center gap-1.5">
@@ -125,7 +148,7 @@ export function BookingListCard({
           <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.location.id)}`} className={cn('block truncate text-sm leading-5 text-[#625b56] hover:underline', showUser && 'mt-0.5 font-medium')}>
             {booking.className || booking.sessionId}
           </Link>
-          {classTime ? <div className="mt-0.5 text-xs leading-4 text-muted-foreground">{classTime}</div> : null}
+          {!sessionDate && classTime ? <div className="mt-0.5 text-xs leading-4 text-muted-foreground">{classTime}</div> : null}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
             {booking.isFreeTrial ? <FreeTrialPill /> : null}

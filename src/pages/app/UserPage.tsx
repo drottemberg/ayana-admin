@@ -505,7 +505,7 @@ export default function UserPage() {
         })}
         tableKey={`bookings.user.${userId}`}
         columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
-        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} />}
+        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} showSessionDateAside />}
         loadingMessage="Loading bookings..."
         emptyMessage="No bookings found."
         errorMessage="Failed to load bookings."
