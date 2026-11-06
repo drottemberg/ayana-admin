@@ -3,6 +3,7 @@ import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { fetchLocationFilterOptions, getLocationsRequest } from '@/features/locations/api'
 import { locationColumns } from '@/features/locations/location-columns'
 import { LocationService } from '@/features/locations/location-service'
+import { LocationListCard } from '@/features/locations/LocationListCard'
 import { locationsQueryKeys } from '@/features/locations/query-keys'
 import { useConnect } from '@/features/app/use-connect'
 import { Drawer, DrawerId } from '@/providers/drawer'
@@ -58,6 +59,7 @@ export default function LocationsPage() {
           loadData={(tableState: DataTableState<Location>) => getLocationsRequest(tableState, { customerId })}
           tableKey="locations.root"
           columns={locationColumns}
+          renderCard={(location, actions) => <LocationListCard location={location} actions={actions} showCustomer={!customerId} />}
           searchPlaceholder="Search by name, email, or customer..."
           searchColumns={['name', 'email', 'customerName']}
           filters={filters}

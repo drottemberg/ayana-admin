@@ -6,6 +6,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { StatusPill } from '@/components/app/StatusPill'
 import { NO_VALUE_STR } from '@/constants'
 import { cn } from '@/lib/utils'
 import type { Booking } from '@/types/booking'
@@ -74,25 +75,6 @@ function sourceLabel(source?: string) {
   return source === 'CLASSPASS' ? 'ClassPass' : source === 'EGYM' ? 'EGYM Wellpass' : 'Direct'
 }
 
-function statusLabel(status: string) {
-  return status.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
-}
-
-function statusTone(status: string) {
-  if (status === 'CONFIRMED') return { pill: 'border-emerald-200 bg-emerald-50 text-emerald-800', dot: 'bg-emerald-600' }
-  if (status === 'CANCELLED' || status === 'LATE_CANCELLED' || status === 'NO_SHOW') return { pill: 'border-rose-200 bg-rose-50 text-rose-800', dot: 'bg-rose-500' }
-  if (status === 'ATTENDED') return { pill: 'border-slate-300 bg-slate-50 text-slate-800', dot: 'bg-slate-800' }
-  return { pill: 'border-amber-200 bg-amber-50 text-amber-800', dot: 'bg-amber-500' }
-}
-
-function StatusText({ status }: { status: string }) {
-  const tone = statusTone(status)
-  return <Badge variant="outline" className={cn('inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-semibold', tone.pill)}>
-    <span className={cn('size-1.5 rounded-full', tone.dot)} />
-    {statusLabel(status)}
-  </Badge>
-}
-
 function SourcePill({ source }: { source?: string }) {
   return <Badge variant="secondary" className="h-6 rounded-full border-0 bg-[#f4f1ee] px-3 text-xs font-medium text-[#5f5954]">{sourceLabel(source)}</Badge>
 }
@@ -152,7 +134,7 @@ export function BookingListCard({
           {secondaryDetails ? <div className="mt-1 truncate text-xs text-muted-foreground">{secondaryDetails}</div> : null}
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <StatusText status={booking.status} />
+          <StatusPill status={booking.status} />
           {actions ? <div className="-mr-2 -mt-2">{actions}</div> : null}
         </div>
       </div>
@@ -220,7 +202,7 @@ export function ClassBookingListCard({
             <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="truncate text-sm font-semibold text-foreground underline-offset-2 hover:underline">{name}</Link>
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
           </div>
-          <StatusText status={booking.status} />
+          <StatusPill status={booking.status} />
           <SourcePill source={booking.source} />
         </div>
       </div>
@@ -246,7 +228,7 @@ export function ClassBookingListCard({
           </div>
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <StatusText status={booking.status} />
+          <StatusPill status={booking.status} />
           {actions ? <div className="-mr-2 -mt-2">{actions}</div> : null}
         </div>
       </div>

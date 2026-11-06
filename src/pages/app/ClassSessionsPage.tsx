@@ -9,13 +9,14 @@ import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
-import { PageHeader } from '@/components/ui/page-header'
+import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
+import { ClassSessionCreateDrawer } from '@/features/classes/ClassSessionCreateDrawer'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
@@ -89,9 +90,11 @@ export default function ClassSessionsPage() {
   const currentCustomerId = session?.currentOrganization?.id
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
   const canResumeSessions = Boolean(session?.permissions.classSessions?.edit)
+  const canCreateSessions = Boolean(session?.permissions.classSessions?.create)
   const isInstructor = session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
   const currentUserId = String(session?.user.id ?? '')
   const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
+  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [claimingSessionId, setClaimingSessionId] = useState<string | null>(null)
   const searchParamsString = searchParams.toString()
   const [tableQueryInitialized, setTableQueryInitialized] = useState(false)
@@ -226,7 +229,7 @@ export default function ClassSessionsPage() {
       <PageHeader
         title="Class sessions"
         subtitle="Review scheduled classes, capacity, and bookings."
-        primaryAction={{ children: 'Class types and schedules', onClick: () => navigate('/classes') }}
+        primaryAction={canCreateSessions ? createPageHeaderAction('Add session', () => setIsCreateDrawerOpen(true)) : undefined}
       />
       <section className="p-4 md:p-6">
         {!tableQueryInitialized ? (
@@ -431,6 +434,7 @@ export default function ClassSessionsPage() {
         open
         onOpenChange={(open) => { if (!open) setEditingSession(null) }}
       /> : null}
+      {canCreateSessions ? <ClassSessionCreateDrawer open={isCreateDrawerOpen} onOpenChange={setIsCreateDrawerOpen} /> : null}
     </>
   )
 }

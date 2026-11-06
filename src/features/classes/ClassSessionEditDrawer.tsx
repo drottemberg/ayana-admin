@@ -10,6 +10,7 @@ import { getLocationCoachesRequest, updateClassSessionRequest } from '@/features
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
+import { ClassSessionDateTimeField } from '@/features/classes/ClassSessionDateTimeField'
 
 const NO_COACH_VALUE = '__no_coach__'
 
@@ -96,8 +97,8 @@ export function ClassSessionEditDrawer({
   >
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
-        <Field label="Starts"><Input required type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></Field>
-        <Field label="Ends"><Input required type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></Field>
+        <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setStartTime} />
+        <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
         <Field label="Capacity"><Input required type="number" min={session?.bookedCount ?? 0} step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
         <Field label="Coach">
           <SelectInput

@@ -11,13 +11,17 @@ import type { DataTableAsyncResult, DataTableState } from '@/components/data-tab
 import { Badge } from '@/components/ui/badge'
 import { PageHeader, PageHeaderIconAction } from '@/components/ui/page-header'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { NO_VALUE_STR } from '@/constants'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
 import { ClassTypeProductDrawer } from '@/features/classes/ClassTypeProductDrawer'
 import { ClassScheduleCreateDrawer } from '@/features/classes/ClassScheduleCreateDrawer'
 import { ClassScheduleEditDrawer } from '@/features/classes/ClassScheduleEditDrawer'
+import { ClassSessionCreateDrawer } from '@/features/classes/ClassSessionCreateDrawer'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { ClassSessionListCard, classScheduleColumns, getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { ClassScheduleListCard } from '@/features/classes/ClassTypeListCards'
+import { ClassTypeProductListCard } from '@/features/classes/ClassTypeProductListCard'
 import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeProductsRequest, getClassTypeRequest, removeClassTypeProductRequest, type ClassTypeProduct } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
@@ -58,10 +62,12 @@ export default function ClassTypePage() {
   const locationId = searchParams.get('locationId') ?? ''
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false)
+  const [isSessionDrawerOpen, setIsSessionDrawerOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<ClassSchedule | null>(null)
   const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
   const [isClassProductDrawerOpen, setIsClassProductDrawerOpen] = useState(false)
   const [editingClassProduct, setEditingClassProduct] = useState<ClassTypeProduct | null>(null)
+  const [scheduleDayFilter, setScheduleDayFilter] = useState('ALL')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session } = useConnect()
@@ -95,6 +101,7 @@ export default function ClassTypePage() {
 
   const canEditClass = Boolean(session?.permissions.classes?.edit)
   const canEditSchedule = Boolean(session?.permissions.classSchedules?.edit)
+  const canCreateSession = Boolean(session?.permissions.classSessions?.create)
   const canEditSession = Boolean(session?.permissions.classSessions?.edit)
   const canDeleteSchedule = Boolean(session?.permissions.classSchedules?.delete)
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
@@ -116,57 +123,44 @@ export default function ClassTypePage() {
           ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit class" onClick={() => setEditingClassType(editableClassType)} />
           : undefined,
       }}
-      modules={[{ key: 'products', label: 'Products' }, { key: 'schedules', label: 'Schedules' }, { key: 'sessions', label: 'Sessions' }]}
+      modules={[{ key: 'schedules', label: 'Schedules' }, { key: 'sessions', label: 'Sessions' }, { key: 'products', label: 'Products' }]}
       aside={<DetailSidePanel sections={sections} isLoading={isLoading} />}
     >
-      <RelatedEntityModule<ClassTypeProduct & Record<string, unknown>>
-        id="module-products"
-        title="Products"
-        queryKey={classProductsQueryKey}
-        loadData={async (state) => localPage(
-          (await getClassTypeProductsRequest(classTypeId, locationId)) as (ClassTypeProduct & Record<string, unknown>)[], state,
-        )}
-        tableKey={`classes.detail.products.${classTypeId}`}
-        columns={classTypeProductColumns as never}
-        action={canEditClass ? { label: 'Add product', iconOnly: true, onClick: () => { setEditingClassProduct(null); setIsClassProductDrawerOpen(true) } } : undefined}
-        getRowCommands={(product) => canEditClass ? [
-          { label: 'Edit', onClick: () => { setEditingClassProduct(product); setIsClassProductDrawerOpen(true) } },
-          {
-            label: 'Remove from class',
-            variant: 'destructive',
-            onClick: async () => {
-              const confirmed = await Modals.confirm({
-                title: 'Remove this product from the class?',
-                content: `${product.productName} will no longer be suggested for this class. The product itself will not be changed.`,
-                okText: 'Remove product', cancelText: 'Cancel', okButtonProps: { variant: 'destructive' },
-              })
-              if (!confirmed) return
-              try {
-                await removeClassTypeProductRequest(classTypeId, locationId, product.productId)
-                await queryClient.invalidateQueries({ queryKey: classProductsQueryKey })
-                toast.success('Product removed from this class.')
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : 'Could not remove the product.')
-              }
-            },
-          },
-        ] : []}
-        loadingMessage="Loading class products..."
-        emptyMessage="No products are linked to this class. Link required items or gentle recommendations for the assistant."
-        errorMessage="Failed to load class products."
-        refetchOnMount="always"
-      />
       <RelatedEntityModule<ClassSchedule & Record<string, unknown>>
         id="module-schedules"
         title="Schedules"
-        queryKey={[...classTypesQueryKeys.location(locationId), classTypeId, 'schedules']}
+        queryKey={[...classTypesQueryKeys.location(locationId), classTypeId, 'schedules', scheduleDayFilter]}
         loadData={async (state) => {
-          const schedules = (await getClassSchedulesRequest(locationId)).filter((schedule) => schedule.classTypeId === classTypeId)
+          const schedules = (await getClassSchedulesRequest(locationId)).filter((schedule) =>
+            schedule.classTypeId === classTypeId && (
+              scheduleDayFilter === 'ALL' ||
+              schedule.frequencyUnit === 'DAILY' ||
+              (schedule.frequencyUnit === 'WEEKLY' && schedule.dayOfWeek === scheduleDayFilter)
+            ),
+          )
           return localPage(schedules as (ClassSchedule & Record<string, unknown>)[], state)
         }}
-        tableKey={`classes.detail.schedules.${classTypeId}`}
+        tableKey={`classes.detail.schedules.${classTypeId}.${scheduleDayFilter}`}
+        resetKey={scheduleDayFilter}
         columns={classScheduleColumns as never}
         action={canEditSchedule ? { label: 'Add schedule', iconOnly: true, onClick: () => setIsScheduleDrawerOpen(true) } : undefined}
+        headerExtra={(
+          <Select value={scheduleDayFilter} onValueChange={(value) => setScheduleDayFilter(value ?? 'ALL')}>
+            <SelectTrigger className="h-8 w-[150px]" aria-label="Filter schedules by day">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All days</SelectItem>
+              <SelectItem value="MON">Monday</SelectItem>
+              <SelectItem value="TUE">Tuesday</SelectItem>
+              <SelectItem value="WED">Wednesday</SelectItem>
+              <SelectItem value="THU">Thursday</SelectItem>
+              <SelectItem value="FRI">Friday</SelectItem>
+              <SelectItem value="SAT">Saturday</SelectItem>
+              <SelectItem value="SUN">Sunday</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         getRowCommands={(schedule) => canEditSchedule ? [
           { label: 'Edit schedule', onClick: () => setEditingSchedule(schedule) },
           ...(schedule.isActive ? [schedule.pauseFrom && (!schedule.pauseUntil || new Date(schedule.pauseUntil).toISOString().slice(0, 10) >= localToday()) ? {
@@ -255,6 +249,7 @@ export default function ClassTypePage() {
             },
           },
         ] : []}
+        renderCard={(schedule, actions) => classType ? <ClassScheduleListCard schedule={schedule} classType={classType} actions={actions} /> : null}
         loadingMessage="Loading schedules..."
         emptyMessage="No schedule has been configured for this class."
         errorMessage="Failed to load schedules."
@@ -264,6 +259,7 @@ export default function ClassTypePage() {
       <RelatedEntityModule<ClassSession & Record<string, unknown>>
         id="module-sessions"
         title="Sessions"
+        action={canCreateSession ? { label: 'Add session', iconOnly: true, onClick: () => setIsSessionDrawerOpen(true) } : undefined}
         viewAllTo={`/class-sessions?${new URLSearchParams({ filterLocationId: locationId, filterClassTypeId: classTypeId }).toString()}`}
         queryKey={classSessionsQueryKeys.classType(classTypeId)}
         loadData={(state) => getClassSessionsRequest(state as DataTableState<ClassSession>, {
@@ -310,9 +306,48 @@ export default function ClassTypePage() {
         errorMessage="Failed to load sessions."
         refetchOnMount="always"
       />
+      <RelatedEntityModule<ClassTypeProduct & Record<string, unknown>>
+        id="module-products"
+        title="Products"
+        queryKey={classProductsQueryKey}
+        loadData={async (state) => localPage(
+          (await getClassTypeProductsRequest(classTypeId, locationId)) as (ClassTypeProduct & Record<string, unknown>)[], state,
+        )}
+        tableKey={`classes.detail.products.${classTypeId}`}
+        columns={classTypeProductColumns as never}
+        action={canEditClass ? { label: 'Add product', iconOnly: true, onClick: () => { setEditingClassProduct(null); setIsClassProductDrawerOpen(true) } } : undefined}
+        renderCard={(product, actions) => <ClassTypeProductListCard product={product} actions={actions} />}
+        getRowCommands={(product) => canEditClass ? [
+          { label: 'Edit', onClick: () => { setEditingClassProduct(product); setIsClassProductDrawerOpen(true) } },
+          {
+            label: 'Remove from class',
+            variant: 'destructive',
+            onClick: async () => {
+              const confirmed = await Modals.confirm({
+                title: 'Remove this product from the class?',
+                content: `${product.productName} will no longer be suggested for this class. The product itself will not be changed.`,
+                okText: 'Remove product', cancelText: 'Cancel', okButtonProps: { variant: 'destructive' },
+              })
+              if (!confirmed) return
+              try {
+                await removeClassTypeProductRequest(classTypeId, locationId, product.productId)
+                await queryClient.invalidateQueries({ queryKey: classProductsQueryKey })
+                toast.success('Product removed from this class.')
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Could not remove the product.')
+              }
+            },
+          },
+        ] : []}
+        loadingMessage="Loading class products..."
+        emptyMessage="No products are linked to this class. Link required items or gentle recommendations for the assistant."
+        errorMessage="Failed to load class products."
+        refetchOnMount="always"
+      />
     </DetailPageLayout>
     <ClassTypeEditDrawer classType={editingClassType} open={Boolean(editingClassType)} onOpenChange={(open) => { if (!open) setEditingClassType(null) }} />
     <ClassScheduleCreateDrawer classType={editableClassType} open={isScheduleDrawerOpen} onOpenChange={setIsScheduleDrawerOpen} />
+    {canCreateSession ? <ClassSessionCreateDrawer fixedClassType={editableClassType} open={isSessionDrawerOpen} onOpenChange={setIsSessionDrawerOpen} /> : null}
     <ClassScheduleEditDrawer schedule={editingSchedule} classType={editableClassType} locationId={locationId} open={Boolean(editingSchedule)} onOpenChange={(open) => { if (!open) setEditingSchedule(null) }} />
     {editingSession ? <ClassSessionEditDrawer
       session={editingSession}

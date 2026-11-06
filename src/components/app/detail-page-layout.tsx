@@ -364,6 +364,7 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
   title: ReactNode
   icon?: IconSvgElement
   initialTotal?: number
+  resetKey?: Key
   viewAllTo?: string
   viewAllMinCount?: number
   action?: {
@@ -372,6 +373,7 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
     iconOnly?: boolean
     icon?: IconSvgElement
   }
+  headerExtra?: ReactNode
   columns: ColumnDef<TData>[]
   getCommands?: DataTableAsyncProps<TData>['getCommands']
   getRowCommands?: DataTableAsyncProps<TData>['getRowCommands']
@@ -397,9 +399,11 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
   title,
   icon,
   initialTotal,
+  resetKey,
   viewAllTo,
   viewAllMinCount,
   action,
+  headerExtra,
   columns,
   getCommands,
   getRowCommands,
@@ -439,19 +443,21 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
           resolvedTotalLabel
         )
       }
-      actions={
-        action ? action.iconOnly ? (
+      actions={action || headerExtra ? <>
+        {headerExtra}
+        {action ? action.iconOnly ? (
           <PageHeaderIconAction icon={action.icon ?? Add01Icon} label={action.label} onClick={action.onClick} variant="outline" size="icon" />
         ) : (
           <Button size="sm" variant="outline" onClick={action.onClick}>
             {action.label}
           </Button>
-        ) : null
-      }
+        ) : null}
+      </> : null}
     >
       <div className="max-w-full min-w-0">
         {toolbarExtra ? <div className="flex justify-end pb-3">{toolbarExtra}</div> : null}
         <DataTableAsync
+          key={resetKey}
           queryKey={queryKey}
           loadData={async (state: DataTableState<TData>) => {
             const result = await loadData(showPagination ? state : { ...state, pagination: { pageIndex: 0, pageSize } })

@@ -8,6 +8,7 @@ import { getClassTypesRequest, getClassTypeLocationOptions, getClassCategoryOpti
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { classTypesQueryKeys } from '@/features/classes/query-keys'
 import { ClassTypeService } from '@/features/classes/class-type-service'
+import { ClassTypeListCard } from '@/features/classes/ClassTypeListCards'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
 import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { useConnect } from '@/features/app/use-connect'
@@ -46,8 +47,9 @@ export default function ClassesPage() {
           tableKey="class-types.root"
           initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
           columns={columns}
+          renderCard={(classType, actions) => <ClassTypeListCard classType={classType} actions={actions} showCustomer={isAdminContext} />}
           getRowCommands={(classType) => ClassTypeService.getRowActions(classType, {
-            canEdit: Boolean(session?.permissions.customers?.edit),
+            canEdit: Boolean(session?.permissions.classes?.edit),
             onEdit: setEditingClassType,
           })}
           disabledSelection

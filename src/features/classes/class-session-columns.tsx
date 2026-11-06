@@ -6,6 +6,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { StatusPill } from '@/components/app/StatusPill'
 import type { ReactNode } from 'react'
 import { NO_VALUE_STR } from '@/constants'
 import type { ClassBooking, ClassSchedule, ClassSession } from '@/types/class-type'
@@ -73,9 +74,11 @@ export function ClassSessionListCard({
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span className={cn('text-sm font-semibold leading-5 text-foreground', isInactive && 'text-muted-foreground', isCancelled && 'line-through')}>{time}</span>
               <Badge variant="secondary" className="h-5 px-2 text-xs font-semibold tabular-nums text-foreground">{session.bookedCount} / {session.capacity}</Badge>
-              {session.status !== 'SCHEDULED' ? <Badge variant="outline" className={cn('h-5 px-2 text-[10px] font-medium uppercase', isCancelled ? 'border-red-300 text-red-600' : session.status === 'PAUSED' ? 'border-border text-muted-foreground' : 'text-foreground')}>{session.status.replaceAll('_', ' ')}</Badge> : null}
             </div>
-            {actions ? <div className="-mr-1 -mt-1 shrink-0">{actions}</div> : null}
+            <div className="flex shrink-0 items-start gap-1.5">
+              {session.status !== 'SCHEDULED' ? <StatusPill status={session.status} /> : null}
+              {actions ? <div className="-mr-1 -mt-1">{actions}</div> : null}
+            </div>
           </div>
           <Link to={sessionUrl} className={cn('mt-0.5 block truncate text-sm font-medium leading-5 text-foreground hover:underline', isInactive && 'text-muted-foreground')}>{session.className || session.classTypeId}</Link>
           {session.locationName ? <div className={cn('truncate text-xs leading-4 text-muted-foreground', isInactive && 'opacity-70')}>{session.locationName}</div> : null}

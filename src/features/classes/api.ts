@@ -53,6 +53,18 @@ export async function getClassFilterOptionsRequest(search: string, page = 1) {
   }
 }
 
+export async function getActiveClassTypeOptionsForLocationRequest(locationId: string, search: string) {
+  const result = await apiClient.post<ApiListResult<ClassType>>(CLASS_TYPES_LIST_URL, {
+    search: search.trim() || undefined,
+    page: 1,
+    limit: 100,
+    orderBy: 'name',
+    order: 'asc',
+    filters: { locationId: [locationId], status: ['ACTIVE'] },
+  }, { headers: { 'x-org-id': locationId } })
+  return result.items
+}
+
 export type UpdateClassTypePayload = {
   name: string
   category?: string
@@ -121,6 +133,20 @@ export async function getLocationCoachesRequest(locationId: string): Promise<Loc
 
 export async function updateClassSessionRequest(id: string, locationId: string, payload: UpdateClassSessionPayload) {
   return apiClient.patch<ClassSession>(`/class-sessions/${encodeURIComponent(id)}`, payload, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
+export type CreateClassSessionPayload = {
+  classTypeId: string
+  coachId?: string | null
+  startTime: string
+  endTime: string
+  capacity?: number
+}
+
+export async function createClassSessionRequest(locationId: string, payload: CreateClassSessionPayload) {
+  return apiClient.post<ClassSession>('/class-sessions', payload, {
     headers: { 'x-org-id': locationId },
   })
 }
