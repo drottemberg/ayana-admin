@@ -15,7 +15,7 @@ import { ClassTypeProductDrawer } from '@/features/classes/ClassTypeProductDrawe
 import { ClassScheduleCreateDrawer } from '@/features/classes/ClassScheduleCreateDrawer'
 import { ClassScheduleEditDrawer } from '@/features/classes/ClassScheduleEditDrawer'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
-import { classScheduleColumns, getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { ClassSessionListCard, classScheduleColumns, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeProductsRequest, getClassTypeRequest, removeClassTypeProductRequest, type ClassTypeProduct } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
@@ -269,6 +269,7 @@ export default function ClassTypePage() {
         })}
         tableKey={`classes.detail.sessions.${classTypeId}`}
         columns={getClassSessionColumns() as never}
+        renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
         getRowCommands={(classSession) => [
           { label: 'View session', onClick: () => navigate(`/class-sessions/${classSession.id}?locationId=${encodeURIComponent(locationId)}`) },
           ...(canEditSession && classSession.status === 'SCHEDULED' ? [{ label: 'Edit session', onClick: () => setEditingSession(classSession) }] : []),

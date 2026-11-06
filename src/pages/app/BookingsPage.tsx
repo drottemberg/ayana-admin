@@ -7,6 +7,7 @@ import { getOrderLocationOptions } from '@/features/orders/api'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { getBookingsRequest } from '@/features/bookings/api'
 import { getBookingColumns } from '@/features/bookings/booking-columns'
+import { BookingCardDayGroup, BookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import type { Booking } from '@/types/booking'
@@ -54,6 +55,13 @@ export default function BookingsPage() {
         tableKey="bookings.root"
         initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
         columns={columns}
+        renderCard={(booking, actions, grouped) => <BookingListCard booking={booking} actions={actions} grouped={grouped} showCustomer={isAdminContext} />}
+        getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
+        sortCardGroups={(left, right) => right.localeCompare(left)}
+        sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}
+        renderCardGroup={(dateKey, items) => <BookingCardDayGroup dateKey={dateKey} count={items.length}>
+          {items.map((item) => <div key={item.key}>{item.content}</div>)}
+        </BookingCardDayGroup>}
         getRowCommands={(booking) => getBookingRowActions({
           status: booking.status,
           canEdit: canEditBooking,

@@ -50,7 +50,7 @@ import { getPricingOptionColumns } from '@/features/pricing-options/pricing-opti
 import { PricingOptionService } from '@/features/pricing-options/pricing-option-service'
 import { CreatePricingOptionDialog } from '@/features/pricing-options/CreatePricingOptionDialog'
 import { classSessionsListConfig, classTypesListConfig, getClassTypesRequest, getClassSessionsRequest } from '@/features/classes/api'
-import { getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { ClassTypeService } from '@/features/classes/class-type-service'
 import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
@@ -632,6 +632,7 @@ export default function CustomerPage() {
                   loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(state, { customerId: customer.id })}
                   tableKey="customers.detail.modules.class-sessions"
                   columns={getClassSessionColumns({ showLocation: true })}
+                  renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
                   getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
                     ? [{ label: 'Edit session', onClick: () => setEditingClassSession(classSession) }]
                     : []}

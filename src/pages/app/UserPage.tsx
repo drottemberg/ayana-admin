@@ -53,11 +53,12 @@ import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { Order } from '@/types/order'
 import { getBookingsRequest } from '@/features/bookings/api'
 import { getBookingColumns } from '@/features/bookings/booking-columns'
+import { BookingCardDayGroup, BookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { getClassSchedulesRequest, getClassSessionsRequest } from '@/features/classes/api'
-import { getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import type { ClassSchedule, ClassSession } from '@/types/class-type'
 import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
 import { getAiSupportIssuesRequest, updateAiSupportIssueRequest } from '@/features/ai-support-issues/api'
@@ -434,6 +435,7 @@ export default function UserPage() {
         })}
         tableKey={`class-sessions.user.${userId}`}
         columns={getClassSessionColumns({ showCustomer: isAdminContext, showLocation: true })}
+        renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
         loadingMessage="Loading class sessions..."
         emptyMessage="No class sessions assigned to this coach."
         errorMessage="Failed to load class sessions."
@@ -500,6 +502,13 @@ export default function UserPage() {
         })}
         tableKey={`bookings.user.${userId}`}
         columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
+        renderCard={(booking, actions, grouped) => <BookingListCard booking={booking} actions={actions} grouped={grouped} showUser={false} showCustomer={isAdminContext} />}
+        getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
+        sortCardGroups={(left, right) => right.localeCompare(left)}
+        sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}
+        renderCardGroup={(dateKey, items) => <BookingCardDayGroup dateKey={dateKey} count={items.length}>
+          {items.map((item) => <div key={item.key}>{item.content}</div>)}
+        </BookingCardDayGroup>}
         loadingMessage="Loading bookings..."
         emptyMessage="No bookings found."
         errorMessage="Failed to load bookings."

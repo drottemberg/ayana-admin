@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { getClassBookingColumns } from '@/features/classes/class-session-columns'
+import { BookingCardDayGroup, ClassBookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
 import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
@@ -22,7 +23,7 @@ import { useConnect } from '@/features/app/use-connect'
 import { Modals } from '@/providers/modal'
 import type { ClassPassScheduleInsight, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
-import { claimCoachSessionRequest } from '@/features/coaches/api'
+import { claimCoachSessionRequest, saveCoachSessionAttendanceRequest } from '@/features/coaches/api'
 import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -151,7 +152,15 @@ export default function ClassSessionPage() {
   const setBookingAttendance = async (bookingId: string, attended: boolean | null) => {
     setAttendanceSavingId(bookingId)
     try {
-      await updateBookingAttendance(bookingId, resolvedLocationId, attended, invalidateBookingViews)
+      if (isInstructorContext && classSession) {
+        await saveCoachSessionAttendanceRequest(classSession.id, [{ bookingId, present: attended }])
+        await invalidateBookingViews()
+        toast.success(attended === true ? 'Booking marked present.' : attended === false ? 'Booking marked absent.' : 'Attendance cleared.')
+      } else {
+        await updateBookingAttendance(bookingId, resolvedLocationId, attended, invalidateBookingViews)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update attendance.')
     } finally {
       setAttendanceSavingId(null)
     }
@@ -430,9 +439,30 @@ export default function ClassSessionPage() {
         canEditAttendance: Boolean(appSession?.permissions.bookings?.edit),
         isPast: Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now()),
         instructorView: isInstructorContext,
+        canInstructorTakeAttendance: canTakeAttendance,
         savingBookingId: attendanceSavingId,
         onSetAttendance: (bookingId, attended) => { void setBookingAttendance(bookingId, attended) },
       })}
+      renderCard={(booking, actions, grouped) => <ClassBookingListCard
+        booking={booking}
+        actions={actions}
+        grouped={grouped}
+        startsAt={classSession?.startTime}
+        timezone={classSession?.timezone}
+        className={classSession?.className}
+        locationName={classSession?.locationName}
+        instructorView={isInstructorContext}
+        canUpdateAttendance={isInstructorContext ? canTakeAttendance : Boolean(appSession?.permissions.bookings?.edit)}
+        isPast={Boolean(classSession?.startTime && new Date(classSession.startTime).getTime() < Date.now())}
+        saving={attendanceSavingId === booking.id}
+        onSetAttendance={(bookingId, attended) => { void setBookingAttendance(bookingId, attended) }}
+      />}
+      getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
+      sortCardGroups={(left, right) => right.localeCompare(left)}
+      sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}
+      renderCardGroup={(dateKey, items) => <BookingCardDayGroup dateKey={dateKey} count={items.length}>
+        {items.map((item) => <div key={item.key}>{item.content}</div>)}
+      </BookingCardDayGroup>}
       getRowCommands={(booking) => getBookingRowActions({
         status: booking.status,
         canEdit: Boolean(appSession?.permissions.bookings?.edit),

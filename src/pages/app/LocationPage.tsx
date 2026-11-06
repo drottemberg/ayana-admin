@@ -24,7 +24,7 @@ import { getPricingOptionColumns } from '@/features/pricing-options/pricing-opti
 import { pricingOptionsQueryKeys } from '@/features/pricing-options/query-keys'
 import type { PricingOption } from '@/types/pricing-option'
 import { getClassTypesRequest, getClassSessionsRequest, getLocationCoachesRequest } from '@/features/classes/api'
-import { getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { getClassTypeColumns } from '@/features/classes/class-type-columns'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession, ClassType } from '@/types/class-type'
@@ -238,6 +238,7 @@ export default function LocationPage() {
           loadData={(state: DataTableState<ClassSession>) => getClassSessionsRequest(state, { locationId })}
           tableKey={`locations.detail.modules.class-sessions.${locationId}`}
           columns={getClassSessionColumns()}
+          renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
           getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
             ? [{ label: 'Edit session', onClick: () => setEditingClassSession(classSession) }]
             : []}

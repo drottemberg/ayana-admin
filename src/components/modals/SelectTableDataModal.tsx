@@ -82,6 +82,7 @@ const SelectTableDataModal = NiceModal.create<SelectTableDataModalProps>(
           errorMessage={errorMessage}
           customizeColumns={false}
           perPageOptions={false}
+          surface="plain"
         />
       </BaseModal>
     )

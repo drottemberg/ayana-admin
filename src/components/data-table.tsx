@@ -21,7 +21,6 @@ import LeftToRightListBulletIcon from '@hugeicons/core-free-icons/LeftToRightLis
 import ArrowDown02Icon from '@hugeicons/core-free-icons/ArrowDown02Icon'
 import MoreHorizontalIcon from '@hugeicons/core-free-icons/MoreHorizontalIcon'
 import ArrowUp02Icon from '@hugeicons/core-free-icons/ArrowUp02Icon'
-import FilterHorizontalIcon from '@hugeicons/core-free-icons/FilterHorizontalIcon'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import { type VariantProps } from 'class-variance-authority'
@@ -141,6 +140,13 @@ type DataTableBaseProps<TData extends Record<string, unknown>> = {
   syncQueryParams?: boolean
   onRowClick?: (row: TData) => void
   getRowClassName?: (row: TData) => string | undefined
+  renderCard?: (row: TData, actions: React.ReactNode, grouped?: boolean) => React.ReactNode
+  getCardGroupKey?: (row: TData) => string | null | undefined
+  sortCardGroups?: (left: string, right: string) => number
+  sortCardGroupItems?: (left: TData, right: TData) => number
+  renderCardGroup?: (groupKey: string, items: Array<{ row: TData; actions: React.ReactNode; content: React.ReactNode; key: string }>) => React.ReactNode
+  toolbarLayout?: 'default' | 'filters-below'
+  surface?: 'card' | 'plain'
 }
 
 export type DataTableProps<TData extends Record<string, unknown>> = Omit<
@@ -348,7 +354,7 @@ function BaseDataTable<TData extends Record<string, unknown>>({
   initialSelectedIds,
   selectionMode = 'multiple',
   disabledSelection = false,
-  customizeColumns = true,
+  customizeColumns = false,
   perPageOptions = true,
   tableKey,
   title,
@@ -359,6 +365,13 @@ function BaseDataTable<TData extends Record<string, unknown>>({
   syncQueryParams = Boolean(tableKey?.endsWith('.root')),
   onRowClick,
   getRowClassName,
+  renderCard,
+  getCardGroupKey,
+  sortCardGroups,
+  sortCardGroupItems,
+  renderCardGroup,
+  toolbarLayout = 'default',
+  surface = 'card',
 }: DataTableBaseProps<TData>) {
   const [searchParams, setSearchParams] = useSearchParams()
   const searchParamsString = searchParams.toString()
@@ -554,10 +567,10 @@ function BaseDataTable<TData extends Record<string, unknown>>({
                 items={rowCommands}
                 align="end"
                 triggerRender={
-                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Row actions" />
+                  <Button variant="ghost" size="icon-md" className="text-foreground" aria-label="Row actions" />
                 }
               >
-                <HugeiconsIcon icon={MoreHorizontalIcon} size={16} strokeWidth={1} />
+                <HugeiconsIcon icon={MoreHorizontalIcon} size={20} strokeWidth={1.5} />
               </DropdownActionsMenu>
             </div>
           )
@@ -786,11 +799,139 @@ function BaseDataTable<TData extends Record<string, unknown>>({
     })
   }
 
+  const filterControls = filters.length ? (
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+      <span className="text-sm text-foreground">Filter by:</span>
+      {filters.map((filter) => {
+        const selectedValues = getColumnFilterValues(columnFilters, filter.column)
+
+        if (filter.queryFn) {
+          return (
+            <AsyncFilterDropdown
+              key={filter.id}
+              filter={filter as DataTableFilter<TData> & { queryFn: NonNullable<DataTableFilter<TData>['queryFn']> }}
+              selectedValues={selectedValues}
+              onToggle={(id, checked) => toggleFilter(filter.column, id, checked, filter.selectionMode ?? 'multiple')}
+            />
+          )
+        }
+
+        const options = getFilterOptions(tableData, filter)
+        const triggerLabel = getFilterTriggerLabel(filter.label, selectedValues)
+        return (
+          <DropdownActionsMenu
+            key={filter.id}
+            items={options.map((option) => ({
+              type: 'checkbox',
+              label: option,
+              checked: selectedValues.includes(option),
+              onCheckedChange: (checked) => toggleFilter(filter.column, option, Boolean(checked), filter.selectionMode ?? 'multiple'),
+            }))}
+            align="start"
+            contentClassName="w-48"
+            triggerRender={<Button variant="outline" className="h-9" />}
+          >
+            {triggerLabel}
+          </DropdownActionsMenu>
+        )
+      })}
+      <Button
+        variant="ghost"
+        className="h-9 px-2 text-muted-foreground"
+        disabled={!globalFilter && !activeFiltersCount}
+        onClick={resetFilters}
+      >
+        Reset filters
+      </Button>
+    </div>
+  ) : null
+
+  const toolbarActions = (
+    <div className="flex min-w-0 max-w-full shrink-0 flex-row flex-wrap items-center justify-end gap-2">
+      {customizeColumns && (
+        <DropdownActionsMenu
+          items={table.getAllColumns()
+            .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
+            .map((column) => ({
+              type: 'checkbox',
+              label: column.columnDef.header as string,
+              checked: column.getIsVisible(),
+              onCheckedChange: (value) => column.toggleVisibility(!!value),
+              className: 'capitalize',
+            }))}
+          align="end"
+          contentClassName="w-32"
+          triggerRender={<Button variant="outline" className="h-9" />}
+        >
+          <HugeiconsIcon icon={LeftToRightListBulletIcon} strokeWidth={2} data-icon="inline-start" />
+        </DropdownActionsMenu>
+      )}
+
+      {primaryCommand ? (
+        <Button
+          variant={primaryCommand.variant === 'destructive' ? 'destructive' : 'outline'}
+          size="lg"
+          disabled={primaryCommand.disabled}
+          onClick={() => primaryCommand.onClick(getSelectedData())}
+        >
+          {primaryCommand.label}
+        </Button>
+      ) : null}
+
+      {command ? (
+        <Button
+          variant={command.variant === 'destructive' ? 'destructive' : 'outline'}
+          size="lg"
+          disabled={command.disabled}
+          onClick={() => command.onClick(getSelectedData())}
+        >
+          {command.label}
+        </Button>
+      ) : commands.length ? (
+        <DropdownActionsMenu
+          items={commands.map((item) => ({ ...item, onClick: () => item.onClick(getSelectedData()) }))}
+          align="end"
+          triggerRender={<Button variant="outline" size="lg" />}
+          showChevron
+        >
+          Commands
+        </DropdownActionsMenu>
+      ) : null}
+    </div>
+  )
+
   return (
-    <div className={cn('@container space-y-3', className)}>
-      {showToolbar ? (
-        <div className="flex flex-col gap-3 @xl:flex-row @xl:items-stretch @xl:justify-between">
-          <div className="flex flex-1 flex-col gap-3 @5xl:flex-row @5xl:items-stretch">
+    <div
+      data-slot={surface === 'card' ? 'card' : undefined}
+      data-size={surface === 'card' ? 'sm' : undefined}
+      className={cn(
+        '@container space-y-3',
+        surface === 'card' && 'group/card flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg bg-muted p-3 text-sm text-card-foreground ring-1 ring-foreground/10',
+        className,
+      )}
+    >
+      {showToolbar ? toolbarLayout === 'filters-below' ? (
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-3 @xl:flex-row @xl:items-center @xl:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 @xl:flex-row @xl:items-center">
+              <SearchInput
+                value={globalFilter}
+                onChange={(event) => {
+                  setGlobalFilter(event.target.value)
+                  table.setPageIndex(0)
+                }}
+                placeholder={searchPlaceholder}
+                containerClassName="w-full max-w-[36rem] min-w-60"
+              />
+              {toolbarExtra ? <div className="flex shrink-0 items-center">{toolbarExtra}</div> : null}
+            </div>
+            {toolbarActions}
+          </div>
+          {filterControls}
+        </div>
+      ) : (
+          <div className="flex min-w-0 flex-col gap-3 @xl:flex-row @xl:items-start @xl:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 @5xl:flex-row @5xl:items-stretch">
             <SearchInput
               value={globalFilter}
               onChange={(event) => {
@@ -800,120 +941,10 @@ function BaseDataTable<TData extends Record<string, unknown>>({
               placeholder={searchPlaceholder}
               containerClassName="w-full max-w-100 min-w-60"
             />
-            {toolbarExtra && <div className="flex items-center">{toolbarExtra}</div>}
-            {filters.length ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-foreground">Filter by:</span>
-                {filters.map((filter) => {
-                  const selectedValues = getColumnFilterValues(columnFilters, filter.column)
-
-                  if (filter.queryFn) {
-                    return (
-                      <AsyncFilterDropdown
-                        key={filter.id}
-                        filter={
-                          filter as DataTableFilter<TData> & { queryFn: NonNullable<DataTableFilter<TData>['queryFn']> }
-                        }
-                        selectedValues={selectedValues}
-                        onToggle={(id, checked) =>
-                          toggleFilter(filter.column, id, checked, filter.selectionMode ?? 'multiple')
-                        }
-                      />
-                    )
-                  }
-
-                  const options = getFilterOptions(tableData, filter)
-                  const triggerLabel = getFilterTriggerLabel(filter.label, selectedValues)
-                  return (
-                    <DropdownActionsMenu
-                      key={filter.id}
-                      items={options.map((option) => ({
-                        type: 'checkbox',
-                        label: option,
-                        checked: selectedValues.includes(option),
-                        onCheckedChange: (checked) =>
-                          toggleFilter(filter.column, option, Boolean(checked), filter.selectionMode ?? 'multiple'),
-                      }))}
-                      align="start"
-                      contentClassName="w-48"
-                      triggerRender={<Button variant="outline" className="h-9" />}
-                    >
-                      {triggerLabel}
-                    </DropdownActionsMenu>
-                  )
-                })}
-                <DropdownActionsMenu items={[]} align="start" triggerRender={<Button variant="outline" size="lg" />}>
-                  <HugeiconsIcon icon={FilterHorizontalIcon} strokeWidth={2} data-icon="inline-start" />
-                </DropdownActionsMenu>
-
-                {globalFilter || activeFiltersCount ? (
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-2 text-muted-foreground"
-                    disabled={!globalFilter && !activeFiltersCount}
-                    onClick={resetFilters}
-                  >
-                    Reset
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
+            {toolbarExtra ? <div className="flex items-center">{toolbarExtra}</div> : null}
+            {filterControls}
           </div>
-          <div className="flex flex-row items-center justify-between gap-3 @xl:items-end @xl:justify-end">
-            {customizeColumns && (
-              <DropdownActionsMenu
-                items={table
-                  .getAllColumns()
-                  .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
-                  .map((column) => ({
-                    type: 'checkbox',
-                    label: column.columnDef.header as string,
-                    checked: column.getIsVisible(),
-                    onCheckedChange: (value) => column.toggleVisibility(!!value),
-                    className: 'capitalize',
-                  }))}
-                align="end"
-                contentClassName="w-32"
-                triggerRender={<Button variant="outline" className="h-9" />}
-              >
-                <HugeiconsIcon icon={LeftToRightListBulletIcon} strokeWidth={2} data-icon="inline-start" />
-              </DropdownActionsMenu>
-            )}
-
-            {primaryCommand ? (
-              <Button
-                variant={primaryCommand.variant === 'destructive' ? 'destructive' : 'outline'}
-                size="lg"
-                disabled={primaryCommand.disabled}
-                onClick={() => primaryCommand.onClick(getSelectedData())}
-              >
-                {primaryCommand.label}
-              </Button>
-            ) : null}
-
-            {command ? (
-              <Button
-                variant={command.variant === 'destructive' ? 'destructive' : 'outline'}
-                size="lg"
-                disabled={command.disabled}
-                onClick={() => command.onClick(getSelectedData())}
-              >
-                {command.label}
-              </Button>
-            ) : commands.length ? (
-              <DropdownActionsMenu
-                items={commands.map((command) => ({
-                  ...command,
-                  onClick: () => command.onClick(getSelectedData()),
-                }))}
-                align="end"
-                triggerRender={<Button variant="outline" size="lg" />}
-                showChevron
-              >
-                Commands
-              </DropdownActionsMenu>
-            ) : null}
-          </div>
+          {toolbarActions}
         </div>
       ) : null}
 
@@ -928,7 +959,76 @@ function BaseDataTable<TData extends Record<string, unknown>>({
         </div>
       ) : null}
 
-      <div className="relative overflow-hidden rounded-lg border bg-card">
+      {renderCard ? (
+        <div className="relative space-y-2">
+          {table.getRowModel().rows.length ? renderCardGroup && getCardGroupKey ? (() => {
+            const groups = new Map<string, Row<TData>[]>()
+            table.getRowModel().rows.forEach((row) => {
+              const key = getCardGroupKey(row.original)
+              if (key == null) return
+              const group = groups.get(key) ?? []
+              group.push(row)
+              groups.set(key, group)
+            })
+            return Array.from(groups.entries())
+              .sort(([left], [right]) => sortCardGroups?.(left, right) ?? 0)
+              .map(([key, rows]) => renderCardGroup(key, rows
+                .slice()
+                .sort((left, right) => sortCardGroupItems?.(left.original, right.original) ?? 0)
+                .map((row) => {
+                  const rowCommands = getRowCommands?.(row.original) ?? []
+                  const actions = rowCommands.length ? (
+                    <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
+                      <DropdownActionsMenu
+                        items={rowCommands}
+                        align="end"
+                        triggerRender={<Button variant="ghost" size="icon-md" className="text-foreground" aria-label="Booking actions" />}
+                      >
+                        <HugeiconsIcon icon={MoreHorizontalIcon} size={20} strokeWidth={1.5} />
+                      </DropdownActionsMenu>
+                    </div>
+                  ) : null
+                  const className = getRowClassName?.(row.original)
+                  const onClick = onRowClick ? () => onRowClick(row.original) : undefined
+                  const content = <div data-state={row.getIsSelected() && 'selected'} className={cn(onClick && 'cursor-pointer', className)} onClick={onClick}>{renderCard(row.original, actions, true)}</div>
+                  return { row: row.original, actions, content, key: row.id }
+                })))
+          })() : table.getRowModel().rows.map((row) => {
+              const rowCommands = getRowCommands?.(row.original) ?? []
+              const actions = rowCommands.length ? (
+                <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
+                  <DropdownActionsMenu
+                    items={rowCommands}
+                    align="end"
+                    triggerRender={<Button variant="ghost" size="icon-md" className="text-foreground" aria-label="Session actions" />}
+                  >
+                    <HugeiconsIcon icon={MoreHorizontalIcon} size={20} strokeWidth={1.5} />
+                  </DropdownActionsMenu>
+                </div>
+              ) : null
+
+              const onClick = onRowClick ? () => onRowClick(row.original) : undefined
+              const className = getRowClassName?.(row.original)
+              return (
+              <div
+                key={row.id}
+                data-state={row.getIsSelected() && 'selected'}
+                className={cn(onClick && 'cursor-pointer', className)}
+                onClick={onClick}
+              >
+                {renderCard(row.original, actions)}
+              </div>
+              )
+          }) : (
+            <div className="rounded-2xl border bg-card px-4 py-8 text-center">
+              {errorMessage ? <div className="text-sm text-destructive">{errorMessage}</div> : isLoading ? (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />{loadingMessage}</div>
+              ) : <EmptyBlock title={emptyMessage} button={emptyAction} />}
+            </div>
+          )}
+          {isLoading ? <div className="absolute inset-0 rounded-2xl bg-background/50" /> : null}
+        </div>
+      ) : <div className="relative overflow-hidden rounded-lg border bg-card">
         <Table>
           <TableHeader className="bg-muted/40">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -998,7 +1098,7 @@ function BaseDataTable<TData extends Record<string, unknown>>({
           </TableBody>
         </Table>
         {isLoading ? <div className="absolute inset-0 bg-background/50" /> : null}
-      </div>
+      </div>}
 
       {showPagination ? (
         <div className="flex flex-col items-stretch justify-between gap-2 @md:flex-row @md:items-center">

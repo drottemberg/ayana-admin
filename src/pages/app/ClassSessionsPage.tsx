@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { DataTableAsync, type DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { getCustomersListRequest } from '@/features/customers/api'
-import { getClassSessionColumns } from '@/features/classes/class-session-columns'
+import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
@@ -209,6 +209,16 @@ export default function ClassSessionsPage() {
           tableKey="class-sessions.root"
           initialFilters={migratedInitialFilters}
           columns={columns}
+          customizeColumns={false}
+          renderCard={(item, actions) => (
+            <ClassSessionListCard
+              session={item}
+              actions={actions}
+              allowClaim={isInstructor}
+              claimingSessionId={claimingSessionId}
+              onClaim={claimSession}
+            />
+          )}
           getRowCommands={(item) => [
             {
               label: 'View session',
@@ -286,6 +296,7 @@ export default function ClassSessionsPage() {
             }] : []),
           ]}
           disabledSelection
+          toolbarLayout="filters-below"
           searchPlaceholder="Search by class, session, or coach"
           searchColumns={['id', 'className', 'coachName']}
           toolbarExtra={(

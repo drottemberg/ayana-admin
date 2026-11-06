@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type Key, type ReactNode } from 'react'
+import { createContext, Fragment, isValidElement, useCallback, useContext, useEffect, useLayoutEffect, useState, type Key, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Link } from 'react-router-dom'
@@ -39,7 +39,17 @@ const DetailLayoutStackedContext = createContext(false)
 function getIsStackedDetailLayout() {
   if (typeof window === 'undefined') return false
   const main = document.querySelector<HTMLElement>('main[data-slot="sidebar-inset"]')
-  return (main?.clientWidth ?? window.innerWidth) <= 1023
+  return (main?.clientWidth ?? window.innerWidth) < 1024
+}
+
+function hasRenderableContent(node: ReactNode): boolean {
+  if (node === null || node === undefined || typeof node === 'boolean') return false
+  if (typeof node === 'string') return node.trim().length > 0
+  if (Array.isArray(node)) return node.some(hasRenderableContent)
+  if (isValidElement<{ children?: ReactNode }>(node) && node.type === Fragment) {
+    return hasRenderableContent(node.props.children)
+  }
+  return true
 }
 
 function useIsStackedDetailLayout() {
@@ -77,10 +87,63 @@ export function DetailPageLayout({
   className?: string
 }) {
   const isStackedLayout = useIsStackedDetailLayout()
+  const hasAside = hasRenderableContent(aside)
   const [activeModule, setActiveModule] = useState(modules?.[0]?.key ?? '')
+  const [bottomFillerHeight, setBottomFillerHeight] = useState(0)
 
   useEffect(() => {
+    if (!modules?.length || modules.some((module) => module.key === activeModule)) return
+    setActiveModule(modules[0].key)
+  }, [activeModule, modules])
+
+  useLayoutEffect(() => {
     if (!modules?.length) return
+
+    const moduleElements = modules
+      .map((module) => ({
+        key: module.key,
+        element: document.getElementById(`${MODULE_ANCHOR_PREFIX}-${module.key}`),
+      }))
+      .filter((module): module is { key: string; element: HTMLElement } => Boolean(module.element))
+    const previousHidden = moduleElements.map(({ element }) => element.hidden)
+
+    moduleElements.forEach(({ key, element }) => {
+      element.hidden = isStackedLayout && key !== activeModule
+    })
+
+    return () => {
+      moduleElements.forEach(({ element }, index) => {
+        element.hidden = previousHidden[index]
+      })
+    }
+  }, [activeModule, children, isStackedLayout, modules])
+
+  useLayoutEffect(() => {
+    if (!modules?.length) return
+
+    const lastModule = document.getElementById(`${MODULE_ANCHOR_PREFIX}-${modules[modules.length - 1].key}`)
+    const pageHeader = document.querySelector<HTMLElement>('[data-slot="page-header"]')
+    const updateFillerHeight = () => {
+      const headerHeight = pageHeader?.getBoundingClientRect().height ?? 0
+      const moduleHeight = lastModule?.getBoundingClientRect().height ?? 0
+      const nextHeight = Math.max(0, Math.ceil(window.innerHeight - headerHeight - moduleHeight + 8))
+      setBottomFillerHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight)
+    }
+
+    updateFillerHeight()
+    const resizeObserver = new ResizeObserver(updateFillerHeight)
+    if (lastModule) resizeObserver.observe(lastModule)
+    if (pageHeader) resizeObserver.observe(pageHeader)
+    window.addEventListener('resize', updateFillerHeight)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateFillerHeight)
+    }
+  }, [children, modules])
+
+  useEffect(() => {
+    if (!modules?.length || isStackedLayout) return
 
     const getModuleElements = () =>
       modules
@@ -102,7 +165,7 @@ export function DetailPageLayout({
           return
         }
 
-        const headerOffset = 160
+        const headerOffset = (document.querySelector<HTMLElement>('[data-slot="page-header"]')?.getBoundingClientRect().height ?? 160) + 8
         const active =
           moduleElements.findLast(({ element }) => element.getBoundingClientRect().top <= headerOffset) ??
           moduleElements[0]
@@ -121,14 +184,28 @@ export function DetailPageLayout({
       window.removeEventListener('scroll', updateActiveModule)
       window.removeEventListener('resize', updateActiveModule)
     }
-  }, [modules])
+  }, [isStackedLayout, modules])
 
-  const scrollToModule = useCallback((key: string) => {
-    setActiveModule(key)
+  const selectModule = useCallback((key: string) => {
     const id = `${MODULE_ANCHOR_PREFIX}-${key}`
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const target = document.getElementById(id)
+    if (!target) {
+      setActiveModule(key)
+      return
+    }
+
+    const headerHeight = document.querySelector<HTMLElement>('[data-slot="page-header"]')?.getBoundingClientRect().height ?? 160
+    target.style.scrollMarginTop = `${headerHeight + 8}px`
     window.history.replaceState(null, '', `#${id}`)
-  }, [])
+
+    if (isStackedLayout) {
+      setActiveModule(key)
+      window.requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+      return
+    }
+
+    window.requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [isStackedLayout])
 
   return (
     <DetailLayoutStackedContext.Provider value={isStackedLayout}>
@@ -141,14 +218,17 @@ export function DetailPageLayout({
             label: module.label,
             count: module.count,
             active: activeModule === module.key,
-            onClick: () => scrollToModule(module.key),
+            onClick: () => selectModule(module.key),
           }))}
           className={cn('sticky top-0 z-30 border-b bg-background', header.className)}
         />
       ) : null}
-      <section className={cn('grid gap-4 p-4 md:p-6', isStackedLayout ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_400px]', className)}>
-        <main className="min-w-0 space-y-4">{children}</main>
-        <aside className={cn('min-w-0 space-y-4', isStackedLayout ? 'order-first' : 'order-none sticky top-32 self-start')}>{aside}</aside>
+      <section className={cn('grid w-full gap-4 p-4 md:p-6', isStackedLayout || !hasAside ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_400px]', className)}>
+        <main className="min-w-0 space-y-4">
+          {children}
+          {modules?.length ? <div data-detail-tab-spacer aria-hidden="true" style={{ height: bottomFillerHeight }} /> : null}
+        </main>
+        {hasAside ? <aside className={cn('w-full min-w-0 space-y-4', isStackedLayout ? 'order-first' : 'order-none sticky top-32 self-start')}>{aside}</aside> : null}
       </section>
     </>
     </DetailLayoutStackedContext.Provider>
@@ -173,7 +253,7 @@ export function DetailSidePanel({
     if (isStackedLayout) {
       const section = sections[0]
       return (
-        <Collapsible className="rounded-lg border border-border bg-muted">
+        <Collapsible className="w-full rounded-lg border border-border bg-muted">
           <CollapsibleTrigger className="group/collapsible-trigger flex w-full items-center gap-2 p-4 text-left text-sm font-semibold">
             {section?.icon ? <HugeiconsIcon icon={section.icon} strokeWidth={2} className="size-5 shrink-0" /> : null}
             <span className="min-w-0 flex-1">{section?.title ?? 'Details'}</span>
@@ -218,7 +298,7 @@ export function DetailSidePanel({
               key={sectionIndex}
               open={Boolean(openSections[sectionIndex])}
               onOpenChange={(open) => setOpenSections((current) => ({ ...current, [sectionIndex]: open }))}
-              className="rounded-lg border border-border bg-muted"
+              className="w-full rounded-lg border border-border bg-muted"
             >
               <CollapsibleTrigger className="group/collapsible-trigger flex w-full items-center gap-2 p-4 text-left text-sm font-semibold">
                 {section.icon ? <HugeiconsIcon icon={section.icon} strokeWidth={2} className="size-5 shrink-0" /> : null}
@@ -301,6 +381,11 @@ export type RelatedEntityModuleProps<TData extends Record<string, unknown>> = {
   toolbarExtra?: ReactNode
   refetchOnMount?: DataTableAsyncProps<TData>['refetchOnMount']
   showPagination?: boolean
+  renderCard?: DataTableAsyncProps<TData>['renderCard']
+  getCardGroupKey?: DataTableAsyncProps<TData>['getCardGroupKey']
+  sortCardGroups?: DataTableAsyncProps<TData>['sortCardGroups']
+  sortCardGroupItems?: DataTableAsyncProps<TData>['sortCardGroupItems']
+  renderCardGroup?: DataTableAsyncProps<TData>['renderCardGroup']
 }
 
 export function RelatedEntityModule<TData extends Record<string, unknown>>({
@@ -324,6 +409,11 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
   toolbarExtra,
   refetchOnMount,
   showPagination = false,
+  renderCard,
+  getCardGroupKey,
+  sortCardGroups,
+  sortCardGroupItems,
+  renderCardGroup,
 }: RelatedEntityModuleProps<TData>) {
   const [loadedTotal, setLoadedTotal] = useState<number | null>(null)
   const resolvedTotal = loadedTotal ?? initialTotal
@@ -367,7 +457,13 @@ export function RelatedEntityModule<TData extends Record<string, unknown>>({
           columns={columns}
           getCommands={getCommands}
           getRowCommands={getRowCommands}
+          renderCard={renderCard}
+          getCardGroupKey={getCardGroupKey}
+          sortCardGroups={sortCardGroups}
+          sortCardGroupItems={sortCardGroupItems}
+          renderCardGroup={renderCardGroup}
           pageSize={pageSize}
+          surface="plain"
           showToolbar={false}
           showPagination={showPagination}
           disabledSelection

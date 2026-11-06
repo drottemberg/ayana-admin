@@ -6,12 +6,90 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import type { ReactNode } from 'react'
 import { NO_VALUE_STR } from '@/constants'
 import type { ClassBooking, ClassSchedule, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { cn } from '@/lib/utils'
 
 const sessionTypeLabels = { GROUP: 'Group', SEMI_PRIVATE: 'Semi-private', PRIVATE: 'Private' } as const
+
+function getSessionDateParts(session: ClassSession) {
+  const date = new Date(session.startTime)
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: session.timezone || undefined,
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    weekday: 'short',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return {
+    key: `${values.year}-${values.month}-${values.day}`,
+    month: (values.month ?? '').toUpperCase(),
+    day: values.day ?? '',
+    weekday: values.weekday ?? '',
+  }
+}
+
+export function ClassSessionListCard({
+  session,
+  actions,
+  allowClaim = false,
+  claimingSessionId,
+  onClaim,
+}: {
+  session: ClassSession
+  actions: ReactNode
+  allowClaim?: boolean
+  claimingSessionId?: string | null
+  onClaim?: (session: ClassSession) => void
+}) {
+  const date = getSessionDateParts(session)
+  const start = new Date(session.startTime)
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone: session.timezone || undefined,
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(start)
+  const isCancelled = session.status === 'CANCELLED'
+  const isInactive = isCancelled || session.status === 'PAUSED'
+  const canClaim = allowClaim
+    && !session.coachId
+    && session.status === 'SCHEDULED'
+    && start.getTime() >= Date.now()
+    && onClaim
+  const sessionUrl = `/class-sessions/${encodeURIComponent(session.id)}?locationId=${encodeURIComponent(session.locationId ?? session.organizationId)}`
+  return (
+    <article className="flex min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground">
+      <div className="flex w-[58px] shrink-0 flex-col items-center justify-start gap-0.5 border-r border-border bg-background px-1.5 pt-3 text-center">
+        <span className="text-[10px] font-semibold leading-none tracking-wide text-muted-foreground">{date.month}</span>
+        <span className="text-xl font-bold leading-tight text-foreground">{date.day}</span>
+        <span className="text-xs leading-none text-muted-foreground">{date.weekday}</span>
+      </div>
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-2 px-3 py-2.5 sm:px-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={cn('text-sm font-semibold leading-5 text-foreground', isInactive && 'text-muted-foreground', isCancelled && 'line-through')}>{time}</span>
+              <Badge variant="secondary" className="h-5 px-2 text-xs font-semibold tabular-nums text-foreground">{session.bookedCount} / {session.capacity}</Badge>
+              {session.status !== 'SCHEDULED' ? <Badge variant="outline" className={cn('h-5 px-2 text-[10px] font-medium uppercase', isCancelled ? 'border-red-300 text-red-600' : session.status === 'PAUSED' ? 'border-border text-muted-foreground' : 'text-foreground')}>{session.status.replaceAll('_', ' ')}</Badge> : null}
+            </div>
+            {actions ? <div className="-mr-1 -mt-1 shrink-0">{actions}</div> : null}
+          </div>
+          <Link to={sessionUrl} className={cn('mt-0.5 block truncate text-sm font-medium leading-5 text-foreground hover:underline', isInactive && 'text-muted-foreground')}>{session.className || session.classTypeId}</Link>
+          {session.locationName ? <div className={cn('truncate text-xs leading-4 text-muted-foreground', isInactive && 'opacity-70')}>{session.locationName}</div> : null}
+          <div className={cn('mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1', isInactive && 'opacity-60')}>
+            {canClaim ? <>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" />No coach</span>
+              <Button type="button" size="sm" className="h-7 rounded-lg px-3 text-xs" disabled={claimingSessionId === session.id} onClick={(event) => { event.stopPropagation(); onClaim?.(session) }}>{claimingSessionId === session.id ? 'Claiming…' : 'Claim'}</Button>
+            </> : session.coachName ? <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"><span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-foreground">{session.coachName.trim().charAt(0).toUpperCase()}</span><span className="truncate">{session.coachName}</span></span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" />No coach</span>}
+          </div>
+        </div>
+      </div>
+    </article>
+  )
+}
 
 export function getClassSessionColumns(options: {
   showCustomer?: boolean
@@ -98,6 +176,7 @@ export function getClassBookingColumns(options: {
   canEditAttendance: boolean
   isPast: boolean
   instructorView?: boolean
+  canInstructorTakeAttendance?: boolean
   savingBookingId?: string | null
   onSetAttendance: (bookingId: string, attended: boolean | null) => void
 }): ColumnDef<ClassBooking>[] {
@@ -142,7 +221,9 @@ export function getClassBookingColumns(options: {
     header: 'Attendance',
     cell: ({ row }) => {
       const booking = row.original
-      const canUpdate = options.canEditAttendance && options.isPast && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(booking.status)
+      const canUpdate = (options.instructorView ? options.canInstructorTakeAttendance : options.canEditAttendance)
+        && options.isPast
+        && !['CANCELLED', 'LATE_CANCELLED', 'WAITLISTED'].includes(booking.status)
       if (!canUpdate) return NO_VALUE_STR
       const isSaving = options.savingBookingId === booking.id
       return (

@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Link } from 'react-router-dom'
+import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
+import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { toast } from 'sonner'
 
 import {
@@ -24,8 +27,10 @@ import {
 import { MyCoachProfileDrawer } from '@/features/coaches/MyCoachProfileDrawer'
 import { coachesQueryKeys } from '@/features/coaches/query-keys'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
+import { BookingCardDayGroup, BookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
 import { getBookingsRequest } from '@/features/bookings/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
+import { ClassSessionListCard } from '@/features/classes/class-session-columns'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { getLocationRequest } from '@/features/locations/api'
 import type { Booking } from '@/types/booking'
@@ -68,10 +73,49 @@ function localDayKey(value: Date, timezone: string): string {
 }
 
 const inviteColumns: ColumnDef<HomeInviteRow>[] = [
-  { accessorKey: 'type', header: 'Type', cell: ({ row }) => UserRequestService.typeToString(row.original.type) },
   { id: 'sender', header: 'From', cell: ({ row }) => row.original.senderName || '-' },
   { id: 'details', header: 'Details', cell: ({ row }) => UserRequestService.getMetadataText(row.original) },
   { accessorKey: 'createdAt', header: 'Received', cell: ({ row }) => formatDateTime(row.original.createdAt, '-') },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => {
+      const request = row.original
+      const run = (action: Promise<void>, fallback: string) => {
+        void action.catch((error: unknown) => {
+          toast.error(error instanceof Error ? error.message : fallback)
+        })
+      }
+
+      return (
+        <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            className="bg-green-600 text-white hover:bg-green-700"
+            aria-label="Accept invitation"
+            onClick={(event) => {
+              event.stopPropagation()
+              run(UserRequestService.accept(request), 'Could not accept invitation.')
+            }}
+          >
+            <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} /> Accept
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="bg-red-600 text-white hover:bg-red-700"
+            aria-label="Reject invitation"
+            onClick={(event) => {
+              event.stopPropagation()
+              run(UserRequestService.reject(request), 'Could not reject invitation.')
+            }}
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} /> Reject
+          </Button>
+        </div>
+      )
+    },
+  },
 ]
 
 function getHomeSessionColumns(options: {
@@ -273,7 +317,6 @@ export default function HomePage() {
             return { ...result, items: result.items as HomeInviteRow[] }
           }}
           tableKey="home.received-invites"
-          getRowCommands={(request) => UserRequestService.getActions(request)}
           emptyMessage="No active invitations."
           loadingMessage="Loading invitations…"
           errorMessage="Could not load invitations."
@@ -288,6 +331,7 @@ export default function HomePage() {
           title="Day planning"
           icon={EntityIcon.classes}
           columns={sessionColumns}
+          renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
           queryKey={[...classSessionsQueryKeys.all, 'home', 'day', customerId, locationId, userId, todayKey]}
           loadData={(state) => loadSessions(state, (item) =>
             item.status === 'SCHEDULED'
@@ -308,6 +352,7 @@ export default function HomePage() {
           title="Upcoming sessions"
           icon={EntityIcon.classes}
           columns={sessionColumns}
+          renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
           queryKey={[...classSessionsQueryKeys.all, 'home', 'upcoming', customerId, locationId, userId]}
           viewAllTo={sessionListUrl}
           viewAllMinCount={0}
@@ -347,6 +392,15 @@ export default function HomePage() {
           title="Sessions to claim"
           icon={EntityIcon.classes}
           columns={claimableSessionColumns}
+          renderCard={(item, actions) => (
+            <ClassSessionListCard
+              session={item}
+              actions={actions}
+              allowClaim={isCoach}
+              claimingSessionId={claimingSessionId}
+              onClaim={(session) => { void claimSession(session as HomeSessionRow) }}
+            />
+          )}
           queryKey={['coaches', 'home', 'claimable-sessions', customerId, locationId, userId]}
           loadData={async (state: DataTableState<HomeSessionRow>) => {
             const offers = await getMyCoachCoverageRequestsRequest()
@@ -371,6 +425,13 @@ export default function HomePage() {
           title="Last bookings"
           icon={EntityIcon.classes}
           columns={bookingColumns}
+          renderCard={(booking, actions, grouped) => <BookingListCard booking={booking} actions={actions} grouped={grouped} />}
+          getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
+          sortCardGroups={(left, right) => right.localeCompare(left)}
+          sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}
+          renderCardGroup={(dateKey, items) => <BookingCardDayGroup dateKey={dateKey} count={items.length}>
+            {items.map((item) => <div key={item.key}>{item.content}</div>)}
+          </BookingCardDayGroup>}
           queryKey={[...bookingsQueryKeys.all, 'home', 'coach', customerId, locationId, userId]}
           viewAllTo={bookingListUrl}
           viewAllMinCount={0}
