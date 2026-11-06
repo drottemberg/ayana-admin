@@ -46,6 +46,7 @@ import { ALL_LOCATIONS_SCOPE, readSelectedLocationScope } from '@/features/organ
 import { EntityIcon } from '@/components/app/entity-icons'
 import { Modals } from '@/providers/modal'
 import { formatDateTime } from '@/utils/date-utils'
+import { BusinessOverviewDashboard } from '@/features/reports/BusinessOverviewDashboard'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 
@@ -289,8 +290,15 @@ export default function HomePage() {
     ...(canViewBookings ? [{ key: 'last-bookings', label: 'Last bookings' }] : []),
   ], [canViewBookings, canViewSessions, hasPendingInvites])
 
+  const hasBusinessDashboard = getAppMode() === 'admin'
+    || membership?.role === CustomerRole.OWNER
+    || membership?.role === CustomerRole.ADMIN
+    || membership?.role === CustomerRole.MANAGER
+
   const sessionListUrl = customerId ? scopedListUrl('/class-sessions', customerId, locationId, userId, true) : '/class-sessions'
   const bookingListUrl = customerId ? scopedListUrl('/bookings', customerId, locationId, userId) : '/bookings'
+
+  if (hasBusinessDashboard) return <BusinessOverviewDashboard />
 
   return (
     <DetailPageLayout

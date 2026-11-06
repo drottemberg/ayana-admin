@@ -37,6 +37,22 @@ export type SalesReport = {
   note: string
 }
 
+export type DashboardPeriod = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH'
+export type DashboardOverview = {
+  period: DashboardPeriod
+  periodLabel: string
+  current: { from: string; to: string }
+  comparison: { from: string; to: string; label: string }
+  revenue: Array<{ currency: string; current: number; previous: number }>
+  bookings: { current: number; previous: number }
+  occupancy: {
+    current: { booked: number; capacity: number; rate: number | null }
+    previous: { booked: number; capacity: number; rate: number | null }
+  }
+  activeMembers: { current: number; previous: number }
+  currencyBasis: string
+}
+
 export function getSalesReportLocationsRequest(customerId?: string) {
   return apiClient.get<ReportLocation[]>('/reports/sales/locations', {
     params: customerId ? { customerId } : undefined,
@@ -45,4 +61,8 @@ export function getSalesReportLocationsRequest(customerId?: string) {
 
 export function getSalesReportRequest(filters: { from: string; to: string; customerId?: string; locationId?: string; page?: number; limit?: number; search?: string }) {
   return apiClient.get<SalesReport>('/reports/sales', { params: filters })
+}
+
+export function getDashboardOverviewRequest(filters: { period?: DashboardPeriod; customerId?: string; locationId?: string } = {}) {
+  return apiClient.get<DashboardOverview>('/reports/overview', { params: filters })
 }
