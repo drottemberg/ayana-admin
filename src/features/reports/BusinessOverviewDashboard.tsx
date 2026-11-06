@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
@@ -9,6 +10,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { getDashboardOverviewRequest, type DashboardOverview, type DashboardPeriod } from '@/features/reports/api'
+import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
+
+type SavedHomeFilters = {
+  period?: DashboardPeriod
+  customerId?: string
+  locationId?: string
+}
 
 const periodOptions: Array<{ value: DashboardPeriod; label: string }> = [
   { value: 'TODAY', label: 'Today' },
@@ -87,22 +95,54 @@ function DashboardMetrics({ data }: { data: DashboardOverview }) {
 export function BusinessOverviewDashboard() {
   const { session } = useConnect()
   const [searchParams, setSearchParams] = useSearchParams()
+  const mode = getAppMode()
+  const customerContextId = session?.currentOrganization?.id ?? 'none'
+  const filterStorageKey = session?.user.id
+    ? `ayana.admin.home.filters.v1:${mode}:${session.user.id}:${mode === 'customer' ? customerContextId : 'all'}`
+    : null
+  const savedFilters = filterStorageKey ? getLocalStorage<SavedHomeFilters>(filterStorageKey) : null
   const membership = session?.user.customerMemberships.find((item) => item.customerId === session.currentOrganization?.id)
-  const defaultPeriod: DashboardPeriod = getAppMode() === 'admin' || membership?.role !== 'MANAGER' ? 'LAST_30_DAYS' : 'TODAY'
+  const defaultPeriod: DashboardPeriod = mode === 'admin' || membership?.role !== 'MANAGER' ? 'LAST_30_DAYS' : 'TODAY'
   const requestedPeriod = searchParams.get('period')
-  const period = isDashboardPeriod(requestedPeriod) ? requestedPeriod : defaultPeriod
-  const customerId = getAppMode() === 'admin' ? searchParams.get('customerId') ?? undefined : undefined
-  const locationId = searchParams.get('locationId') ?? undefined
+  const period = isDashboardPeriod(requestedPeriod)
+    ? requestedPeriod
+    : savedFilters && isDashboardPeriod(savedFilters.period ?? null)
+      ? savedFilters.period
+      : defaultPeriod
+  const customerId = mode === 'admin'
+    ? searchParams.has('customerId')
+      ? searchParams.get('customerId') || undefined
+      : savedFilters?.customerId
+    : undefined
+  const locationId = searchParams.has('locationId')
+    ? searchParams.get('locationId') || undefined
+    : savedFilters?.locationId
   const query = useQuery({
     queryKey: ['reports', 'overview', period, customerId, locationId],
     queryFn: () => getDashboardOverviewRequest({ period, customerId, locationId }),
     enabled: Boolean(session),
   })
 
+  useEffect(() => {
+    if (!filterStorageKey) return
+    setLocalStorage<SavedHomeFilters>(filterStorageKey, {
+      period,
+      ...(customerId ? { customerId } : {}),
+      ...(locationId ? { locationId } : {}),
+    })
+  }, [filterStorageKey, period, customerId, locationId])
+
   const setPeriod = (value: DashboardPeriod) => {
     const next = new URLSearchParams(searchParams)
     next.set('period', value)
     setSearchParams(next)
+    if (filterStorageKey) {
+      setLocalStorage<SavedHomeFilters>(filterStorageKey, {
+        period: value,
+        ...(customerId ? { customerId } : {}),
+        ...(locationId ? { locationId } : {}),
+      })
+    }
   }
 
   return <>
