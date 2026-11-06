@@ -61,9 +61,9 @@ function classSessionTime(value?: string, timezone?: string | null) {
   return new Intl.DateTimeFormat(undefined, { timeZone: timezone || undefined, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
-function bookingTime(value: string) {
+function bookingCreatedDateTime(value: string) {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
 function bookingDateTime(value: string) {
@@ -140,7 +140,7 @@ export function BookingListCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">
         <span>{Number(booking.creditsUsed ?? 0)} credit{Number(booking.creditsUsed ?? 0) === 1 ? '' : 's'} used</span>
-        <time dateTime={booking.createdAt}>{bookingTime(booking.createdAt)}</time>
+        <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>
       </div>
     </div>
   </article>

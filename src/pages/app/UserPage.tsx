@@ -53,7 +53,7 @@ import { ordersQueryKeys } from '@/features/orders/query-keys'
 import type { Order } from '@/types/order'
 import { getBookingsRequest } from '@/features/bookings/api'
 import { getBookingColumns } from '@/features/bookings/booking-columns'
-import { BookingCardDayGroup, BookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
+import { BookingListCard } from '@/features/bookings/BookingListCard'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
 import { EntityIcon } from '@/components/app/entity-icons'
@@ -496,19 +496,16 @@ export default function UserPage() {
         icon={EntityIcon.classes}
         viewAllTo={makeViewAllTo('/bookings', userId)}
         queryKey={bookingsQueryKeys.user(userId)}
-        loadData={(state: DataTableState<Booking>) => getBookingsRequest(state, {
+        loadData={(state: DataTableState<Booking>) => getBookingsRequest({
+          ...state,
+          sorting: [{ id: 'startsAt', desc: true }],
+        }, {
           userId,
           ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
         })}
         tableKey={`bookings.user.${userId}`}
         columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
-        renderCard={(booking, actions, grouped) => <BookingListCard booking={booking} actions={actions} grouped={grouped} showUser={false} showCustomer={isAdminContext} />}
-        getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
-        sortCardGroups={(left, right) => right.localeCompare(left)}
-        sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}
-        renderCardGroup={(dateKey, items) => <BookingCardDayGroup dateKey={dateKey} count={items.length}>
-          {items.map((item) => <div key={item.key}>{item.content}</div>)}
-        </BookingCardDayGroup>}
+        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} />}
         loadingMessage="Loading bookings..."
         emptyMessage="No bookings found."
         errorMessage="Failed to load bookings."
