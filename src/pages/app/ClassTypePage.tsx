@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createColumnHelper } from '@tanstack/react-table'
 import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
+import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
@@ -24,6 +25,7 @@ import { ClassScheduleListCard } from '@/features/classes/ClassTypeListCards'
 import { ClassTypeProductListCard } from '@/features/classes/ClassTypeProductListCard'
 import { cancelClassSessionRequest, generateClassScheduleSessionsRequest, getClassSchedulesRequest, getClassSessionsRequest, getClassTypeProductsRequest, getClassTypeRequest, removeClassTypeProductRequest, type ClassTypeProduct } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
+import { deleteClassSessionWithConfirmation } from '@/features/classes/delete-class-session'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import { useConnect } from '@/features/app/use-connect'
 import { useDetailQuery } from '@/lib/query-hooks'
@@ -297,6 +299,18 @@ export default function ClassTypePage() {
                 toast.success(`Session cancelled. ${result.bookingCount} booking(s) cancelled; ${result.creditsReturned} credit(s) returned.`)
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : 'Could not cancel the class session.')
+              }
+            },
+          }] : []),
+          ...(canCancelSessions && classSession.status !== 'DELETED' && classSession.status !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() ? [{
+            label: 'Delete session',
+            icon: Delete02Icon,
+            variant: 'destructive' as const,
+            onClick: async () => {
+              try {
+                await deleteClassSessionWithConfirmation(classSession, locationId, queryClient, [classSessionsQueryKeys.classType(classTypeId)])
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
               }
             },
           }] : []),

@@ -69,7 +69,7 @@ export default function CoachPage() {
       { label: 'User', value: <Link className="underline-offset-2 hover:underline" to={`/users/${userId}`}>{coach.coachName || coach.email || 'Instructor'}</Link> },
       { label: 'Email', value: coach.email || NO_VALUE_STR },
       { label: 'Locations', value: coach.locationScope === 'ALL' ? 'All locations' : `${coach.locations.length} assigned` },
-      { label: 'Languages spoken', value: coach.languages.map(coachLanguageLabel).join(', ') || NO_VALUE_STR },
+      { label: 'Teaching language', value: coach.languages.map(coachLanguageLabel).join(', ') || NO_VALUE_STR },
       { label: 'Specialties', value: coach.specialties.join(', ') || NO_VALUE_STR },
       { label: 'Bio', value: coach.bio || NO_VALUE_STR },
       { label: 'Created', value: coach.createdAt ? formatDateTime(coach.createdAt) : NO_VALUE_STR },

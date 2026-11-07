@@ -61,7 +61,9 @@ export function CoachProfileDrawer({
       : null
   const selectableClassTypes = profile?.locationScope === 'NONE' || (!profile && userId && loadingCandidates)
     ? []
-    : classTypes.filter((classType) => !specificLocationIds || specificLocationIds.has(classType.locationId))
+    : classTypes.filter((classType) => classType.isActive && (!specificLocationIds || specificLocationIds.has(classType.locationId)))
+  const selectableClassTypeIds = new Set(selectableClassTypes.map((classType) => classType.id))
+  const selectedClassTypeIds = classTypeIds.filter((id) => selectableClassTypeIds.has(id))
 
   useEffect(() => {
     if (!open) return
@@ -85,7 +87,7 @@ export function CoachProfileDrawer({
         bio: bio.trim() || undefined,
         specialties: specialties.split(',').map((value) => value.trim()).filter(Boolean),
         languages: normalizeCoachLanguages(languages),
-        classTypeIds: classTypeIds.filter((id) => selectableClassTypes.some((classType) => classType.id === id)),
+        classTypeIds: selectedClassTypeIds,
       }
       if (profile) await updateCoachProfileRequest(customerId, profile.userId, payload)
       else await createCoachProfileRequest(customerId, { ...payload, userId })
@@ -170,7 +172,7 @@ export function CoachProfileDrawer({
           <MultiselectInput
             aria-label="Class types"
             items={selectableClassTypes.map((classType) => ({ value: classType.id, label: `${classType.name} · ${classType.locationName}` }))}
-            value={classTypeIds}
+            value={selectedClassTypeIds}
             onValueChange={setClassTypeIds}
             isLoading={loadingClassTypes || (!profile && Boolean(userId) && loadingCandidates)}
             loadingMessage="Loading class types..."
@@ -178,7 +180,7 @@ export function CoachProfileDrawer({
             emptyMessage={specificLocationIds ? 'No class types exist at this instructor’s assigned locations.' : 'No class types exist for this customer.'}
           />
         </Field>
-        <Field label="Languages spoken"><CoachLanguagesInput value={languages} onValueChange={setLanguages} /></Field>
+        <Field label="Teaching language"><CoachLanguagesInput value={languages} onValueChange={setLanguages} /></Field>
         <Field label="Specialties"><Input value={specialties} onChange={(event) => setSpecialties(event.target.value)} placeholder="Reformer, Mat, Barrel" /></Field>
         <Field label="Bio"><Textarea value={bio} onChange={(event) => setBio(event.target.value)} rows={5} /></Field>
       </div>

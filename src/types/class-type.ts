@@ -25,7 +25,7 @@ export type ClassType = {
   updatedAt?: string | null
 }
 
-export type ClassSessionStatus = 'SCHEDULED' | 'PAUSED' | 'CANCELLED' | 'COMPLETED'
+export type ClassSessionStatus = 'SCHEDULED' | 'PAUSED' | 'CANCELLED' | 'COMPLETED' | 'DELETED'
 export type ClassPassScheduleInsight = {
   scheduleMappingId: string
   integrationId: string

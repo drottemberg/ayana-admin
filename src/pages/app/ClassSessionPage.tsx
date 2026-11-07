@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
+import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
@@ -18,6 +19,7 @@ import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBoo
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
+import { deleteClassSessionWithConfirmation } from '@/features/classes/delete-class-session'
 import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
@@ -114,6 +116,7 @@ export default function ClassSessionPage() {
   const [classPassActionSaving, setClassPassActionSaving] = useState(false)
   const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const locationId = searchParams.get('locationId') ?? ''
   const { session: appSession } = useConnect()
@@ -398,12 +401,28 @@ export default function ClassSessionPage() {
       backTo: '/class-sessions',
       commands: (classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit)
         || ((classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete)
+        || (classSession && String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete)
         ? <>
             {classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
               ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
               : null}
             {(classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
               ? <PageHeaderIconAction icon={CalendarRemove01Icon} label="Cancel session" variant="destructive" onClick={cancelSession} />
+              : null}
+            {classSession && String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete
+              ? <PageHeaderIconAction
+                  icon={Delete02Icon}
+                  label="Delete session"
+                  variant="destructive"
+                  onClick={async () => {
+                    try {
+                      const result = await deleteClassSessionWithConfirmation(classSession, resolvedLocationId, queryClient)
+                      if (result) navigate('/class-sessions')
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
+                    }
+                  }}
+                />
               : null}
           </>
         : undefined,

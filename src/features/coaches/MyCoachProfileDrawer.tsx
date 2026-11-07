@@ -97,7 +97,7 @@ export function MyCoachProfileDrawer({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
         <p className="text-sm text-muted-foreground">You can update your introduction, specialties and the languages you teach. Class qualifications are managed by your studio.</p>
         <CoachPhotoEditor imageUrl={imageUrl} uploading={isUploadingPhoto} disabled={isSaving} onUpload={uploadPhoto} onRemove={removePhoto} />
-        <Field label="Languages spoken"><CoachLanguagesInput value={languages} onValueChange={setLanguages} /></Field>
+        <Field label="Teaching language"><CoachLanguagesInput value={languages} onValueChange={setLanguages} /></Field>
         <Field label="Specialties"><Input value={specialties} onChange={(event) => setSpecialties(event.target.value)} placeholder="Reformer, Mat, Barrel" /></Field>
         <Field label="Bio"><Textarea value={bio} onChange={(event) => setBio(event.target.value)} rows={6} /></Field>
       </div>

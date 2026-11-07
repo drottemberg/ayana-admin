@@ -174,6 +174,23 @@ export async function cancelClassSessionRequest(id: string, locationId: string, 
   )
 }
 
+export type DeleteClassSessionResult = {
+  sessionId: string
+  scope: 'THIS' | 'FUTURE'
+  sessionsAffected: number
+  softDeleted: number
+  bookingsCancelled: number
+  creditsReturned: number
+}
+
+export async function deleteClassSessionRequest(id: string, locationId: string, scope: 'THIS' | 'FUTURE') {
+  return apiClient.delete<DeleteClassSessionResult>(
+    `/bookings/session/${encodeURIComponent(id)}?scope=${scope}`,
+    undefined,
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
 export async function getClassSessionsRequest(
   tableState: DataTableState<ClassSession>,
   filters?: Record<string, unknown>,

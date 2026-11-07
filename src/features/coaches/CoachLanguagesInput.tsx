@@ -32,7 +32,7 @@ export function coachLanguageLabel(value: string): string {
 
 export function CoachLanguagesInput({ value, onValueChange }: { value: string[]; onValueChange: (value: string[]) => void }) {
   return <MultiselectInput
-    aria-label="Languages spoken"
+    aria-label="Teaching language"
     items={languageItems}
     value={normalizeCoachLanguages(value)}
     onValueChange={(next) => onValueChange(normalizeCoachLanguages(next))}

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
+import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -15,6 +16,7 @@ import { getCustomersListRequest } from '@/features/customers/api'
 import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
+import { deleteClassSessionWithConfirmation } from '@/features/classes/delete-class-session'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { ClassSessionCreateDrawer } from '@/features/classes/ClassSessionCreateDrawer'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
@@ -89,6 +91,7 @@ export default function ClassSessionsPage() {
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
   const canCancelSessions = Boolean(session?.permissions.classSessions?.delete)
+  const canDeleteSessions = Boolean(session?.permissions.classSessions?.delete)
   const canResumeSessions = Boolean(session?.permissions.classSessions?.edit)
   const canCreateSessions = Boolean(session?.permissions.classSessions?.create)
   const isInstructor = session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
@@ -298,6 +301,18 @@ export default function ClassSessionsPage() {
                   toast.success(`Session cancelled. ${result.bookingCount} booking(s) cancelled; ${result.creditsReturned} credit(s) returned.`)
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : 'Could not cancel the class session.')
+                }
+              },
+            }] : []),
+            ...(canDeleteSessions && item.status !== 'DELETED' && item.status !== 'COMPLETED' && new Date(item.startTime).getTime() > Date.now() ? [{
+              label: 'Delete session',
+              icon: Delete02Icon,
+              variant: 'destructive' as const,
+              onClick: async () => {
+                try {
+                  await deleteClassSessionWithConfirmation(item, item.locationId ?? item.organizationId, queryClient)
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
                 }
               },
             }] : []),

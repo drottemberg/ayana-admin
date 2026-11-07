@@ -28,5 +28,5 @@ export const coachColumns: ColumnDef<CoachProfile>[] = [
       ? row.original.classTypes.map((classType) => classType.name).join(', ')
       : NO_VALUE_STR,
   },
-  { accessorKey: 'languages', header: 'Languages spoken', cell: ({ row }) => row.original.languages.map(coachLanguageLabel).join(', ') || NO_VALUE_STR },
+  { accessorKey: 'languages', header: 'Teaching language', cell: ({ row }) => row.original.languages.map(coachLanguageLabel).join(', ') || NO_VALUE_STR },
 ]
