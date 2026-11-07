@@ -193,15 +193,16 @@ const coachAvatarPalette = [
 ]
 
 function coachInitials(name: string) {
-  return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toLocaleUpperCase() || '?'
+  return name.trim().split(/\s+/).filter(Boolean)[0]?.slice(0, 2).toLocaleUpperCase() || '?'
 }
 
 function BookingCoach({ name, languages, imageUrl, duration }: { name?: string | null; languages?: string[]; imageUrl?: string | null; duration: number }) {
   const [imageFailed, setImageFailed] = useState(false)
+  const firstName = name?.trim().split(/\s+/).filter(Boolean)[0] ?? name
   const codes = [...new Set((languages ?? []).map((code) => code.trim().toLowerCase()).filter(Boolean))]
   if (!name) return <div className="booking-session-duration">{duration} min</div>
   let hash = 0
-  for (const character of name.toLocaleLowerCase()) hash = (hash * 31 + character.charCodeAt(0)) | 0
+  for (const character of (firstName ?? name).toLocaleLowerCase()) hash = (hash * 31 + character.charCodeAt(0)) | 0
   const avatar = coachAvatarPalette[Math.abs(hash) % coachAvatarPalette.length]
   return <div className="booking-session-coach">
     {imageUrl && !imageFailed
@@ -209,7 +210,7 @@ function BookingCoach({ name, languages, imageUrl, duration }: { name?: string |
       : <span className="booking-session-coach-avatar booking-session-coach-initials" style={{ backgroundColor: avatar.background, color: avatar.color }} aria-hidden="true">{coachInitials(name)}</span>}
     <div className="booking-session-coach-copy">
       <div className="booking-session-coach-name">
-        <span>{name}</span>
+        <span>{firstName}</span>
         {codes.map((code) => <span key={code} className="booking-session-coach-flag" title={code.toUpperCase()}>{coachLanguageFlags[code] ?? '🌐'}</span>)}
       </div>
       <span className="booking-session-duration">{duration} min</span>
