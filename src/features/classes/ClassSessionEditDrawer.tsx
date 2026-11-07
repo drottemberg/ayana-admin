@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
+import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
@@ -14,6 +15,8 @@ import { ClassSessionDateTimeField } from '@/features/classes/ClassSessionDateTi
 
 const NO_COACH_VALUE = '__no_coach__'
 const SCHEDULE_COACH_VALUE = '__schedule_coach__'
+const NO_ROOM_VALUE = '__no_room__'
+const SCHEDULE_ROOM_VALUE = '__schedule_room__'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>
@@ -38,10 +41,16 @@ export function ClassSessionEditDrawer({
   const [capacity, setCapacity] = useState('')
   const [coachId, setCoachId] = useState('')
   const [coachName, setCoachName] = useState('')
+  const [roomId, setRoomId] = useState(NO_ROOM_VALUE)
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, session?.classTypeId],
     queryFn: () => getLocationCoachesRequest(locationId),
+    enabled: Boolean(open && locationId),
+  })
+  const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
+    queryKey: ['rooms', 'location', locationId],
+    queryFn: () => getLocationRoomsRequest(locationId),
     enabled: Boolean(open && locationId),
   })
 
@@ -52,6 +61,7 @@ export function ClassSessionEditDrawer({
     setCapacity(String(session.capacity))
     setCoachId(session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
     setCoachName(session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
+    setRoomId(session.scheduleId && !session.roomOverride ? SCHEDULE_ROOM_VALUE : session.roomId ?? NO_ROOM_VALUE)
   }, [open, session, timeZone])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -82,6 +92,8 @@ export function ClassSessionEditDrawer({
         coachId: coachId === SCHEDULE_COACH_VALUE || coachId === NO_COACH_VALUE ? null : coachId,
         coachName: coachName.trim() || null,
         useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
+        roomId: roomId === SCHEDULE_ROOM_VALUE || roomId === NO_ROOM_VALUE ? null : roomId,
+        useScheduleRoom: roomId === SCHEDULE_ROOM_VALUE,
       })
       await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
       toast.success('Class session updated.')
@@ -105,6 +117,23 @@ export function ClassSessionEditDrawer({
         <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setStartTime} />
         <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
         <Field label="Capacity"><Input required type="number" min={session?.bookedCount ?? 0} step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
+        <Field label="Room">
+          <SelectInput
+            aria-label="Room"
+            items={[
+              ...(session?.scheduleId ? [{ value: SCHEDULE_ROOM_VALUE, label: 'Use schedule room' }] : []),
+              { value: NO_ROOM_VALUE, label: 'No room' },
+              ...rooms.filter((room) => room.isEnabled || room.id === session?.roomId).map((room) => ({ value: room.id, label: `${room.name}${room.isDefault ? ' · Default' : room.isEnabled ? '' : ' · Disabled'}` })),
+              ...(session?.roomId && !rooms.some((room) => room.id === session.roomId) ? [{ value: session.roomId, label: `Current room (${session.roomId})` }] : []),
+            ]}
+            value={roomId}
+            onValueChange={(value) => setRoomId(String(value))}
+            isLoading={isLoadingRooms}
+            loadingMessage="Loading rooms..."
+            placeholder="Select a room"
+            emptyMessage="No enabled rooms at this location."
+          />
+        </Field>
         <Field label="Coach">
           <SelectInput
             aria-label="Coach"

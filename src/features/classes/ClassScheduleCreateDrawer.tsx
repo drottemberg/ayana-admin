@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { createClassScheduleRequest, getLocationCoachesRequest } from '@/features/classes/api'
+import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { getLocationRequest } from '@/features/locations/api'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import type { ClassType } from '@/types/class-type'
@@ -16,6 +17,8 @@ const dayOptions = [
   { value: 'MON', label: 'Monday' }, { value: 'TUE', label: 'Tuesday' }, { value: 'WED', label: 'Wednesday' },
   { value: 'THU', label: 'Thursday' }, { value: 'FRI', label: 'Friday' }, { value: 'SAT', label: 'Saturday' }, { value: 'SUN', label: 'Sunday' },
 ]
+const NO_ROOM_VALUE = '__no_room__'
+const PENDING_ROOM_VALUE = '__pending_room__'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>
@@ -40,6 +43,7 @@ export function ClassScheduleCreateDrawer({
   const [coachName, setCoachName] = useState('')
   const [coachValidFrom, setCoachValidFrom] = useState('')
   const [coachValidUntil, setCoachValidUntil] = useState('')
+  const [roomId, setRoomId] = useState(PENDING_ROOM_VALUE)
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const locationId = classType?.locationId || classType?.organizationId || ''
@@ -53,6 +57,11 @@ export function ClassScheduleCreateDrawer({
     queryFn: () => getLocationCoachesRequest(locationId),
     enabled: Boolean(open && locationId),
   })
+  const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
+    queryKey: ['rooms', 'location', locationId],
+    queryFn: () => getLocationRoomsRequest(locationId),
+    enabled: Boolean(open && locationId),
+  })
 
   useEffect(() => {
     if (!open) return
@@ -61,6 +70,15 @@ export function ClassScheduleCreateDrawer({
     setCoachValidFrom('')
     setCoachValidUntil('')
   }, [open, locationId, classType?.id, location?.defaultCoachId])
+
+  useEffect(() => {
+    if (open) setRoomId(PENDING_ROOM_VALUE)
+  }, [open, locationId, classType?.id])
+
+  useEffect(() => {
+    if (!open || roomId !== PENDING_ROOM_VALUE || isLoadingRooms) return
+    setRoomId(rooms.find((room) => room.isDefault && room.isEnabled)?.id ?? NO_ROOM_VALUE)
+  }, [open, roomId, rooms, isLoadingRooms])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -78,6 +96,7 @@ export function ClassScheduleCreateDrawer({
         classTypeId: classType.id,
         coachId: coachId || null,
         coachName: coachName.trim() || null,
+        roomId: roomId === NO_ROOM_VALUE || roomId === PENDING_ROOM_VALUE ? null : roomId,
         coachValidFrom: coachId ? (coachValidFrom || validFrom) : undefined,
         coachValidUntil: coachId && coachValidUntil ? coachValidUntil : undefined,
         dayOfWeek: dayOfWeek as NonNullable<import('@/types/class-type').ClassSchedule['dayOfWeek']>,
@@ -110,6 +129,18 @@ export function ClassScheduleCreateDrawer({
           <SelectInput aria-label="Day of week" items={dayOptions} value={dayOfWeek} onValueChange={(value) => setDayOfWeek(String(value))} />
         </Field>
         <Field label="Start time"><Input required type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></Field>
+        <Field label="Default room">
+          <SelectInput
+            aria-label="Default room"
+            items={[{ value: NO_ROOM_VALUE, label: 'No room' }, ...rooms.filter((room) => room.isEnabled).map((room) => ({ value: room.id, label: `${room.name}${room.isDefault ? ' · Default' : ''}` }))]}
+            value={roomId === PENDING_ROOM_VALUE ? '' : roomId}
+            onValueChange={(value) => setRoomId(String(value))}
+            isLoading={isLoadingRooms}
+            loadingMessage="Loading rooms..."
+            placeholder="Select a room"
+            emptyMessage="No enabled rooms at this location."
+          />
+        </Field>
         <Field label="Default coach">
           <SelectInput
             aria-label="Default coach"

@@ -122,6 +122,8 @@ export type UpdateClassSessionPayload = {
   coachId: string | null
   coachName?: string | null
   useScheduleCoach?: boolean
+  roomId?: string | null
+  useScheduleRoom?: boolean
 }
 
 export type LocationCoach = { userId: string; coachName: string }
@@ -143,6 +145,7 @@ export type CreateClassSessionPayload = {
   classTypeId: string
   coachId?: string | null
   coachName?: string | null
+  roomId?: string | null
   startTime: string
   endTime: string
   capacity?: number
@@ -240,6 +243,7 @@ export type CreateClassSchedulePayload = {
   classTypeId: string
   coachId?: string | null
   coachName?: string | null
+  roomId?: string | null
   coachValidFrom?: string
   coachValidUntil?: string
   dayOfWeek: NonNullable<ClassSchedule['dayOfWeek']>
@@ -258,6 +262,7 @@ export async function createClassScheduleRequest(locationId: string, payload: Cr
 export type UpdateClassSchedulePayload = {
   coachId: string | null
   coachName?: string | null
+  roomId: string | null
   coachValidFrom: string | null
   coachValidUntil: string | null
   dayOfWeek: NonNullable<ClassSchedule['dayOfWeek']>

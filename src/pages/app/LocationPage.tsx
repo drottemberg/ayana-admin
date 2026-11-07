@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import {
   DetailPageLayout,
@@ -60,6 +61,24 @@ import { coachColumns } from '@/features/coaches/coach-columns'
 import { getCoachProfilesRequest } from '@/features/coaches/api'
 import { coachesQueryKeys } from '@/features/coaches/query-keys'
 import type { CoachProfile } from '@/features/coaches/types'
+import { loadLocationRoomsRequest, updateRoomRequest, type Room } from '@/features/rooms/api'
+import { roomColumns } from '@/features/rooms/room-columns'
+import { RoomDrawer } from '@/features/rooms/RoomDrawer'
+import { Badge } from '@/components/ui/badge'
+import type { ReactNode } from 'react'
+
+function RoomListCard({ room, actions }: { room: Room; actions: ReactNode }) {
+  return <article className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-card-foreground">
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="truncate text-sm font-semibold">{room.name}</span>
+        {room.isDefault ? <Badge variant="secondary">Default</Badge> : null}
+      </div>
+      <span className="mt-1 block text-xs text-muted-foreground">{room.isEnabled ? 'Enabled' : 'Disabled'}</span>
+    </div>
+    {actions ? <div className="shrink-0">{actions}</div> : null}
+  </article>
+}
 
 function getSections(location?: Location, canEdit = false, defaultCoachName?: string): DetailPanelSection[] {
   return [
@@ -129,6 +148,7 @@ function getSections(location?: Location, canEdit = false, defaultCoachName?: st
 
 export default function LocationPage() {
   const { locationId = '' } = useParams()
+  const queryClient = useQueryClient()
   const [editingClassType, setEditingClassType] = useState<ClassType | null>(null)
   const [editingClassSession, setEditingClassSession] = useState<ClassSession | null>(null)
   const [isCreateClassDrawerOpen, setIsCreateClassDrawerOpen] = useState(false)
@@ -136,8 +156,12 @@ export default function LocationPage() {
   const [isCreateDeviceOpen, setIsCreateDeviceOpen] = useState(false)
   const [editingDevice, setEditingDevice] = useState<AccessDevice | null>(null)
   const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null)
+  const [isRoomDrawerOpen, setIsRoomDrawerOpen] = useState(false)
   const { session } = useConnect()
   const canViewCoaches = Boolean(session?.permissions.coaches?.view)
+  const canViewRooms = Boolean(session?.permissions.rooms?.view)
+  const canManageRooms = Boolean(session?.permissions.rooms?.edit)
   const canEditProducts = Boolean(session?.permissions.products?.edit)
   const canViewClientContracts = Boolean(session?.permissions.clientContracts?.view)
   const canEditClientContracts = Boolean(session?.permissions.clientContracts?.edit)
@@ -146,6 +170,7 @@ export default function LocationPage() {
   const canRefundOrders = Boolean(session?.permissions.orders?.delete)
   const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
   const modules = useMemo(() => [
+    ...(canViewRooms ? [{ key: 'rooms', label: 'Rooms' }] : []),
     { key: 'pricing-options', label: 'Pricing options' },
     { key: 'classes', label: 'Classes' },
     ...(canViewCoaches ? [{ key: 'coaches', label: 'Coaches' }] : []),
@@ -154,7 +179,7 @@ export default function LocationPage() {
     ...(canEditProducts ? [{ key: 'products', label: 'Products' }] : []),
     ...(canViewClientContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
     ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
-  ], [canEditProducts, canViewClientContracts, canViewOrders, canViewCoaches])
+  ], [canEditProducts, canViewClientContracts, canViewOrders, canViewCoaches, canViewRooms])
   const {
     data: location,
     isError,
@@ -201,6 +226,31 @@ export default function LocationPage() {
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
           {isLoading ? 'Loading location...' : location?.description || 'No description.'}
         </div>
+        {canViewRooms ? <RelatedEntityModule
+          id="module-rooms"
+          title="Rooms"
+          icon={EntityIcon.rooms}
+          queryKey={['rooms', 'location', locationId]}
+          loadData={(state: DataTableState<Room>) => loadLocationRoomsRequest(locationId, state)}
+          tableKey={`locations.detail.modules.rooms.${locationId}`}
+          columns={roomColumns}
+          renderCard={(room, actions) => <RoomListCard room={room} actions={actions} />}
+          action={session?.permissions.rooms?.create ? { label: 'Add room', iconOnly: true, onClick: () => { setEditingRoom(null); setIsRoomDrawerOpen(true) } } : undefined}
+          getRowCommands={(room) => canManageRooms ? [
+            { label: 'Edit room', onClick: () => { setEditingRoom(room); setIsRoomDrawerOpen(true) } },
+            { label: room.isEnabled ? 'Disable room' : 'Enable room', onClick: async () => {
+              try {
+                await updateRoomRequest(locationId, room.id, { isEnabled: !room.isEnabled })
+                await queryClient.invalidateQueries({ queryKey: ['rooms', 'location', locationId] })
+                toast.success(room.isEnabled ? 'Room disabled.' : 'Room enabled.')
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Could not update the room.')
+              }
+            } },
+          ] : []}
+          loadingMessage="Loading rooms..."
+          emptyMessage="No rooms configured for this location."
+        /> : null}
         <RelatedEntityModule
           id="module-pricing-options"
           title="Pricing options"
@@ -361,6 +411,12 @@ export default function LocationPage() {
           fixedOrganization={editingDevice ? getAccessDeviceOrganization(editingDevice) : { id: location.id, name: location.name, type: 'LOCATION' }}
         />
       ) : null}
+      <RoomDrawer
+        locationId={locationId}
+        room={editingRoom}
+        open={isRoomDrawerOpen}
+        onOpenChange={(open) => { setIsRoomDrawerOpen(open); if (!open) setEditingRoom(null) }}
+      />
     </>
   )
 }

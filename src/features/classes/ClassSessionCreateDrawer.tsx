@@ -11,6 +11,7 @@ import { getAllLocationsForCustomerRequest, getLocationRequest } from '@/feature
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { createClassSessionRequest, getActiveClassTypeOptionsForLocationRequest, getLocationCoachesRequest, type LocationCoach } from '@/features/classes/api'
+import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
 import { ClassSessionDateTimeField } from '@/features/classes/ClassSessionDateTimeField'
@@ -19,6 +20,8 @@ import type { Customer } from '@/types/customer'
 import type { Location } from '@/types/location'
 
 const NO_COACH_VALUE = '__no_coach__'
+const NO_ROOM_VALUE = '__no_room__'
+const PENDING_ROOM_VALUE = '__pending_room__'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>
@@ -59,6 +62,7 @@ export function ClassSessionCreateDrawer({
   const [capacity, setCapacity] = useState('')
   const [coachId, setCoachId] = useState(NO_COACH_VALUE)
   const [coachName, setCoachName] = useState('')
+  const [roomId, setRoomId] = useState(PENDING_ROOM_VALUE)
   const [isSaving, setIsSaving] = useState(false)
 
   const customerId = customer?.id ?? ''
@@ -69,6 +73,20 @@ export function ClassSessionCreateDrawer({
     queryFn: () => getLocationCoachesRequest(locationId),
     enabled: Boolean(open && locationId),
   })
+  const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
+    queryKey: ['rooms', 'location', locationId],
+    queryFn: () => getLocationRoomsRequest(locationId),
+    enabled: Boolean(open && locationId),
+  })
+
+  useEffect(() => {
+    if (open && locationId) setRoomId(PENDING_ROOM_VALUE)
+  }, [open, locationId])
+
+  useEffect(() => {
+    if (!open || !locationId || roomId !== PENDING_ROOM_VALUE || isLoadingRooms) return
+    setRoomId(rooms.find((room) => room.isDefault && room.isEnabled)?.id ?? NO_ROOM_VALUE)
+  }, [open, locationId, roomId, rooms, isLoadingRooms])
 
   useEffect(() => {
     if (!open) return
@@ -82,6 +100,7 @@ export function ClassSessionCreateDrawer({
     setCapacity(fixedClassType ? String(fixedClassType.maxCapacity) : '')
     setCoachId(NO_COACH_VALUE)
     setCoachName('')
+    setRoomId(PENDING_ROOM_VALUE)
   }, [open, initialCustomer, fixedClassType])
 
   useEffect(() => {
@@ -152,6 +171,7 @@ export function ClassSessionCreateDrawer({
         classTypeId: classType.id,
         coachId: coachId === NO_COACH_VALUE ? null : coachId,
         coachName: coachName.trim() || null,
+        roomId: roomId === PENDING_ROOM_VALUE || roomId === NO_ROOM_VALUE ? null : roomId,
         startTime: startIso,
         endTime: endIso,
         capacity: capacityValue,
@@ -231,6 +251,19 @@ export function ClassSessionCreateDrawer({
           <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setSessionStart} />
           <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
           <Field label="Capacity"><Input required type="number" min="1" step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
+          <Field label="Room">
+            <SelectInput
+              aria-label="Room"
+              items={[{ value: NO_ROOM_VALUE, label: 'No room' }, ...rooms.filter((room) => room.isEnabled).map((room) => ({ value: room.id, label: `${room.name}${room.isDefault ? ' · Default' : ''}` }))]}
+              value={roomId === PENDING_ROOM_VALUE ? '' : roomId}
+              onValueChange={(value) => setRoomId(String(value))}
+              isLoading={isLoadingRooms}
+              loadingMessage="Loading rooms..."
+              placeholder="Select a room"
+              emptyMessage="No enabled rooms at this location."
+              disabled={!locationId}
+            />
+          </Field>
           <Field label="Coach">
             <SelectInput
               aria-label="Coach"

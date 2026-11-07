@@ -49,6 +49,7 @@ export type ClassSession = {
   coachName?: string | null
   coachCustomName?: string | null
   coachOverride?: boolean
+  roomOverride?: boolean
   scheduleId?: string | null
   roomId?: string | null
   startTime: string
@@ -75,6 +76,7 @@ export type ClassSchedule = {
   coachValidFrom?: string | null
   coachValidUntil?: string | null
   roomId?: string | null
+  roomOverride?: boolean
   frequencyUnit: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   frequencyMultiplier: number
   dayOfWeek?: string | null

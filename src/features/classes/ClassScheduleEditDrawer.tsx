@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { getLocationCoachesRequest, updateClassScheduleRequest } from '@/features/classes/api'
+import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys, classTypesQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSchedule, ClassType } from '@/types/class-type'
 
@@ -15,6 +16,7 @@ const dayOptions = [
   { value: 'MON', label: 'Monday' }, { value: 'TUE', label: 'Tuesday' }, { value: 'WED', label: 'Wednesday' },
   { value: 'THU', label: 'Thursday' }, { value: 'FRI', label: 'Friday' }, { value: 'SAT', label: 'Saturday' }, { value: 'SUN', label: 'Sunday' },
 ]
+const NO_ROOM_VALUE = '__no_room__'
 
 function dateInput(value?: string | null) {
   return value ? new Date(value).toISOString().slice(0, 10) : ''
@@ -47,11 +49,17 @@ export function ClassScheduleEditDrawer({
   const [coachName, setCoachName] = useState('')
   const [coachValidFrom, setCoachValidFrom] = useState('')
   const [coachValidUntil, setCoachValidUntil] = useState('')
+  const [roomId, setRoomId] = useState(NO_ROOM_VALUE)
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, classType?.id],
     queryFn: () => getLocationCoachesRequest(locationId),
+    enabled: Boolean(open && locationId),
+  })
+  const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
+    queryKey: ['rooms', 'location', locationId],
+    queryFn: () => getLocationRoomsRequest(locationId),
     enabled: Boolean(open && locationId),
   })
 
@@ -67,6 +75,7 @@ export function ClassScheduleEditDrawer({
     setCoachValidFrom(schedule.coachId ? dateInput(schedule.coachValidFrom ?? schedule.validFrom) : '')
     setCoachValidUntil(schedule.coachId ? dateInput(schedule.coachValidUntil) : '')
     setAutoGenerateSessions(schedule.autoGenerateSessions !== false)
+    setRoomId(schedule.roomId ?? NO_ROOM_VALUE)
   }, [open, schedule])
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -100,6 +109,7 @@ export function ClassScheduleEditDrawer({
         validUntil: validUntil ? new Date(`${validUntil}T23:59:59.000Z`).toISOString() : null,
         coachId: coachId || null,
         coachName: coachName.trim() || null,
+        roomId: roomId === NO_ROOM_VALUE ? null : roomId,
         coachValidFrom: coachId ? effectiveCoachFrom || null : null,
         coachValidUntil: coachId ? coachValidUntil || null : null,
         autoGenerateSessions,
@@ -122,6 +132,22 @@ export function ClassScheduleEditDrawer({
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
         <Field label="Repeats every week on"><SelectInput aria-label="Day of week" items={dayOptions} value={dayOfWeek} onValueChange={(value) => setDayOfWeek(String(value))} /></Field>
         <Field label="Start time"><Input required type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></Field>
+        <Field label="Default room">
+          <SelectInput
+            aria-label="Default room"
+            items={[
+              { value: NO_ROOM_VALUE, label: 'No room' },
+              ...rooms.filter((room) => room.isEnabled || room.id === schedule?.roomId).map((room) => ({ value: room.id, label: `${room.name}${room.isDefault ? ' · Default' : room.isEnabled ? '' : ' · Disabled'}` })),
+              ...(schedule?.roomId && !rooms.some((room) => room.id === schedule.roomId) ? [{ value: schedule.roomId, label: `Current room (${schedule.roomId})` }] : []),
+            ]}
+            value={roomId}
+            onValueChange={(value) => setRoomId(String(value))}
+            isLoading={isLoadingRooms}
+            loadingMessage="Loading rooms..."
+            placeholder="Select a room"
+            emptyMessage="No enabled rooms at this location."
+          />
+        </Field>
         <Field label={`Capacity (default ${classType?.maxCapacity ?? 0})`}><Input type="number" min="1" step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} placeholder="Use class capacity" /></Field>
         <Field label="Default coach">
           <SelectInput

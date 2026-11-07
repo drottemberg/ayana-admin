@@ -28,6 +28,7 @@ export type AppPermissions = {
   devices?: EntityPermissions
   classSchedules?: EntityPermissions
   classSessions?: EntityPermissions
+  rooms?: EntityPermissions
   bookings?: EntityPermissions
   organization?: { editSelf: boolean }
 }
