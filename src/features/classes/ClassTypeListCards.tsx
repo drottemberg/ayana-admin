@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { StatusPill } from '@/components/app/StatusPill'
 import { cn } from '@/lib/utils'
 import type { ClassSchedule, ClassType } from '@/types/class-type'
+import { memberAvatarColor, memberAvatarInitials } from '@/features/bookings/member-avatar'
 
 const classTypeLabels: Record<ClassType['type'], string> = {
   GROUP: 'Group',
@@ -124,7 +125,7 @@ export function ClassScheduleListCard({
         </div>
         <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {schedule.coachName
-            ? <span className="inline-flex min-w-0 items-center gap-1.5"><span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-foreground">{schedule.coachName.trim().charAt(0).toUpperCase()}</span><span className="truncate">{schedule.coachName}</span></span>
+            ? <span className="inline-flex min-w-0 items-center gap-1.5"><span className={cn('flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium', memberAvatarColor(schedule.coachId || schedule.coachName),)}>{memberAvatarInitials(schedule.coachName)}</span><span className="truncate">{schedule.coachName}</span></span>
             : <span className="inline-flex items-center gap-1.5 font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" />No coach</span>}
           {schedule.autoGenerateSessions === false ? <span>Manual sessions</span> : null}
         </div>

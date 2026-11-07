@@ -144,6 +144,7 @@ export default function ClassSessionPage() {
     isInstructorContext
     && classSession
     && !classSession.coachId
+    && !classSession.coachName
     && classSession.status === 'SCHEDULED'
     && new Date(classSession.startTime).getTime() >= Date.now(),
   )

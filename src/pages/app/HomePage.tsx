@@ -15,7 +15,6 @@ import {
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { PageHeaderIconAction } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import {
@@ -41,6 +40,7 @@ import { UserRequestStatus, UserRequestType, type UserRequest } from '@/types/us
 import { getUserRequestsPageRequest } from '@/features/user-requests/api'
 import { userRequestsQueryKeys } from '@/features/user-requests/query-keys'
 import { UserRequestService } from '@/features/user-requests/user-request-service'
+import { InviteListCard } from '@/features/user-requests/InviteListCard'
 import { CustomerRole } from '@/types/membership'
 import { ALL_LOCATIONS_SCOPE, readSelectedLocationScope } from '@/features/organizations/storage'
 import { EntityIcon } from '@/components/app/entity-icons'
@@ -156,6 +156,7 @@ function getHomeSessionColumns(options: {
         const session = row.original
         const canClaim = options.allowClaim
           && !session.coachId
+          && !session.coachName
           && session.status === 'SCHEDULED'
           && new Date(session.startTime).getTime() >= Date.now()
         if (canClaim) {
@@ -305,8 +306,11 @@ export default function HomePage() {
       header={{
         title: 'Home',
         subtitle: 'Your studio activity.',
-        commands: showCoachModules && myCoachProfile.data
-          ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit my coach profile" onClick={() => setIsMyCoachProfileOpen(true)} />
+        commands: showCoachModules
+          ? <Button type="button" size="lg" onClick={() => {
+              setIsMyCoachProfileOpen(true)
+              if (!myCoachProfile.data) void myCoachProfile.refetch()
+            }}><HugeiconsIcon icon={PencilEdit02Icon} strokeWidth={2} />Edit my coach profile</Button>
           : undefined,
       }}
       modules={modules}
@@ -318,6 +322,26 @@ export default function HomePage() {
           title="Received invites"
           icon={EntityIcon.users}
           columns={inviteColumns}
+          renderCard={(request) => {
+            const run = (action: Promise<void>, fallback: string) => {
+              void action.catch((error: unknown) => {
+                toast.error(error instanceof Error ? error.message : fallback)
+              })
+            }
+            return <InviteListCard
+              request={request}
+              quickActions={
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  <Button size="sm" className="bg-green-600 text-white hover:bg-green-700" aria-label="Accept invitation" onClick={(event) => { event.stopPropagation(); run(UserRequestService.accept(request), 'Could not accept invitation.') }}>
+                    <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} /> Accept
+                  </Button>
+                  <Button size="sm" variant="destructive" className="bg-red-600 text-white hover:bg-red-700" aria-label="Reject invitation" onClick={(event) => { event.stopPropagation(); run(UserRequestService.reject(request), 'Could not reject invitation.') }}>
+                    <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} /> Reject
+                  </Button>
+                </div>
+              }
+            />
+          }}
           queryKey={[...userRequestsQueryKeys.all, 'home', getAppMode(), userId, 'received', 'pending']}
           loadData={async (state) => {
             const result = await getUserRequestsPageRequest(state, 'RECEIVED', {

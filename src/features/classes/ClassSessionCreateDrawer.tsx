@@ -58,6 +58,7 @@ export function ClassSessionCreateDrawer({
   const [endTime, setEndTime] = useState('')
   const [capacity, setCapacity] = useState('')
   const [coachId, setCoachId] = useState(NO_COACH_VALUE)
+  const [coachName, setCoachName] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   const customerId = customer?.id ?? ''
@@ -80,6 +81,7 @@ export function ClassSessionCreateDrawer({
     setEndTime('')
     setCapacity(fixedClassType ? String(fixedClassType.maxCapacity) : '')
     setCoachId(NO_COACH_VALUE)
+    setCoachName('')
   }, [open, initialCustomer, fixedClassType])
 
   useEffect(() => {
@@ -107,6 +109,7 @@ export function ClassSessionCreateDrawer({
     setClassType(undefined)
     setCapacity('')
     setCoachId(NO_COACH_VALUE)
+    setCoachName('')
     if (!value) {
       setStartTime('')
       setEndTime('')
@@ -148,6 +151,7 @@ export function ClassSessionCreateDrawer({
       await createClassSessionRequest(locationId, {
         classTypeId: classType.id,
         coachId: coachId === NO_COACH_VALUE ? null : coachId,
+        coachName: coachName.trim() || null,
         startTime: startIso,
         endTime: endIso,
         capacity: capacityValue,
@@ -240,6 +244,8 @@ export function ClassSessionCreateDrawer({
               disabled={!locationId}
             />
           </Field>
+          <Field label="Coach name (optional)"><Input value={coachName} onChange={(event) => setCoachName(event.target.value)} placeholder="Enter a name if the coach isn't in the system" /></Field>
+          <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
           {location ? <p className="text-sm text-muted-foreground">Times use the {timeZone} time zone.</p> : null}
         </div>
         <div className="flex justify-end gap-2 border-t border-border p-5">

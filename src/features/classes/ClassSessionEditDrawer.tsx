@@ -13,6 +13,7 @@ import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/feature
 import { ClassSessionDateTimeField } from '@/features/classes/ClassSessionDateTimeField'
 
 const NO_COACH_VALUE = '__no_coach__'
+const SCHEDULE_COACH_VALUE = '__schedule_coach__'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium"><span>{label}</span>{children}</label>
@@ -36,6 +37,7 @@ export function ClassSessionEditDrawer({
   const [endTime, setEndTime] = useState('')
   const [capacity, setCapacity] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [coachName, setCoachName] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, session?.classTypeId],
@@ -48,7 +50,8 @@ export function ClassSessionEditDrawer({
     setStartTime(toClassSessionLocalInput(session.startTime, timeZone))
     setEndTime(toClassSessionLocalInput(session.endTime, timeZone))
     setCapacity(String(session.capacity))
-    setCoachId(session.coachId ?? NO_COACH_VALUE)
+    setCoachId(session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
+    setCoachName(session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
   }, [open, session, timeZone])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -76,7 +79,9 @@ export function ClassSessionEditDrawer({
         startTime: startIso,
         endTime: endIso,
         capacity: capacityValue,
-        coachId: coachId === NO_COACH_VALUE ? null : coachId,
+        coachId: coachId === SCHEDULE_COACH_VALUE || coachId === NO_COACH_VALUE ? null : coachId,
+        coachName: coachName.trim() || null,
+        useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
       })
       await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
       toast.success('Class session updated.')
@@ -103,7 +108,11 @@ export function ClassSessionEditDrawer({
         <Field label="Coach">
           <SelectInput
             aria-label="Coach"
-            items={[{ value: NO_COACH_VALUE, label: 'No coach' }, ...coaches.map((coach) => ({ value: coach.userId, label: coach.coachName }))]}
+            items={[
+              ...(session?.scheduleId ? [{ value: SCHEDULE_COACH_VALUE, label: 'Use schedule coach' }] : []),
+              { value: NO_COACH_VALUE, label: 'No coach' },
+              ...coaches.map((coach) => ({ value: coach.userId, label: coach.coachName })),
+            ]}
             value={coachId}
             onValueChange={(value) => setCoachId(String(value))}
             isLoading={isLoadingCoaches}
@@ -112,6 +121,11 @@ export function ClassSessionEditDrawer({
             emptyMessage="No qualified instructors assigned to this location."
           />
         </Field>
+        <Field label="Coach name (optional)"><Input value={coachName} onChange={(event) => {
+          setCoachName(event.target.value)
+          if (event.target.value.trim() && coachId === SCHEDULE_COACH_VALUE) setCoachId(NO_COACH_VALUE)
+        }} placeholder="Enter a name if the coach isn't in the system" /></Field>
+        <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
         <p className="text-sm text-muted-foreground">The class type and existing bookings stay attached to this session.</p>
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">

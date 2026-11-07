@@ -38,8 +38,13 @@ export function CoachPhotoEditor({
   onRemove: () => Promise<void>
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const previewUrl = useMemo(() => selectedFile ? URL.createObjectURL(selectedFile) : null, [selectedFile])
+  const [savedPreviewFile, setSavedPreviewFile] = useState<File | null>(null)
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
+  const previewFile = selectedFile ?? savedPreviewFile
+  const previewUrl = useMemo(() => previewFile ? URL.createObjectURL(previewFile) : null, [previewFile])
   const busy = disabled || uploading
+  const remoteImageUrl = imageUrl && imageUrl !== failedImageUrl ? imageUrl : null
+  const displayedImageUrl = selectedFile ? previewUrl : remoteImageUrl || previewUrl
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -48,10 +53,21 @@ export function CoachPhotoEditor({
   const save = async () => {
     if (!selectedFile) return
     try {
-      if (await onUpload(await compressPhoto(selectedFile))) setSelectedFile(null)
+      const compressedFile = await compressPhoto(selectedFile)
+      if (await onUpload(compressedFile)) {
+        setSavedPreviewFile(compressedFile)
+        setFailedImageUrl(null)
+        setSelectedFile(null)
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not prepare this photo.')
     }
+  }
+
+  const remove = async () => {
+    await onRemove()
+    setSavedPreviewFile(null)
+    setFailedImageUrl(null)
   }
 
   return (
@@ -62,13 +78,23 @@ export function CoachPhotoEditor({
       </div>
       <div className="flex flex-wrap items-center gap-4">
         <div className="grid size-28 shrink-0 place-items-center overflow-hidden rounded-xl bg-muted text-3xl text-muted-foreground">
-          {previewUrl || imageUrl
-            ? <img src={previewUrl || imageUrl || ''} alt="Coach profile preview" className="size-full object-cover" />
+          {displayedImageUrl
+            ? <img
+                src={displayedImageUrl}
+                alt="Coach profile preview"
+                className="size-full object-cover"
+                onLoad={(event) => {
+                  if (remoteImageUrl && event.currentTarget.src === remoteImageUrl) setSavedPreviewFile(null)
+                }}
+                onError={() => {
+                  if (remoteImageUrl) setFailedImageUrl(remoteImageUrl)
+                }}
+              />
             : <span aria-hidden="true">👤</span>}
         </div>
         <div className="flex flex-wrap gap-2">
           <label className={`inline-flex min-h-9 cursor-pointer items-center rounded-md border px-3 text-sm hover:bg-muted ${busy ? 'pointer-events-none opacity-50' : ''}`}>
-            {imageUrl || selectedFile ? 'Choose / replace photo' : 'Choose photo'}
+            {imageUrl || savedPreviewFile || selectedFile ? 'Choose / replace photo' : 'Choose photo'}
             <input
               className="sr-only"
               type="file"
@@ -88,8 +114,8 @@ export function CoachPhotoEditor({
               Discard
             </Button>
           </> : null}
-          {imageUrl && !selectedFile ? (
-            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void onRemove()}>
+          {(imageUrl || savedPreviewFile) && !selectedFile ? (
+            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void remove()}>
               Remove photo
             </Button>
           ) : null}

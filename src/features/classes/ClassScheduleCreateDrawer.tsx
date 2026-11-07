@@ -37,6 +37,7 @@ export function ClassScheduleCreateDrawer({
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [coachName, setCoachName] = useState('')
   const [coachValidFrom, setCoachValidFrom] = useState('')
   const [coachValidUntil, setCoachValidUntil] = useState('')
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
@@ -56,6 +57,7 @@ export function ClassScheduleCreateDrawer({
   useEffect(() => {
     if (!open) return
     setCoachId(location?.defaultCoachId ?? '')
+    setCoachName('')
     setCoachValidFrom('')
     setCoachValidUntil('')
   }, [open, locationId, classType?.id, location?.defaultCoachId])
@@ -75,6 +77,7 @@ export function ClassScheduleCreateDrawer({
       await createClassScheduleRequest(classType.locationId || classType.organizationId, {
         classTypeId: classType.id,
         coachId: coachId || null,
+        coachName: coachName.trim() || null,
         coachValidFrom: coachId ? (coachValidFrom || validFrom) : undefined,
         coachValidUntil: coachId && coachValidUntil ? coachValidUntil : undefined,
         dayOfWeek: dayOfWeek as NonNullable<import('@/types/class-type').ClassSchedule['dayOfWeek']>,
@@ -119,6 +122,8 @@ export function ClassScheduleCreateDrawer({
             emptyMessage="No instructors assigned to this location."
           />
         </Field>
+        <Field label="Coach name (optional)"><Input value={coachName} onChange={(event) => setCoachName(event.target.value)} placeholder="Enter a name if the coach isn't in the system" /></Field>
+        <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
         {coachId ? <>
           <Field label="Coach assigned from"><Input required type="date" value={coachValidFrom || validFrom} onChange={(event) => setCoachValidFrom(event.target.value)} /></Field>
           <Field label="Coach assigned until (optional)"><Input type="date" value={coachValidUntil} onChange={(event) => setCoachValidUntil(event.target.value)} /></Field>

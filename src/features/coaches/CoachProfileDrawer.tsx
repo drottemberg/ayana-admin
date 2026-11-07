@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { createCoachProfileRequest, getCoachCandidatesRequest, getCustomerClassTypesRequest, removeCoachProfileImageRequest, updateCoachProfileRequest, uploadCoachProfileImageRequest } from '@/features/coaches/api'
 import { classTypesQueryKeys } from '@/features/classes/query-keys'
 import { CoachPhotoEditor } from '@/features/coaches/CoachPhotoEditor'
+import { CoachLanguagesInput, normalizeCoachLanguages } from '@/features/coaches/CoachLanguagesInput'
 import type { CoachProfile } from './types'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -37,7 +38,7 @@ export function CoachProfileDrawer({
   const [userId, setUserId] = useState('')
   const [bio, setBio] = useState('')
   const [specialties, setSpecialties] = useState('')
-  const [languages, setLanguages] = useState('')
+  const [languages, setLanguages] = useState<string[]>([])
   const [classTypeIds, setClassTypeIds] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
@@ -67,7 +68,7 @@ export function CoachProfileDrawer({
     setUserId(profile?.userId ?? initialUserId ?? '')
     setBio(profile?.bio ?? '')
     setSpecialties(profile?.specialties.join(', ') ?? '')
-    setLanguages(profile?.languages.join(', ') ?? '')
+    setLanguages(normalizeCoachLanguages(profile?.languages))
     setClassTypeIds(profile?.classTypes.map((classType) => classType.id) ?? [])
     setPhotoUrl(profile?.imageUrl ?? null)
   }, [open, profile, initialUserId])
@@ -83,7 +84,7 @@ export function CoachProfileDrawer({
       const payload = {
         bio: bio.trim() || undefined,
         specialties: specialties.split(',').map((value) => value.trim()).filter(Boolean),
-        languages: languages.split(',').map((value) => value.trim()).filter(Boolean),
+        languages: normalizeCoachLanguages(languages),
         classTypeIds: classTypeIds.filter((id) => selectableClassTypes.some((classType) => classType.id === id)),
       }
       if (profile) await updateCoachProfileRequest(customerId, profile.userId, payload)
@@ -177,7 +178,7 @@ export function CoachProfileDrawer({
             emptyMessage={specificLocationIds ? 'No class types exist at this instructor’s assigned locations.' : 'No class types exist for this customer.'}
           />
         </Field>
-        <Field label="Languages taught"><Input value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="French, English" /></Field>
+        <Field label="Languages spoken"><CoachLanguagesInput value={languages} onValueChange={setLanguages} /></Field>
         <Field label="Specialties"><Input value={specialties} onChange={(event) => setSpecialties(event.target.value)} placeholder="Reformer, Mat, Barrel" /></Field>
         <Field label="Bio"><Textarea value={bio} onChange={(event) => setBio(event.target.value)} rows={5} /></Field>
       </div>

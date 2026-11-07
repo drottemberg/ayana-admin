@@ -24,6 +24,8 @@ type ClassSession = {
   localEndTime: string
   timezone: string
   coachName?: string | null
+  coachLanguages?: string[]
+  coachImageUrl?: string | null
   capacity: number
   bookedCount: number
   availableSpots: number
@@ -73,6 +75,14 @@ type MemberState = {
 
 type BookingResult = { bookingId: string; status: 'CONFIRMED' | 'WAITLISTED'; creditBalance: number; shortMessage: string; relatedProducts?: ClassProductOffer[] }
 type EgymBookingResult = { bookingId: string; status: 'CONFIRMED'; sessionToken?: string }
+type EgymValidationResult = {
+  valid: true
+  sessionToken?: string
+  member?: Omit<MemberState, 'token'>
+  accountToken?: string
+  refreshToken?: string
+  message?: string | string[]
+}
 type EgymMemberPayload = Partial<MemberState> & { message?: string | string[] }
 type PricingOffer = {
   id: string
@@ -164,6 +174,47 @@ function readSession(customerSlug: string, locationSlug: string): MemberState | 
 
 function responseMessage(payload: { message?: string | string[] }, fallback: string) {
   return Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || fallback
+}
+
+const coachLanguageFlags: Record<string, string> = {
+  ar: '🇸🇦', bg: '🇧🇬', bn: '🇧🇩', ca: '🏴', cs: '🇨🇿', da: '🇩🇰', de: '🇩🇪', el: '🇬🇷', en: '🇬🇧',
+  es: '🇪🇸', et: '🇪🇪', fa: '🇮🇷', fi: '🇫🇮', fr: '🇫🇷', he: '🇮🇱', hi: '🇮🇳', hr: '🇭🇷', hu: '🇭🇺',
+  id: '🇮🇩', it: '🇮🇹', ja: '🇯🇵', ko: '🇰🇷', lt: '🇱🇹', lv: '🇱🇻', ms: '🇲🇾', nl: '🇳🇱', no: '🇳🇴',
+  pl: '🇵🇱', pt: '🇵🇹', ro: '🇷🇴', ru: '🇷🇺', sk: '🇸🇰', sl: '🇸🇮', sr: '🇷🇸', sv: '🇸🇪', sw: '🇹🇿',
+  ta: '🇱🇰', th: '🇹🇭', tr: '🇹🇷', uk: '🇺🇦', ur: '🇵🇰', vi: '🇻🇳', zh: '🇨🇳',
+}
+
+const coachAvatarPalette = [
+  { background: '#fbe6dc', color: '#97401e' },
+  { background: '#e5ecdf', color: '#405b38' },
+  { background: '#f0eaf6', color: '#72618d' },
+  { background: '#f5ecd5', color: '#806320' },
+  { background: '#e7eff1', color: '#55727c' },
+]
+
+function coachInitials(name: string) {
+  return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toLocaleUpperCase() || '?'
+}
+
+function BookingCoach({ name, languages, imageUrl, duration }: { name?: string | null; languages?: string[]; imageUrl?: string | null; duration: number }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const codes = [...new Set((languages ?? []).map((code) => code.trim().toLowerCase()).filter(Boolean))]
+  if (!name) return <div className="booking-session-duration">{duration} min</div>
+  let hash = 0
+  for (const character of name.toLocaleLowerCase()) hash = (hash * 31 + character.charCodeAt(0)) | 0
+  const avatar = coachAvatarPalette[Math.abs(hash) % coachAvatarPalette.length]
+  return <div className="booking-session-coach">
+    {imageUrl && !imageFailed
+      ? <img className="booking-session-coach-avatar" src={imageUrl} alt="" aria-hidden="true" onError={() => setImageFailed(true)} />
+      : <span className="booking-session-coach-avatar booking-session-coach-initials" style={{ backgroundColor: avatar.background, color: avatar.color }} aria-hidden="true">{coachInitials(name)}</span>}
+    <div className="booking-session-coach-copy">
+      <div className="booking-session-coach-name">
+        <span>{name}</span>
+        {codes.map((code) => <span key={code} className="booking-session-coach-flag" title={code.toUpperCase()}>{coachLanguageFlags[code] ?? '🌐'}</span>)}
+      </div>
+      <span className="booking-session-duration">{duration} min</span>
+    </div>
+  </div>
 }
 
 function reservationTerms(session: Pick<ClassSession, 'minimumParticipants'>, policy: Schedule['location']['cancellationPolicy'], isFrench: boolean) {
@@ -859,16 +910,35 @@ function BookingPortalRoute() {
     setSubmitting(true)
     setEgymError('')
     try {
-      const headers = { 'content-type': 'application/json', ...(member?.token ? { authorization: `Bearer ${member.token}` } : {}) }
-      const validateResponse = await fetch(`${endpoint}/validate`, { method: 'POST', headers, body: JSON.stringify(payload) })
-      const validatePayload = await validateResponse.json().catch(() => ({})) as { message?: string | string[] }
+      let authorizationToken = member?.token
+      let authenticatedByValidation = false
+      const headers = () => ({ 'content-type': 'application/json', ...(authorizationToken ? { authorization: `Bearer ${authorizationToken}` } : {}) })
+      const validateResponse = await fetch(`${endpoint}/validate`, { method: 'POST', headers: headers(), body: JSON.stringify(payload) })
+      const validatePayload = await validateResponse.json().catch(() => ({})) as EgymValidationResult
       if (!validateResponse.ok) throw new Error(responseMessage(validatePayload, isFrench ? 'Le code Wellpass n’a pas pu être vérifié.' : 'Could not verify the Wellpass code.'))
 
-      const response = await fetch(`${endpoint}/confirm`, { method: 'POST', headers, body: JSON.stringify(payload) })
+      if (validatePayload.sessionToken && validatePayload.member) {
+        authorizationToken = validatePayload.sessionToken
+        authenticatedByValidation = true
+        const nextMember = {
+          ...validatePayload.member,
+          token: authorizationToken,
+          hasUnlimitedContract: validatePayload.member.hasUnlimitedContract === true,
+          bookedSessionIds: validatePayload.member.bookedSessionIds ?? [],
+          bookings: validatePayload.member.bookings ?? [],
+        } as MemberState
+        setMember(nextMember)
+        setFirstNameDraft(nextMember.identity.firstName ?? '')
+        setLastNameDraft(nextMember.identity.lastName ?? '')
+        setMemberPhoneDraft(nextMember.identity.phone ?? '')
+        localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
+      }
+
+      const response = await fetch(`${endpoint}/confirm`, { method: 'POST', headers: headers(), body: JSON.stringify(payload) })
       const result = await response.json().catch(() => ({})) as EgymBookingResult & { message?: string | string[] }
       if (!response.ok) throw new Error(responseMessage(result, isFrench ? 'La réservation Wellpass n’a pas pu être confirmée.' : 'The Wellpass booking could not be confirmed.'))
 
-      const sessionToken = result.sessionToken || member?.token
+      const sessionToken = result.sessionToken || authorizationToken || member?.token
       if (sessionToken) {
         const memberResponse = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/me`, {
           method: 'POST',
@@ -891,7 +961,7 @@ function BookingPortalRoute() {
         }
       }
 
-      if (!member && sessionToken) {
+      if (!member && !authenticatedByValidation && sessionToken) {
         saveGuestDraft(customerSlug, locationSlug, { firstName: guestFirstName, lastName: guestLastName, phone: guestPhone, email })
       }
       setSchedule((current) => current ? {
@@ -1086,7 +1156,7 @@ function BookingPortalRoute() {
               <div className="booking-session-time"><strong>{session.localStartTime}</strong><span>{session.localEndTime}</span></div>
               <div className="booking-session-copy">
                 <div className="booking-session-title"><h3>{session.name}</h3>{session.category && <span>{session.category}</span>}</div>
-                <div className="booking-session-meta"><span>◷</span>{session.duration} min{session.coachName ? ` · ${session.coachName}` : ''}{session.category && <><i />{session.category}</>}</div>
+                <BookingCoach name={session.coachName} languages={session.coachLanguages} imageUrl={session.coachImageUrl} duration={session.duration} />
                 {session.description && <details className="booking-session-terms">
                   <summary>Description</summary>
                   <p className="booking-session-description">{session.description}</p>

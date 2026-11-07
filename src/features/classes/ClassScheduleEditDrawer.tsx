@@ -44,6 +44,7 @@ export function ClassScheduleEditDrawer({
   const [validFrom, setValidFrom] = useState('')
   const [validUntil, setValidUntil] = useState('')
   const [coachId, setCoachId] = useState('')
+  const [coachName, setCoachName] = useState('')
   const [coachValidFrom, setCoachValidFrom] = useState('')
   const [coachValidUntil, setCoachValidUntil] = useState('')
   const [autoGenerateSessions, setAutoGenerateSessions] = useState(true)
@@ -62,6 +63,7 @@ export function ClassScheduleEditDrawer({
     setValidFrom(dateInput(schedule.validFrom))
     setValidUntil(dateInput(schedule.validUntil))
     setCoachId(schedule.coachId ?? '')
+    setCoachName(schedule.coachCustomName ?? (!schedule.coachId ? schedule.coachName ?? '' : ''))
     setCoachValidFrom(schedule.coachId ? dateInput(schedule.coachValidFrom ?? schedule.validFrom) : '')
     setCoachValidUntil(schedule.coachId ? dateInput(schedule.coachValidUntil) : '')
     setAutoGenerateSessions(schedule.autoGenerateSessions !== false)
@@ -97,6 +99,7 @@ export function ClassScheduleEditDrawer({
         validFrom: validFrom ? new Date(`${validFrom}T00:00:00.000Z`).toISOString() : null,
         validUntil: validUntil ? new Date(`${validUntil}T23:59:59.000Z`).toISOString() : null,
         coachId: coachId || null,
+        coachName: coachName.trim() || null,
         coachValidFrom: coachId ? effectiveCoachFrom || null : null,
         coachValidUntil: coachId ? coachValidUntil || null : null,
         autoGenerateSessions,
@@ -132,6 +135,8 @@ export function ClassScheduleEditDrawer({
             emptyMessage="No qualified instructors assigned to this location."
           />
         </Field>
+        <Field label="Coach name (optional)"><Input value={coachName} onChange={(event) => setCoachName(event.target.value)} placeholder="Enter a name if the coach isn't in the system" /></Field>
+        <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
         {coachId ? <>
           <Field label="Coach assigned from"><Input required type="date" value={coachValidFrom || validFrom} onChange={(event) => setCoachValidFrom(event.target.value)} /></Field>
           <Field label="Coach assigned until (optional)"><Input type="date" value={coachValidUntil} onChange={(event) => setCoachValidUntil(event.target.value)} /></Field>

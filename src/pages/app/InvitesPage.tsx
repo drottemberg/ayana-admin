@@ -6,6 +6,7 @@ import { useConnect } from '@/features/app/use-connect'
 import { getUserRequestsPageRequest } from '@/features/user-requests/api'
 import { userRequestsQueryKeys } from '@/features/user-requests/query-keys'
 import { UserRequestService } from '@/features/user-requests/user-request-service'
+import { InviteListCard } from '@/features/user-requests/InviteListCard'
 import { Drawer, DrawerId } from '@/providers/drawer'
 import { UserRequestStatus, type UserRequest } from '@/types/user-request'
 import { formatDateTime } from '@/utils/date-utils'
@@ -45,6 +46,7 @@ export default function InvitesPage() {
         tableKey={`invites.${direction.toLowerCase()}`}
         columns={columns}
         getRowCommands={(request) => UserRequestService.getActions(request)}
+        renderCard={(request, actions) => <InviteListCard request={request} actions={actions} />}
         disabledSelection
         searchPlaceholder="Search invitations..."
         searchColumns={['type', 'status']}

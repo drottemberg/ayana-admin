@@ -12,6 +12,7 @@ import { NO_VALUE_STR } from '@/constants'
 import type { ClassBooking, ClassSchedule, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { cn } from '@/lib/utils'
+import { memberAvatarColor, memberAvatarInitials } from '@/features/bookings/member-avatar'
 
 const sessionTypeLabels = { GROUP: 'Group', SEMI_PRIVATE: 'Semi-private', PRIVATE: 'Private' } as const
 
@@ -57,6 +58,7 @@ export function ClassSessionListCard({
   const isInactive = isCancelled || session.status === 'PAUSED'
   const canClaim = allowClaim
     && !session.coachId
+    && !session.coachName
     && session.status === 'SCHEDULED'
     && start.getTime() >= Date.now()
     && onClaim
@@ -86,7 +88,7 @@ export function ClassSessionListCard({
             {canClaim ? <>
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" />No coach</span>
               <Button type="button" size="sm" className="h-7 rounded-lg px-3 text-xs" disabled={claimingSessionId === session.id} onClick={(event) => { event.stopPropagation(); onClaim?.(session) }}>{claimingSessionId === session.id ? 'Claiming…' : 'Claim'}</Button>
-            </> : session.coachName ? <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"><span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-foreground">{session.coachName.trim().charAt(0).toUpperCase()}</span><span className="truncate">{session.coachName}</span></span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" />No coach</span>}
+            </> : session.coachName ? <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"><span className={cn('flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium', memberAvatarColor(session.coachId || session.coachName))}>{memberAvatarInitials(session.coachName)}</span><span className="truncate">{session.coachName}</span></span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" />No coach</span>}
           </div>
         </div>
       </div>
@@ -125,6 +127,7 @@ export function getClassSessionColumns(options: {
         const session = row.original
         const canClaim = options.allowClaim
           && !session.coachId
+          && !session.coachName
           && session.status === 'SCHEDULED'
           && new Date(session.startTime).getTime() >= Date.now()
           && options.onClaim

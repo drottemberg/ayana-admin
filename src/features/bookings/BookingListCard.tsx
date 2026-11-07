@@ -11,24 +11,7 @@ import { NO_VALUE_STR } from '@/constants'
 import { cn } from '@/lib/utils'
 import type { Booking } from '@/types/booking'
 import type { ClassBooking } from '@/types/class-type'
-
-const avatarColors = [
-  'bg-[#fbe6dc] text-[#97401e]',
-  'bg-[#e5ecdf] text-[#405b38]',
-  'bg-[#f0eaf6] text-[#72618d]',
-  'bg-[#f5ecd5] text-[#806320]',
-  'bg-[#e7eff1] text-[#55727c]',
-]
-
-function getInitials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?'
-}
-
-function avatarColor(id: string) {
-  let hash = 0
-  for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) | 0
-  return avatarColors[Math.abs(hash) % avatarColors.length]
-}
+import { memberAvatarColor, memberAvatarInitials } from './member-avatar'
 
 export function bookingCreatedDateKey(value: string) {
   const date = new Date(value)
@@ -137,7 +120,7 @@ export function BookingListCard({
       <span className="text-xs leading-none text-muted-foreground">{sessionDate.weekday}</span>
       <span className="mt-1 whitespace-nowrap text-xs font-semibold leading-4 text-foreground">{sessionDate.time}</span>
     </div> : null}
-    {showUser ? <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', avatarColor(booking.user.id))} aria-hidden="true">{getInitials(memberName)}</div> : null}
+    {showUser ? <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', memberAvatarColor(booking.user.id))} aria-hidden="true">{memberAvatarInitials(memberName)}</div> : null}
     <div className={cn('min-w-0 flex-1', sessionDate && 'py-3.5 pr-4 sm:pr-5')}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
@@ -219,7 +202,7 @@ export function ClassBookingListCard({
   if (instructorView) {
     return <article className={cn('flex min-w-0 items-center justify-between gap-3 px-4 py-3 sm:px-5', !grouped && 'rounded-2xl bg-card shadow-sm', isCancelled && 'opacity-60')}>
       <div className="flex min-w-0 items-center gap-3">
-        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold', avatarColor(booking.userId))} aria-hidden="true">{getInitials(name)}</div>
+        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold', memberAvatarColor(booking.userId))} aria-hidden="true">{memberAvatarInitials(name)}</div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="truncate text-sm font-semibold text-foreground underline-offset-2 hover:underline">{name}</Link>
@@ -237,7 +220,7 @@ export function ClassBookingListCard({
   }
 
   return <article className={cn('flex min-w-0 items-start gap-3 px-4 py-3.5 sm:gap-4 sm:px-5', !grouped && 'rounded-2xl bg-card shadow-sm', isCancelled && 'opacity-60')}>
-    <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', avatarColor(booking.userId))} aria-hidden="true">{getInitials(name)}</div>
+    <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', memberAvatarColor(booking.userId))} aria-hidden="true">{memberAvatarInitials(name)}</div>
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">

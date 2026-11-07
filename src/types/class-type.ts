@@ -47,6 +47,8 @@ export type ClassSession = {
   classCategory?: string | null
   coachId?: string | null
   coachName?: string | null
+  coachCustomName?: string | null
+  coachOverride?: boolean
   scheduleId?: string | null
   roomId?: string | null
   startTime: string
@@ -69,6 +71,7 @@ export type ClassSchedule = {
   classTypeId: string
   coachId?: string | null
   coachName?: string | null
+  coachCustomName?: string | null
   coachValidFrom?: string | null
   coachValidUntil?: string | null
   roomId?: string | null

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { NO_VALUE_STR } from '@/constants'
 import type { CoachProfile } from './types'
+import { coachLanguageLabel } from './CoachLanguagesInput'
 
 export const coachColumns: ColumnDef<CoachProfile>[] = [
   {
@@ -27,5 +28,5 @@ export const coachColumns: ColumnDef<CoachProfile>[] = [
       ? row.original.classTypes.map((classType) => classType.name).join(', ')
       : NO_VALUE_STR,
   },
-  { accessorKey: 'languages', header: 'Languages taught', cell: ({ row }) => row.original.languages.join(', ') || NO_VALUE_STR },
+  { accessorKey: 'languages', header: 'Languages spoken', cell: ({ row }) => row.original.languages.map(coachLanguageLabel).join(', ') || NO_VALUE_STR },
 ]

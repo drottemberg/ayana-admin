@@ -16,6 +16,7 @@ import LogoutIcon from '@hugeicons/core-free-icons/Logout01Icon'
 import { useAuth } from '@/providers/use-auth'
 import type { User } from '@/types/user'
 import { StringUtils } from '@/utils'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const NavAvatar = ({ user }: { user: User }) => {
@@ -32,17 +33,30 @@ const NavAvatar = ({ user }: { user: User }) => {
 
 export function NavUser() {
   const { user, logout } = useAuth()
-  const { isMobile } = useSidebar()
+  const { isMobile, setOpenMobile } = useSidebar()
   const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
 
   if (!user) {
     return null
   }
 
+  const openAccount = () => {
+    setOpen(false)
+    if (isMobile) setOpenMobile(false)
+    navigate('/account')
+  }
+
+  const signOut = () => {
+    setOpen(false)
+    if (isMobile) setOpenMobile(false)
+    logout()
+  }
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger render={<SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />}>
             <NavAvatar user={user} />
             <div className="grid flex-1 text-left text-sm leading-tight">
@@ -60,6 +74,7 @@ export function NavUser() {
             side={isMobile ? 'bottom' : 'right'}
             align="end"
             sideOffset={4}
+            onClickCapture={() => setOpen(false)}
           >
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
@@ -74,13 +89,13 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => navigate('/account')}>
+              <DropdownMenuItem onClick={openAccount}>
                 <HugeiconsIcon icon={CheckmarkBadgeIcon} strokeWidth={2} />
                 Account
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>
+            <DropdownMenuItem onClick={signOut}>
               <HugeiconsIcon icon={LogoutIcon} strokeWidth={2} />
               Log out
             </DropdownMenuItem>

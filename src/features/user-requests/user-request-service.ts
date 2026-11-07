@@ -3,6 +3,7 @@ import {
   acceptUserRequestRequest,
   cancelUserRequestRequest,
   rejectUserRequestRequest,
+  resendUserRequestRequest,
 } from '@/features/user-requests/api'
 import { appQueryKeys } from '@/features/app/query-keys'
 import { getAppMode } from '@/features/app/app-mode'
@@ -111,11 +112,19 @@ export const UserRequestService = {
     await runRequestAction('cancel this request', () => cancelUserRequestRequest(request.id), true)
   },
 
+  async resend(request: UserRequest) {
+    await runRequestAction('resend this invitation', () => resendUserRequestRequest(request.id))
+  },
+
   getActions(request: UserRequest): DropdownActionItem[] {
     if (request.status !== UserRequestStatus.PENDING) return []
 
     if (request.isSent && request.isReceived) {
       return [
+        {
+          label: 'Resend invitation',
+          onClick: () => void this.resend(request),
+        },
         {
           label: 'Accept',
           onClick: () => void this.accept(request),
@@ -135,6 +144,10 @@ export const UserRequestService = {
 
     if (request.isSent) {
       return [
+        {
+          label: 'Resend invitation',
+          onClick: () => void this.resend(request),
+        },
         {
           label: 'Cancel',
           variant: 'destructive',

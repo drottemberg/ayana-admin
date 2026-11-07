@@ -103,3 +103,9 @@ export async function cancelUserRequestRequest(requestId: string, reason?: strin
 
   return result.request
 }
+
+export async function resendUserRequestRequest(requestId: string): Promise<UserRequest> {
+  const result = await apiClient.post<UserRequestResponse>(`/user-requests/${requestId}/resend`)
+
+  return result.request
+}

@@ -12,6 +12,7 @@ import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
 import { getCoachProfileRequest } from '@/features/coaches/api'
 import { coachesQueryKeys } from '@/features/coaches/query-keys'
 import type { CoachClassQualification } from '@/features/coaches/types'
+import { coachLanguageLabel } from '@/features/coaches/CoachLanguagesInput'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { formatDateTime } from '@/utils/date-utils'
@@ -68,7 +69,7 @@ export default function CoachPage() {
       { label: 'User', value: <Link className="underline-offset-2 hover:underline" to={`/users/${userId}`}>{coach.coachName || coach.email || 'Instructor'}</Link> },
       { label: 'Email', value: coach.email || NO_VALUE_STR },
       { label: 'Locations', value: coach.locationScope === 'ALL' ? 'All locations' : `${coach.locations.length} assigned` },
-      { label: 'Languages taught', value: coach.languages.join(', ') || NO_VALUE_STR },
+      { label: 'Languages spoken', value: coach.languages.map(coachLanguageLabel).join(', ') || NO_VALUE_STR },
       { label: 'Specialties', value: coach.specialties.join(', ') || NO_VALUE_STR },
       { label: 'Bio', value: coach.bio || NO_VALUE_STR },
       { label: 'Created', value: coach.createdAt ? formatDateTime(coach.createdAt) : NO_VALUE_STR },
