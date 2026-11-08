@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import {
-  claimCoachSessionRequest,
   getMyCoachCoverageRequestsRequest,
   getMyCoachSessionsRequest,
   getCoachProfileRequest,
@@ -27,6 +26,7 @@ import {
 } from '@/features/coaches/api'
 import { MyCoachProfileDrawer } from '@/features/coaches/MyCoachProfileDrawer'
 import { coachesQueryKeys } from '@/features/coaches/query-keys'
+import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { BookingCardDayGroup, BookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
 import { getBookingsRequest } from '@/features/bookings/api'
@@ -224,20 +224,7 @@ export default function HomePage() {
   const locationId = locationScope && locationScope !== ALL_LOCATIONS_SCOPE ? locationScope : null
   const locationQuery = useMemo(() => ({ customerId, locationId }), [customerId, locationId])
   async function claimSession(item: HomeSessionRow) {
-    if (claimingSessionId) return
-    setClaimingSessionId(item.id)
-    try {
-      await claimCoachSessionRequest(item.id)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ['coaches'] }),
-      ])
-      toast.success('Session assigned to you.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
-    } finally {
-      setClaimingSessionId(null)
-    }
+    await claimCoachSession(item, queryClient, setClaimingSessionId)
   }
   const sessionColumns = getHomeSessionColumns()
   const claimableSessionColumns = getHomeSessionColumns({

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
@@ -63,16 +64,23 @@ export function CoachAttendanceDrawer({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-3">
         {attendance.isLoading ? <p className="text-sm text-muted-foreground">Loading attendees…</p> : null}
         {attendance.isError ? <p role="alert" className="text-sm text-destructive">Could not load the attendance list.</p> : null}
+        {attendance.data && !attendance.data.attendanceAvailable ? <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">Roster is available now. Attendance opens 90 minutes before class.</p> : null}
         {attendance.data?.bookings.length === 0 ? <p className="text-sm text-muted-foreground">There are no confirmed bookings for this session.</p> : null}
         {attendance.data?.bookings.map((booking) => {
-          const name = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || booking.email || 'Member'
+          const name = [booking.firstName, booking.lastName].filter(Boolean).join(' ') || 'Member'
           const attended = booking.status === 'ATTENDED' ? true : booking.status === 'NO_SHOW' ? false : null
           const isSaving = savingBookingId === booking.bookingId
           return <div key={booking.bookingId} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="truncate font-medium">{name}</div>
-              {booking.email ? <div className="truncate text-sm text-muted-foreground">{booking.email}</div> : null}
-              {booking.phone ? <div className="truncate text-sm text-muted-foreground">{booking.phone}</div> : null}
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {booking.visitInsight ? <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{booking.visitInsight === 'FIRST_VISIT' ? 'First visit' : booking.visitInsight === 'REGULAR' ? 'Regular' : 'Returning'}</span> : null}
+                <Link
+                  className="text-xs underline underline-offset-2"
+                  to={`/class-sessions/${encodeURIComponent(session.id)}?locationId=${encodeURIComponent(session.organizationId)}&memberUserId=${encodeURIComponent(booking.userId)}#module-bookings`}
+                >View profile</Link>
+              </div>
+              {booking.preferences && Object.keys(booking.preferences).length ? <div className="mt-1 text-sm text-muted-foreground">{Object.entries(booking.preferences).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : typeof value === 'string' ? value : JSON.stringify(value)}`).join(' · ')}</div> : null}
             </div>
             <div className="flex items-center gap-2 self-end sm:self-auto">
               <Button
@@ -86,7 +94,7 @@ export function CoachAttendanceDrawer({
                 aria-label={`Mark ${name} present`}
                 aria-pressed={attended === true}
                 title="Mark present"
-                disabled={isSaving}
+                disabled={isSaving || !attendance.data?.attendanceAvailable}
                 onClick={() => void setAttendance(booking.bookingId, true)}
               >
                 <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" />
@@ -102,13 +110,13 @@ export function CoachAttendanceDrawer({
                 aria-label={`Mark ${name} absent`}
                 aria-pressed={attended === false}
                 title="Mark absent"
-                disabled={isSaving}
+                disabled={isSaving || !attendance.data?.attendanceAvailable}
                 onClick={() => void setAttendance(booking.bookingId, false)}
               >
                 <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-4" />
               </Button>
               <DropdownActionsMenu
-                items={[{ label: 'Clear attendance', disabled: attended === null || isSaving, onClick: () => void setAttendance(booking.bookingId, null) }]}
+                items={[{ label: 'Clear attendance', disabled: attended === null || isSaving || !attendance.data?.attendanceAvailable, onClick: () => void setAttendance(booking.bookingId, null) }]}
                 align="end"
                 triggerRender={<Button type="button" variant="ghost" size="icon-sm" aria-label={`More attendance actions for ${name}`} disabled={isSaving} />}
               >

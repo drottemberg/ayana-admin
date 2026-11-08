@@ -90,13 +90,42 @@ export function DetailPageLayout({
 }) {
   const isStackedLayout = useIsStackedDetailLayout()
   const hasAside = hasRenderableContent(aside)
-  const [activeModule, setActiveModule] = useState(modules?.[0]?.key ?? '')
+  const moduleKeys = modules?.map((module) => module.key) ?? []
+  const moduleKeysSignature = moduleKeys.join('|')
+  const getModuleFromUrl = useCallback(() => {
+    const key = window.location.hash.match(/^#module-([^&]+)/)?.[1]
+    return key && moduleKeys.includes(key) ? key : null
+  }, [moduleKeysSignature])
+  const [activeModule, setActiveModule] = useState(() => getModuleFromUrl() ?? modules?.[0]?.key ?? '')
   const [bottomFillerHeight, setBottomFillerHeight] = useState(0)
 
   useEffect(() => {
     if (!modules?.length || modules.some((module) => module.key === activeModule)) return
     setActiveModule(modules[0].key)
   }, [activeModule, modules])
+
+  useEffect(() => {
+    if (!moduleKeys.length) return
+    const selectFromUrl = () => {
+      const key = getModuleFromUrl()
+      if (!key) return
+      setActiveModule(key)
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(`${MODULE_ANCHOR_PREFIX}-${key}`)
+        if (!target) return
+        const headerHeight = document.querySelector<HTMLElement>('[data-slot="page-header"]')?.getBoundingClientRect().height ?? 160
+        target.style.scrollMarginTop = `${headerHeight + 8}px`
+        target.scrollIntoView({ block: 'start' })
+      })
+    }
+    selectFromUrl()
+    window.addEventListener('hashchange', selectFromUrl)
+    window.addEventListener('popstate', selectFromUrl)
+    return () => {
+      window.removeEventListener('hashchange', selectFromUrl)
+      window.removeEventListener('popstate', selectFromUrl)
+    }
+  }, [getModuleFromUrl, moduleKeysSignature])
 
   useLayoutEffect(() => {
     if (!modules?.length) return
@@ -173,7 +202,11 @@ export function DetailPageLayout({
           moduleElements[0]
         const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
 
-        setActiveModule(isAtBottom ? moduleElements[moduleElements.length - 1].key : active.key)
+        const nextKey = isAtBottom ? moduleElements[moduleElements.length - 1].key : active.key
+        setActiveModule(nextKey)
+        if (window.location.hash !== `#${MODULE_ANCHOR_PREFIX}-${nextKey}`) {
+          window.history.replaceState(window.history.state, '', `#${MODULE_ANCHOR_PREFIX}-${nextKey}`)
+        }
       })
     }
 
@@ -198,7 +231,7 @@ export function DetailPageLayout({
 
     const headerHeight = document.querySelector<HTMLElement>('[data-slot="page-header"]')?.getBoundingClientRect().height ?? 160
     target.style.scrollMarginTop = `${headerHeight + 8}px`
-    window.history.replaceState(null, '', `#${id}`)
+    window.history.replaceState(window.history.state, '', `#${id}`)
 
     if (isStackedLayout) {
       setActiveModule(key)

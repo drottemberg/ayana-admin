@@ -25,7 +25,8 @@ import { getAppMode } from '@/features/app/app-mode'
 import { Modals } from '@/providers/modal'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import type { ClassSession } from '@/types/class-type'
-import { claimCoachSessionRequest, getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
+import { getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
+import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
 const CLASS_SESSION_DATE_FILTER_KEY = 'class-sessions.date-filter'
@@ -200,20 +201,7 @@ export default function ClassSessionsPage() {
   }
 
   async function claimSession(item: ClassSession) {
-    if (claimingSessionId) return
-    setClaimingSessionId(item.id)
-    try {
-      await claimCoachSessionRequest(item.id)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ['coaches'] }),
-      ])
-      toast.success('Session assigned to you.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
-    } finally {
-      setClaimingSessionId(null)
-    }
+    await claimCoachSession(item, queryClient, setClaimingSessionId)
   }
 
   const columns = useMemo(

@@ -50,14 +50,33 @@ export type CoachAttendanceBooking = {
   userId: string
   firstName?: string | null
   lastName?: string | null
-  email?: string | null
-  phone?: string | null
   status: 'CONFIRMED' | 'ATTENDED' | 'NO_SHOW'
   checkInAt?: string | null
+  language?: string | null
+  preferences?: Record<string, unknown>
+  studioVisits?: number
+  previousStudioVisits?: number
+  visitInsight?: 'FIRST_VISIT' | 'RETURNING' | 'REGULAR'
+  profileUrl?: string | null
+  sessionUrl?: string | null
 }
 
-export function getCoachSessionAttendanceRequest(sessionId: string): Promise<{ sessionId: string; bookings: CoachAttendanceBooking[] }> {
-  return apiClient.get<{ sessionId: string; bookings: CoachAttendanceBooking[] }>(`/coaches/me/sessions/${encodeURIComponent(sessionId)}/attendance`)
+export type CoachRosterMemberProfile = Pick<CoachAttendanceBooking,
+  'userId' | 'firstName' | 'lastName' | 'language' | 'preferences' | 'studioVisits' | 'previousStudioVisits' | 'visitInsight' | 'status'
+>
+
+export function getCoachSessionAttendanceRequest(sessionId: string): Promise<{
+  sessionId: string
+  locationId: string
+  attendanceAvailableAt: string
+  attendanceAvailable: boolean
+  bookings: CoachAttendanceBooking[]
+}> {
+  return apiClient.get(`/coaches/me/sessions/${encodeURIComponent(sessionId)}/attendance`)
+}
+
+export function getCoachRosterMemberProfileRequest(sessionId: string, userId: string): Promise<CoachRosterMemberProfile> {
+  return apiClient.get(`/coaches/me/sessions/${encodeURIComponent(sessionId)}/roster/${encodeURIComponent(userId)}/profile`)
 }
 
 export function saveCoachSessionAttendanceRequest(sessionId: string, records: Array<{ bookingId: string; present: boolean | null }>) {

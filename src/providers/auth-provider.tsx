@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createPasswordRequest,
+  exchangeInstructorAccessRequest,
   forgotPasswordRequest,
   loginRequest,
   logoutRequest,
@@ -40,12 +41,14 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
   const queryClient = useQueryClient()
   const [authVersion, setAuthVersion] = useState(0)
   const [sessionInvalidated, setSessionInvalidated] = useState(false)
+  const [accessHandoffReady, setAccessHandoffReady] = useState(false)
+  const accessHandoffTask = useRef<Promise<void> | null>(null)
   const token = apiClient.getAuthToken()
   const hasToken = Boolean(token)
   const connectQuery = useQuery({
     queryKey: appQueryKeys.connect,
     queryFn: connectAppRequest,
-    enabled: !sessionInvalidated,
+    enabled: accessHandoffReady && !sessionInvalidated,
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 401) && failureCount < 2,
   })
   const session = useMemo(
@@ -53,7 +56,44 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     [connectQuery.data, sessionInvalidated],
   )
   const user = session?.user.toJSON() ?? null
-  const isLoading = hasToken && !sessionInvalidated && connectQuery.isLoading
+  // Keep protected routes mounted on their current URL until the optional
+  // one-time access handoff has been checked and app.connect has resolved.
+  // Otherwise a refresh briefly looks unauthenticated while connect is gated,
+  // sending the router through /login and back to the home page.
+  const isLoading = !accessHandoffReady || (hasToken && !sessionInvalidated && connectQuery.isLoading)
+
+  useEffect(() => {
+    const originalHash = window.location.hash.replace(/^#/, '')
+    const parts = originalHash.split('&')
+    const params = new URLSearchParams(parts.filter((part) => !part.startsWith('module-')).join('&'))
+    const accessId = params.get('staffAccessId')
+    const accessCode = params.get('staffAccessCode')
+    const cleanHandoffFromUrl = () => {
+      const remaining = parts.filter((part) => !part.startsWith('staffAccessId=') && !part.startsWith('staffAccessCode='))
+      const nextHash = remaining.length ? `#${remaining.join('&')}` : ''
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${nextHash}`)
+    }
+
+    if (!accessId || !accessCode) {
+      setAccessHandoffReady(true)
+      return
+    }
+
+    if (accessHandoffTask.current) return
+    accessHandoffTask.current = (async () => {
+      try {
+        const handoff = await exchangeInstructorAccessRequest(accessId, accessCode)
+        queryClient.clear()
+        apiClient.setTokens(handoff.token, handoff.refreshToken)
+        saveSelectedOrgId(handoff.organizationId)
+      } catch {
+        apiClient.clearTokens()
+      } finally {
+        cleanHandoffFromUrl()
+        setAccessHandoffReady(true)
+      }
+    })()
+  }, [queryClient])
 
   useEffect(() => {
     if (!session) return

@@ -11,6 +11,10 @@ export function loginRequest(email: string, password: string): Promise<AuthRespo
   return apiClient.login<AuthResponse>('/auth/login', { email, password })
 }
 
+export function exchangeInstructorAccessRequest(accessId: string, accessCode: string): Promise<AuthResponse> {
+  return apiClient.post<AuthResponse>('/auth/instructor-access/exchange', { accessId, accessCode })
+}
+
 export function signupRequest(
   requestId: string | undefined,
   payload: { email: string; phone: string; name: string; password: string },

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
@@ -27,8 +27,10 @@ import { useConnect } from '@/features/app/use-connect'
 import { Modals } from '@/providers/modal'
 import type { ClassPassScheduleInsight, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
-import { claimCoachSessionRequest, saveCoachSessionAttendanceRequest } from '@/features/coaches/api'
+import { saveCoachSessionAttendanceRequest } from '@/features/coaches/api'
+import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
+import { CoachRosterMemberProfileDrawer } from '@/features/coaches/CoachRosterMemberProfileDrawer'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -104,6 +106,7 @@ export default function ClassSessionPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddBookingOpen, setIsAddBookingOpen] = useState(false)
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false)
+  const [memberProfileUserId, setMemberProfileUserId] = useState<string | null>(null)
   const [attendanceSavingId, setAttendanceSavingId] = useState<string | null>(null)
   const [isClaimingSession, setIsClaimingSession] = useState(false)
   const [bookingSourceSummary, setBookingSourceSummary] = useState('')
@@ -117,8 +120,10 @@ export default function ClassSessionPage() {
   const cancellationMessageRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const locationId = searchParams.get('locationId') ?? ''
+  const memberUserIdFromUrl = searchParams.get('memberUserId')
+  useEffect(() => setMemberProfileUserId(memberUserIdFromUrl), [memberUserIdFromUrl])
   const { session: appSession } = useConnect()
   const { data, isLoading, isError } = useDetailQuery({
     queryKey: classSessionsQueryKeys.detail(sessionId),
@@ -178,20 +183,7 @@ export default function ClassSessionPage() {
 
   const claimSession = async () => {
     if (!classSession || isClaimingSession) return
-    setIsClaimingSession(true)
-    try {
-      await claimCoachSessionRequest(classSession.id)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-        queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.detail(sessionId) }),
-        queryClient.invalidateQueries({ queryKey: ['coaches'] }),
-      ])
-      toast.success('Session assigned to you.')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not claim this session.')
-    } finally {
-      setIsClaimingSession(false)
-    }
+    await claimCoachSession(classSession, queryClient, (id) => setIsClaimingSession(id !== null))
   }
 
   const cancelSession = async () => {
@@ -447,8 +439,8 @@ export default function ClassSessionPage() {
       icon={EntityIcon.users}
       action={classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
         ? { label: 'Resume session', onClick: resumeSession }
-        : canTakeAttendance
-          ? { label: 'Take attendance', onClick: () => setIsAttendanceOpen(true) }
+          : isAssignedInstructor
+          ? { label: attendanceAvailable ? 'Take attendance' : 'View roster', onClick: () => setIsAttendanceOpen(true) }
         : classSession?.status === 'SCHEDULED' && appSession?.permissions.bookings?.create
           ? { label: 'Add booking', iconOnly: true, onClick: () => setIsAddBookingOpen(true) }
           : undefined}
@@ -569,10 +561,23 @@ export default function ClassSessionPage() {
       onOpenChange={setIsAddBookingOpen}
       initialSession={classSession ?? null}
     />
-    {canTakeAttendance && classSession ? <CoachAttendanceDrawer
+    {isAssignedInstructor && classSession ? <CoachAttendanceDrawer
       session={classSession}
       open={isAttendanceOpen}
       onOpenChange={setIsAttendanceOpen}
+    /> : null}
+    {isInstructorContext && classSession ? <CoachRosterMemberProfileDrawer
+      sessionId={classSession.id}
+      userId={memberProfileUserId}
+      open={Boolean(memberProfileUserId)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setMemberProfileUserId(null)
+          const nextParams = new URLSearchParams(searchParams)
+          nextParams.delete('memberUserId')
+          setSearchParams(nextParams, { replace: true })
+        }
+      }}
     /> : null}
     <Dialog
       open={Boolean(classPassScheduleAction)}
