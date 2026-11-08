@@ -17,7 +17,7 @@ export function exchangeInstructorAccessRequest(accessId: string, accessCode: st
 
 export function signupRequest(
   requestId: string | undefined,
-  payload: { email: string; phone: string; name: string; password: string },
+  payload: { email: string; phone: string; firstName: string; lastName: string; password: string },
 ): Promise<AuthResponse> {
   const path = requestId
     ? `/user-requests/${encodeURIComponent(requestId)}/signup`

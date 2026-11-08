@@ -17,7 +17,8 @@ const signupSchema = z
   .object({
     email: z.email('Please enter a valid email address.'),
     phone: z.string().trim().min(1, 'Phone number is required.').refine(isValidPhoneNumber, 'Please enter a valid phone number.'),
-    name: z.string().trim().min(1, 'Name is required.').max(120, 'Name must be 120 characters or fewer.'),
+    firstName: z.string().trim().min(1, 'First name is required.').max(120, 'First name must be 120 characters or fewer.'),
+    lastName: z.string().trim().min(1, 'Last name is required.').max(120, 'Last name must be 120 characters or fewer.'),
     password: createPasswordValidator(),
     confirmPassword: z.string().min(1, 'Please confirm your password.'),
   })
@@ -43,7 +44,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
     formState: { errors, isSubmitting },
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: inviteEmail, phone: '', name: '', password: '', confirmPassword: '' },
+    defaultValues: { email: inviteEmail, phone: '', firstName: '', lastName: '', password: '', confirmPassword: '' },
   })
   const passwordValue = watch('password')
   const passwordChecks = useMemo(
@@ -51,9 +52,9 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
     [passwordValue],
   )
 
-  const onSubmit = async ({ email, phone, name, password }: SignupValues) => {
+  const onSubmit = async ({ email, phone, firstName, lastName, password }: SignupValues) => {
     try {
-      await signup(requestId, email, phone, name, password)
+      await signup(requestId, email, phone, firstName, lastName, password)
       navigate('/app')
     } catch (error) {
       setError('root', {
@@ -64,7 +65,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
 
   return (
     <AuthForm
-      title="Create your customer account"
+      title="Create your account"
       description="Use the email address that received your invitation."
       className={className}
       {...props}
@@ -97,11 +98,18 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
             )}
           />
           <TextInput
-            label="Name"
-            placeholder="Enter your name"
-            autoComplete="name"
-            error={errors.name?.message}
-            {...register('name')}
+            label="First name"
+            placeholder="Enter your first name"
+            autoComplete="given-name"
+            error={errors.firstName?.message}
+            {...register('firstName')}
+          />
+          <TextInput
+            label="Last name"
+            placeholder="Enter your last name"
+            autoComplete="family-name"
+            error={errors.lastName?.message}
+            {...register('lastName')}
           />
           <PasswordInput
             label="Password"
