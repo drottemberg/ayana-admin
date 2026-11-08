@@ -56,8 +56,10 @@ import { getBookingColumns } from '@/features/bookings/booking-columns'
 import { BookingListCard } from '@/features/bookings/BookingListCard'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
+import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { getClassSchedulesRequest, getClassSessionsRequest } from '@/features/classes/api'
+import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
 import type { ClassSchedule, ClassSession } from '@/types/class-type'
 import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/features/client-contracts/CreditManagementDrawers'
@@ -274,6 +276,8 @@ export default function UserPage() {
   const canManageCredits = Boolean(session?.permissions.clientContracts?.edit)
   const canViewCreditWallets = canViewContracts
   const canViewBookings = Boolean(session?.permissions.bookings?.view)
+  const canCreateBookings = Boolean(session?.permissions.bookings?.create)
+  const canEditBookings = Boolean(session?.permissions.bookings?.edit)
   const canViewOrders = Boolean(session?.permissions.orders?.view)
   const [contractsToGrant, setContractsToGrant] = useState<ClientContract[]>([])
   const [grantCreditsOpen, setGrantCreditsOpen] = useState(false)
@@ -284,6 +288,10 @@ export default function UserPage() {
   const isAdminContext = getAppMode() === 'admin'
   const canViewAiSupportIssues = Boolean(isAdminContext && ['SUPPORT', 'ADMIN', 'SUPER_ADMIN'].includes(session?.user.staffRole ?? ''))
   const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
+  const invalidateBookingViews = async () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+  ])
   const setAiSupportIssueStatus = async (issue: AiSupportIssue, status: 'RESOLVED' | 'DISMISSED') => {
     try {
       await updateAiSupportIssueRequest(issue.id, { status })
@@ -506,6 +514,27 @@ export default function UserPage() {
         tableKey={`bookings.user.${userId}`}
         columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
         renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} showSessionDateAside />}
+        getRowCommands={(booking) => getBookingRowActions({
+          status: booking.status,
+          canEdit: canEditBookings,
+          canCreate: canCreateBookings,
+          isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
+          source: booking.source,
+          onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
+          onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
+          onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
+          onRebook: () => {
+            const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
+            void rebookClientForSession({
+              customerId: booking.customer.id,
+              locationId: booking.location.id,
+              sessionId: booking.sessionId,
+              userId: booking.userId,
+              clientName,
+              invalidate: invalidateBookingViews,
+            })
+          },
+        })}
         loadingMessage="Loading bookings..."
         emptyMessage="No bookings found."
         errorMessage="Failed to load bookings."
