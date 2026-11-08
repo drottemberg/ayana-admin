@@ -133,16 +133,29 @@ export async function loadCustomerLocationPolicies(
   _state: DataTableState<CustomerLocationPolicyRow>,
 ): Promise<DataTableAsyncResult<CustomerLocationPolicyRow>> {
   const locations = await getCustomerLocationPoliciesRequest(customerId)
-  const items = locations.map((item) => {
-    const policy = item.policy
-    return {
-      ...item,
-      lateCancelWindowHours: Number(policy?.lateCancelWindowHours ?? 12),
-      lateCancelPenaltyCredits: Number(policy?.lateCancelPenaltyCredits ?? 1),
-      noShowPenaltyCredits: Number(policy?.noShowPenaltyCredits ?? 1),
-      openingDate: typeof policy?.openingDate === 'string' ? policy.openingDate : null,
-      isConfigured: Boolean(policy),
-    }
-  })
+  const items = locations.map(toCustomerLocationPolicyRow)
   return { items, count: items.length, pageCount: 1 }
+}
+
+export async function loadCustomerLocationPolicy(
+  customerId: string,
+  locationId: string,
+  _state: DataTableState<CustomerLocationPolicyRow>,
+): Promise<DataTableAsyncResult<CustomerLocationPolicyRow>> {
+  const locations = await getCustomerLocationPoliciesRequest(customerId)
+  const location = locations.find((item) => item.id === locationId)
+  const items = location ? [toCustomerLocationPolicyRow(location)] : []
+  return { items, count: items.length, pageCount: 1 }
+}
+
+function toCustomerLocationPolicyRow(item: CustomerLocationPolicyRow): CustomerLocationPolicyRow {
+  const policy = item.policy
+  return {
+    ...item,
+    lateCancelWindowHours: Number(policy?.lateCancelWindowHours ?? 12),
+    lateCancelPenaltyCredits: Number(policy?.lateCancelPenaltyCredits ?? 1),
+    noShowPenaltyCredits: Number(policy?.noShowPenaltyCredits ?? 1),
+    openingDate: typeof policy?.openingDate === 'string' ? policy.openingDate : null,
+    isConfigured: Boolean(policy),
+  }
 }

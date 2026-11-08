@@ -134,14 +134,16 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     mutationFn: ({
       requestId,
       email,
+      phone,
       name,
       password,
     }: {
       requestId: string | undefined
       email: string
+      phone: string
       name: string
       password: string
-    }) => signupRequest(requestId, { email, name, password }),
+    }) => signupRequest(requestId, { email, phone, name, password }),
     onSuccess: async () => {
       setSessionInvalidated(false)
       await refreshAppSession()
@@ -176,8 +178,8 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
         const response = await loginMutation.mutateAsync({ email, password })
         return response.mustChangePassword === true
       },
-      signup: async (requestId, email, name, password) => {
-        await signupMutation.mutateAsync({ requestId, email, name, password })
+      signup: async (requestId, email, phone, name, password) => {
+        await signupMutation.mutateAsync({ requestId, email, phone, name, password })
       },
       logout: async () => {
         try {

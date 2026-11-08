@@ -132,6 +132,11 @@ const data = {
   tools: [],
   settings: [
     {
+      title: 'Settings',
+      url: '/settings',
+      icon: <Icon icon={EntityIcon.deviceTypes} />,
+    },
+    {
       title: 'Devices',
       url: '/devices',
       icon: <Icon icon={EntityIcon.devices} />,
@@ -225,8 +230,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const manageItems = React.useMemo(() => data.manage.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const toolItems = React.useMemo(() => data.tools.filter((item) => canUseFeature(item, hasFeature)), [hasFeature])
   const settingsItems = React.useMemo(
-    () => data.settings.filter((item) => canUseFeature(item, hasFeature) && (item.title !== 'Integrations' || getAppMode() === 'customer')),
-    [hasFeature],
+    () => data.settings.filter((item) =>
+      canUseFeature(item, hasFeature)
+      && (item.title !== 'Integrations' || getAppMode() === 'customer')
+      && (item.title !== 'Settings' || (getAppMode() === 'customer' && Boolean(session?.permissions.organization?.editSelf))),
+    ),
+    [hasFeature, session?.permissions.organization?.editSelf],
   )
   return (
     <Sidebar collapsible="icon" {...props}>

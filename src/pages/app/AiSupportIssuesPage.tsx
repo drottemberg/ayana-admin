@@ -21,6 +21,7 @@ const types: AiSupportIssueType[] = ['UNANSWERED', 'TOOL_FAILURE', 'INTERNAL_ERR
 
 export default function AiSupportIssuesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const customerIdFilter = searchParams.get('f.customerId')
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(() => searchParams.get('issueId'))
   const [status, setStatus] = useState<AiSupportIssueStatus>('OPEN')
   const [note, setNote] = useState('')
@@ -186,6 +187,7 @@ export default function AiSupportIssuesPage() {
           loadData={(state: DataTableState<AiSupportIssue>) => getAiSupportIssuesRequest(state)}
           refetchOnMount="always"
           tableKey="ai-support-issues.root"
+          initialFilters={customerIdFilter ? { customerId: [customerIdFilter] } : undefined}
           columns={columns}
           searchPlaceholder="Search summary, user, or issue ID"
           searchColumns={['id', 'summary', 'userName', 'userEmail', 'customerName']}

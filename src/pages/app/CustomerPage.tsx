@@ -17,6 +17,8 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import type { DataTableState } from '@/components/data-table'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
+import type { ColumnDef } from '@tanstack/react-table'
+import { Badge } from '@/components/ui/badge'
 import { NO_VALUE_STR } from '@/constants'
 import { getCustomerRequest } from '@/features/customers/api'
 import { CustomerService } from '@/features/customers/customer-service'
@@ -25,10 +27,9 @@ import { accessDevicesListConfig, getAccessDeviceOrganization, getAccessDevicesR
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
 import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
-import { getIssuesRequest, issuesListConfig } from '@/features/issues/api'
-import { issueColumns } from '@/features/issues/issue-columns'
-import { IssueService } from '@/features/issues/issue-service'
-import { issuesQueryKeys } from '@/features/issues/query-keys'
+import { getAiSupportIssuesRequest } from '@/features/ai-support-issues/api'
+import { aiSupportIssueQueryKeys } from '@/features/ai-support-issues/query-keys'
+import type { AiSupportIssue } from '@/features/ai-support-issues/types'
 import { OrganizationStatusBadge } from '@/features/organizations/OrganizationStatusBadge'
 import { getProductsRequest, productsListConfig } from '@/features/products/api'
 import { getProductColumns } from '@/features/products/product-columns'
@@ -70,7 +71,6 @@ import {
 import { useDetailQuery } from '@/lib/query-hooks'
 import type { Customer } from '@/types/customer'
 import type { Location } from '@/types/location'
-import type { Issue } from '@/types/issue'
 import type { Product } from '@/types/product'
 import type { PricingOption } from '@/types/pricing-option'
 import type { ClassType } from '@/types/class-type'
@@ -115,6 +115,34 @@ import { CustomerIntegrationsModule } from '@/features/integrations/CustomerInte
 
 const MODULE_ANCHOR_PREFIX = 'module'
 const CUSTOMER_BATCH_QUERY_KEY = 'customer-detail-batch'
+
+const aiSupportIssueColumns: ColumnDef<AiSupportIssue>[] = [
+  {
+    accessorKey: 'createdAt',
+    header: 'Created',
+    cell: ({ row }) => formatDateTime(row.original.createdAt, NO_VALUE_STR),
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }) => <Badge variant="outline">{row.original.status.replaceAll('_', ' ')}</Badge>,
+  },
+  {
+    accessorKey: 'type',
+    header: 'Type',
+    cell: ({ row }) => row.original.type.replaceAll('_', ' '),
+  },
+  {
+    accessorKey: 'summary',
+    header: 'Summary',
+    cell: ({ row }) => <span className="block max-w-80 whitespace-normal break-words line-clamp-2">{row.original.summary}</span>,
+  },
+  {
+    accessorKey: 'channel',
+    header: 'Channel',
+    cell: ({ row }) => row.original.channel ?? NO_VALUE_STR,
+  },
+]
 
 function getCustomerDetailSections(customer?: Customer, canEdit = false): DetailPanelSection[] {
   return [
@@ -328,15 +356,6 @@ export default function CustomerPage() {
         payload: (tableState) => accessDevicesListConfig.toPayload(tableState, { customerId }),
         map: accessDevicesListConfig.toResult,
       }),
-      createTableBatchCacheEntry<Issue>({
-        key: 'issues',
-        queryKey: [...issuesQueryKeys.all, 'customer-module', customerId],
-        tableKey: 'customers.detail.modules.issues',
-        pageSize: RELATED_ENTITY_MODULE_PAGE_SIZE,
-        url: issuesListConfig.url,
-        payload: (tableState) => issuesListConfig.toPayload(tableState, { customerId }),
-        map: issuesListConfig.toResult,
-      }),
     ]
 
     return entries
@@ -382,7 +401,7 @@ export default function CustomerPage() {
       ...(canManageCustomer ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }] : []),
       { key: 'products', label: 'Products' },
       { key: 'devices', label: 'Devices' },
-      { key: 'issues', label: 'Issues' },
+      { key: 'issues', label: 'AI support issues' },
     ],
     [canManageCustomer, canShowUsers, canViewCoaches],
   )
@@ -721,26 +740,24 @@ export default function CustomerPage() {
                 refetchOnMount={false}
               />
             )}
-            {failedModuleKeys.has('issues') ? (
-              <CustomerModuleError module={{ key: 'issues', label: 'Issues' }} />
-            ) : (
-              <RelatedEntityModule
-                id={`${MODULE_ANCHOR_PREFIX}-issues`}
-                title="Issues"
-                icon={EntityIcon.issues}
-                initialTotal={getInitialTotal('issues')}
-                viewAllTo={makeViewAllTo('/issues', customer)}
-                action={CustomerService.getModuleAction(customer, 'issues', permissions)}
-                queryKey={[...issuesQueryKeys.all, 'customer-module', customer.id]}
-                loadData={(state: DataTableState<Issue>) => getIssuesRequest(state, { customerId: customer.id })}
-                tableKey="customers.detail.modules.issues"
-                columns={issueColumns}
-                getRowCommands={(issue) => IssueService.getActions(issue)}
-                loadingMessage="Loading issues..."
-                emptyMessage="No issues found."
-                refetchOnMount={false}
-              />
-            )}
+            <RelatedEntityModule
+              id={`${MODULE_ANCHOR_PREFIX}-issues`}
+              title="AI support issues"
+              icon={EntityIcon.aiSupportIssues}
+              viewAllTo={makeViewAllTo('/agent-support-issues', customer)}
+              queryKey={[...aiSupportIssueQueryKeys.all, 'customer-module', customer.id]}
+              loadData={(state: DataTableState<AiSupportIssue>) => getAiSupportIssuesRequest(state, { customerId: customer.id })}
+              tableKey="customers.detail.modules.ai-support-issues"
+              columns={aiSupportIssueColumns}
+              pageSize={5}
+              getRowCommands={(issue) => [{
+                label: 'View details',
+                onClick: () => navigate(`/agent-support-issues?${new URLSearchParams({ issueId: issue.id, 'f.customerId': customer.id })}`),
+              }]}
+              loadingMessage="Loading AI support issues..."
+              emptyMessage="No AI support issues found for this customer."
+              refetchOnMount="always"
+            />
           </>
         ) : null}
       </DetailPageLayout>

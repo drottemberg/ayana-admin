@@ -10,8 +10,7 @@ function App() {
     return <Suspense fallback={<div className="store-loading">Ouverture de la boutique…</div>}><StorefrontApp /></Suspense>
   }
   if (window.location.hostname.startsWith('booking.')) {
-    const isFrench = (navigator.languages?.[0] ?? navigator.language ?? 'fr').toLowerCase().startsWith('fr')
-    return <Suspense fallback={<div className="booking-loading">{isFrench ? 'Chargement du planning…' : 'Loading schedule…'}</div>}><BookingPortalApp /></Suspense>
+    return <Suspense fallback={<div className="booking-loading" role="status"><span className="booking-spinner" /></div>}><BookingPortalApp /></Suspense>
   }
   return <RouterProvider router={router} />
 }

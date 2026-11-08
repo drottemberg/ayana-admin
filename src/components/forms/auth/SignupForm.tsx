@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { isValidPhoneNumber } from 'libphonenumber-js'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { TextInput } from '@/components/ui/text-input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { useAuth } from '@/providers/use-auth'
 import { cn } from '@/lib/utils'
 import { createPasswordValidator, MAX_PASSWORD_LENGTH, PASSWORD_RULES } from '@/lib/validators'
@@ -14,6 +16,7 @@ import { AuthForm } from './AuthForm'
 const signupSchema = z
   .object({
     email: z.email('Please enter a valid email address.'),
+    phone: z.string().trim().min(1, 'Phone number is required.').refine(isValidPhoneNumber, 'Please enter a valid phone number.'),
     name: z.string().trim().min(1, 'Name is required.').max(120, 'Name must be 120 characters or fewer.'),
     password: createPasswordValidator(),
     confirmPassword: z.string().min(1, 'Please confirm your password.'),
@@ -33,13 +36,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
   const inviteEmail = searchParams.get('email') ?? ''
   const {
     register,
+    control,
     handleSubmit,
     watch,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: inviteEmail, name: '', password: '', confirmPassword: '' },
+    defaultValues: { email: inviteEmail, phone: '', name: '', password: '', confirmPassword: '' },
   })
   const passwordValue = watch('password')
   const passwordChecks = useMemo(
@@ -47,9 +51,9 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
     [passwordValue],
   )
 
-  const onSubmit = async ({ email, name, password }: SignupValues) => {
+  const onSubmit = async ({ email, phone, name, password }: SignupValues) => {
     try {
-      await signup(requestId, email, name, password)
+      await signup(requestId, email, phone, name, password)
       navigate('/app')
     } catch (error) {
       setError('root', {
@@ -74,6 +78,23 @@ export function SignupForm({ className, ...props }: React.ComponentProps<'div'>)
             autoComplete="email"
             error={errors.email?.message}
             {...register('email')}
+          />
+          <Controller
+            control={control}
+            name="phone"
+            render={({ field, fieldState }) => (
+              <PhoneInput
+                label="Phone number"
+                placeholder="6 12 34 56 78"
+                required
+                error={fieldState.error?.message}
+                value={field.value}
+                onValueChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                ref={field.ref}
+              />
+            )}
           />
           <TextInput
             label="Name"

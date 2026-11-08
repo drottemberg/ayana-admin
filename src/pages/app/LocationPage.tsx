@@ -66,6 +66,13 @@ import { roomColumns } from '@/features/rooms/room-columns'
 import { RoomDrawer } from '@/features/rooms/RoomDrawer'
 import { Badge } from '@/components/ui/badge'
 import type { ReactNode } from 'react'
+import {
+  customerSettingsQueryKeys,
+  loadCustomerLocationPolicy,
+  type CustomerLocationPolicyRow,
+} from '@/features/customers/customer-settings-api'
+import { customerLocationPolicyColumns } from '@/features/customers/customer-settings-columns'
+import { CustomerSettingsEditDrawer } from '@/features/customers/CustomerSettingsEditDrawer'
 
 function RoomListCard({ room, actions }: { room: Room; actions: ReactNode }) {
   return <article className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-card-foreground">
@@ -158,6 +165,11 @@ export default function LocationPage() {
   const [editingCoachProfile, setEditingCoachProfile] = useState<CoachProfile | null>(null)
   const [editingRoom, setEditingRoom] = useState<Room | null>(null)
   const [isRoomDrawerOpen, setIsRoomDrawerOpen] = useState(false)
+  const [editingLocationPolicy, setEditingLocationPolicy] = useState<CustomerLocationPolicyRow | null>(null)
+  const locationPolicyEditTarget = useMemo(
+    () => editingLocationPolicy ? { kind: 'location-policy' as const, location: editingLocationPolicy } : null,
+    [editingLocationPolicy],
+  )
   const { session } = useConnect()
   const canViewCoaches = Boolean(session?.permissions.coaches?.view)
   const canViewRooms = Boolean(session?.permissions.rooms?.view)
@@ -169,7 +181,9 @@ export default function LocationPage() {
   const canEditOrders = Boolean(session?.permissions.orders?.edit)
   const canRefundOrders = Boolean(session?.permissions.orders?.delete)
   const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
+  const canManageLocationPolicy = Boolean(session?.permissions.customers?.edit || session?.permissions.organization?.editSelf)
   const modules = useMemo(() => [
+    ...(canManageLocationPolicy ? [{ key: 'location-policy', label: 'Location policy' }] : []),
     ...(canViewRooms ? [{ key: 'rooms', label: 'Rooms' }] : []),
     { key: 'pricing-options', label: 'Pricing options' },
     { key: 'classes', label: 'Classes' },
@@ -179,7 +193,7 @@ export default function LocationPage() {
     ...(canEditProducts ? [{ key: 'products', label: 'Products' }] : []),
     ...(canViewClientContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
     ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
-  ], [canEditProducts, canViewClientContracts, canViewOrders, canViewCoaches, canViewRooms])
+  ], [canEditProducts, canManageLocationPolicy, canViewClientContracts, canViewOrders, canViewCoaches, canViewRooms])
   const {
     data: location,
     isError,
@@ -226,6 +240,20 @@ export default function LocationPage() {
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
           {isLoading ? 'Loading location...' : location?.description || 'No description.'}
         </div>
+        {canManageLocationPolicy && location?.parentId ? <RelatedEntityModule
+          id="module-location-policy"
+          title="Location policy"
+          icon={EntityIcon.locations}
+          queryKey={[...customerSettingsQueryKeys.customer(location.parentId), 'location-policy', locationId]}
+          loadData={(state: DataTableState<CustomerLocationPolicyRow>) => loadCustomerLocationPolicy(location.parentId!, locationId, state)}
+          tableKey={`locations.detail.modules.policy.${locationId}`}
+          columns={customerLocationPolicyColumns}
+          getRowCommands={(policy) => [{ label: 'Edit policy', onClick: () => setEditingLocationPolicy(policy) }]}
+          pageSize={1}
+          loadingMessage="Loading location policy..."
+          emptyMessage="Location policy is unavailable for this location."
+          refetchOnMount="always"
+        /> : null}
         {canViewRooms ? <RelatedEntityModule
           id="module-rooms"
           title="Rooms"
@@ -417,6 +445,13 @@ export default function LocationPage() {
         open={isRoomDrawerOpen}
         onOpenChange={(open) => { setIsRoomDrawerOpen(open); if (!open) setEditingRoom(null) }}
       />
+      {location?.parentId ? <CustomerSettingsEditDrawer
+        open={Boolean(editingLocationPolicy)}
+        onOpenChange={(open) => { if (!open) setEditingLocationPolicy(null) }}
+        customerId={location.parentId}
+        customerName={location.customerName ?? 'Customer'}
+        target={locationPolicyEditTarget}
+      /> : null}
     </>
   )
 }
