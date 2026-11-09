@@ -11,6 +11,7 @@ import { getIntegrationColumns } from './integration-columns'
 import { IntegrationEditDrawer } from './IntegrationEditDrawer'
 import { ClassPassSetupDrawer } from './ClassPassSetupDrawer'
 import { EgymSetupDrawer } from './EgymSetupDrawer'
+import { Egym2SetupDrawer } from './Egym2SetupDrawer'
 
 export function CustomerIntegrationsModule({ customerId, canCreate, canEdit, canDelete }: { customerId: string; canCreate: boolean; canEdit: boolean; canDelete: boolean }) {
   const [integration, setIntegration] = useState<CustomerIntegration | null>(null)
@@ -45,6 +46,8 @@ export function CustomerIntegrationsModule({ customerId, canCreate, canEdit, can
       ...(row.setupComplete ? [{ label: 'Edit setup', onClick: () => openSetup(row) }] : []),
       ...(row.provider === 'CLASSPASS' && row.setupComplete ? [{ label: 'Preview and sync', onClick: () => openSetup(row, true) }] : []),
       ...(row.provider === 'CLASSPASS' && row.setupComplete && row.isEnabled ? [{ label: 'Resync all history', onClick: () => openSetup(row, true, true) }] : []),
+      ...(row.provider === 'EGYM2' && row.setupStarted ? [{ label: row.setupComplete ? 'Preview and sync' : 'Continue setup', onClick: () => openSetup(row, row.setupComplete) }] : []),
+      ...(row.provider === 'EGYM2' && row.setupComplete && row.isEnabled ? [{ label: 'Resync all history', onClick: () => openSetup(row, true, true) }] : []),
       { label: row.isEnabled ? 'Disable' : 'Enable', onClick: () => void toggle(row) },
     ] : []),
     ...(canDelete ? [{ label: 'Delete', variant: 'destructive' as const, onClick: () => void remove(row) }] : []),
@@ -70,6 +73,7 @@ export function CustomerIntegrationsModule({ customerId, canCreate, canEdit, can
     />
     <IntegrationEditDrawer customerId={customerId} integration={integration} open={drawerOpen} onOpenChange={setDrawerOpen} onSaved={() => { setDrawerOpen(false); void refresh() }} />
     {setupIntegration?.provider === 'EGYM' ? <EgymSetupDrawer customerId={customerId} integration={setupIntegration} open={setupOpen} onOpenChange={setSetupOpen} onSaved={() => { setSetupOpen(false); void refresh() }} /> : null}
+    {setupIntegration?.provider === 'EGYM2' ? <Egym2SetupDrawer customerId={customerId} integration={setupIntegration} open={setupOpen} startAtPreview={previewMode} fullHistory={fullHistoryMode} onOpenChange={setSetupOpen} onSaved={() => { setSetupOpen(false); void refresh() }} /> : null}
     {setupIntegration?.provider === 'CLASSPASS' ? <ClassPassSetupDrawer customerId={customerId} integration={setupIntegration} open={setupOpen} startAtPreview={previewMode} fullHistory={fullHistoryMode} onOpenChange={setSetupOpen} onSaved={() => { setSetupOpen(false); void refresh() }} /> : null}
   </>
 }

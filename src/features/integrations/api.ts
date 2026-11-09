@@ -1,7 +1,7 @@
 import { apiClient } from '@/lib/api-client'
 import type { DataTableAsyncResult, DataTableState } from '@/components/data-table'
 
-export type IntegrationProvider = 'CLASSPASS' | 'EGYM' | 'LASTSPOT'
+export type IntegrationProvider = 'CLASSPASS' | 'EGYM' | 'EGYM2' | 'LASTSPOT'
 export type CustomerIntegration = Record<string, unknown> & {
   id: string
   customerId: string
@@ -29,7 +29,7 @@ export type CustomerIntegrationInput = {
   baseUrl?: string
   apiKey?: string
 }
-export type ExternalVenue = { id: string; name: string }
+export type ExternalVenue = { id: string; name: string; network?: string | null }
 export type ExternalClass = { id: string; name: string }
 export type IntegrationSetup = {
   id: string
@@ -43,7 +43,7 @@ export type IntegrationSetup = {
     locationId: string
     externalVenueId: string
     externalVenueName: string
-    metadata?: { referencePrice?: number; allowedClassTypeIds?: string[] } | null
+    metadata?: { referencePrice?: number; allowedClassTypeIds?: string[]; network?: string } | null
     location: { id: string; name: string }
     classMappings: Array<{ id: string; externalClassId: string; externalClassName: string; classTypeId: string; classType: { id: string; name: string } }>
   }>
@@ -88,10 +88,16 @@ export function getIntegrationSetupRequest(customerId: string, integrationId: st
 export function getClassPassVenuesRequest(customerId: string, integrationId: string) {
   return apiClient.get<ExternalVenue[]>(route(customerId, integrationId, '/classpass/venues'))
 }
+export function getEgym2GymsRequest(customerId: string, integrationId: string) {
+  return apiClient.get<ExternalVenue[]>(route(customerId, integrationId, '/egym2/gyms'))
+}
 export function getClassPassClassesRequest(customerId: string, integrationId: string, venueMappingId: string) {
   return apiClient.get<ExternalClass[]>(route(customerId, integrationId, `/classpass/venue-mappings/${encodeURIComponent(venueMappingId)}/classes`))
 }
 export function saveIntegrationVenuesRequest(customerId: string, integrationId: string, venues: Array<{ locationId: string; externalVenueId: string }>) {
+  return apiClient.post<IntegrationSetup>(route(customerId, integrationId, '/setup/venues'), { venues })
+}
+export function saveEgym2VenueMappingsRequest(customerId: string, integrationId: string, venues: Array<{ locationId: string; externalVenueId: string; network?: string }>) {
   return apiClient.post<IntegrationSetup>(route(customerId, integrationId, '/setup/venues'), { venues })
 }
 export function saveIntegrationClassesRequest(customerId: string, integrationId: string, classes: Array<{ venueMappingId: string; externalClassId: string; classTypeId: string }>) {
@@ -163,5 +169,5 @@ export async function loadIntegrationRows(customerId: string, state: DataTableSt
 }
 
 export function getIntegrationProviderLabel(provider: IntegrationProvider) {
-  return ({ CLASSPASS: 'ClassPass', EGYM: 'EGYM', LASTSPOT: 'LastSpot' })[provider]
+  return ({ CLASSPASS: 'ClassPass', EGYM: 'EGYM Wellpass', EGYM2: 'EGYM Wellpass portal', LASTSPOT: 'LastSpot' })[provider]
 }

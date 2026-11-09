@@ -66,6 +66,14 @@ export function cancelClassPassBookingForManagementRequest(bookingId: string, lo
   )
 }
 
+export function updateEgym2BookingDecisionRequest(bookingId: string, locationId: string, action: 'ACCEPT' | 'REJECT') {
+  return apiClient.patch<Booking>(
+    `/bookings/manage/${encodeURIComponent(bookingId)}/egym2-decision`,
+    { action },
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
 export function createManualBookingRequest(payload: {
   customerId: string
   locationId: string

@@ -147,7 +147,14 @@ function getHomeSessionColumns(options: {
     {
       id: 'capacity',
       header: 'Bookings',
-      cell: ({ row }) => `${row.original.bookedCount} / ${row.original.capacity}`,
+      cell: ({ row }) => {
+        const session = row.original
+        const pendingCount = Math.max(0, session.pendingApprovalCount ?? 0)
+        return <div className="flex items-center gap-1.5">
+          <span>{Math.max(0, session.bookedCount - pendingCount)} / {session.capacity}</span>
+          {pendingCount > 0 ? <Badge variant="outline" className="border-amber-400 bg-amber-100 text-xs text-amber-900">{pendingCount} pending</Badge> : null}
+        </div>
+      },
     },
     {
       accessorKey: 'coachName',

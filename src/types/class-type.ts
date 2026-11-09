@@ -56,6 +56,7 @@ export type ClassSession = {
   endTime: string
   capacity: number
   bookedCount: number
+  pendingApprovalCount?: number
   status: ClassSessionStatus
   type: ClassType['type']
   locationId?: string

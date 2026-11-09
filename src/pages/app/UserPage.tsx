@@ -56,7 +56,7 @@ import { getBookingColumns } from '@/features/bookings/booking-columns'
 import { BookingListCard } from '@/features/bookings/BookingListCard'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
-import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
+import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { getClassSchedulesRequest, getClassSessionsRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
@@ -523,6 +523,7 @@ export default function UserPage() {
           onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
           onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
           onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
+          onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },
           onRebook: () => {
             const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
             void rebookClientForSession({

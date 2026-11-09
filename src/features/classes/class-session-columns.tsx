@@ -56,6 +56,8 @@ export function ClassSessionListCard({
   }).format(start)
   const isCancelled = session.status === 'CANCELLED'
   const isInactive = isCancelled || session.status === 'PAUSED'
+  const pendingApprovalCount = Math.max(0, session.pendingApprovalCount ?? 0)
+  const confirmedBookingCount = Math.max(0, session.bookedCount - pendingApprovalCount)
   const canClaim = allowClaim
     && !session.coachId
     && !session.coachName
@@ -64,7 +66,10 @@ export function ClassSessionListCard({
     && onClaim
   const sessionUrl = `/class-sessions/${encodeURIComponent(session.id)}?locationId=${encodeURIComponent(session.locationId ?? session.organizationId)}`
   return (
-    <article className="flex min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground">
+    <article className={cn(
+      'flex min-w-0 overflow-hidden rounded-2xl border text-card-foreground',
+      pendingApprovalCount > 0 ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : 'border-border bg-card',
+    )}>
       <div className="flex w-[58px] shrink-0 flex-col items-center justify-start gap-0.5 border-r border-border bg-background px-1.5 pt-3 text-center">
         <span className="text-[10px] font-semibold leading-none tracking-wide text-muted-foreground">{date.month}</span>
         <span className="text-xl font-bold leading-tight text-foreground">{date.day}</span>
@@ -75,7 +80,8 @@ export function ClassSessionListCard({
           <div className="flex min-w-0 items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span className={cn('text-sm font-semibold leading-5 text-foreground', isInactive && 'text-muted-foreground', isCancelled && 'line-through')}>{time}</span>
-              <Badge variant="secondary" className="h-5 px-2 text-xs font-semibold tabular-nums text-foreground">{session.bookedCount} / {session.capacity}</Badge>
+              <Badge variant="secondary" className="h-5 px-2 text-xs font-semibold tabular-nums text-foreground">{confirmedBookingCount} / {session.capacity}</Badge>
+              {pendingApprovalCount > 0 ? <Badge variant="outline" className="h-5 border-amber-400 bg-amber-100 px-2 text-xs font-semibold tabular-nums text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">{pendingApprovalCount} pending</Badge> : null}
             </div>
             <div className="flex shrink-0 items-start gap-1.5">
               {session.status !== 'SCHEDULED' ? <StatusPill status={session.status} /> : null}
@@ -118,7 +124,14 @@ export function getClassSessionColumns(options: {
     },
     {
       id: 'capacity', header: 'Bookings',
-      cell: ({ row }) => `${row.original.bookedCount} / ${row.original.capacity}`,
+      cell: ({ row }) => {
+        const session = row.original
+        const pendingCount = Math.max(0, session.pendingApprovalCount ?? 0)
+        return <div className="flex items-center gap-1.5">
+          <span>{Math.max(0, session.bookedCount - pendingCount)} / {session.capacity}</span>
+          {pendingCount > 0 ? <Badge variant="outline" className="border-amber-400 bg-amber-100 text-xs text-amber-900">{pendingCount} pending</Badge> : null}
+        </div>
+      },
     },
     {
       accessorKey: 'coachName',

@@ -616,6 +616,7 @@ function MultiselectInput({
               id={inputId}
               placeholder={value.length ? undefined : placeholder}
               disabled={disabled}
+              autoComplete="new-password"
               readOnly={!searchable && !creatable}
               className="min-h-7 text-base placeholder:text-muted-foreground/70"
             />

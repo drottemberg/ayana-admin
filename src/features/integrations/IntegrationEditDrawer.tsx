@@ -54,17 +54,22 @@ export function IntegrationEditDrawer({
       setFormError('Enter the EGYM base URL and API key.')
       return
     }
+    if (provider === 'EGYM2' && (!username.trim() || (!integration && !password.trim()))) {
+      setFormError('Enter the EGYM username and password.')
+      return
+    }
     setFormError(null)
     const input: CustomerIntegrationInput = {
       provider,
       ...(provider === 'CLASSPASS' ? { username: username.trim(), ...(password.trim() ? { password } : {}) } : {}),
+      ...(provider === 'EGYM2' ? { username: username.trim(), ...(password.trim() ? { password } : {}) } : {}),
       ...(provider === 'EGYM' ? { baseUrl: baseUrl.trim(), ...(apiKey.trim() ? { apiKey } : {}) } : {}),
     }
     setSaving(true)
     try {
       if (integration) await updateIntegrationRequest(customerId, integration.id, input)
       else await createIntegrationRequest(customerId, input)
-      toast.success(`${provider === 'EGYM' ? 'EGYM' : 'ClassPass'} credentials verified and saved.`)
+      toast.success(`${provider === 'EGYM' ? 'EGYM' : provider === 'EGYM2' ? 'EGYM Wellpass portal' : 'ClassPass'} credentials verified and saved.`)
       onSaved()
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Could not verify integration credentials.')
@@ -91,15 +96,16 @@ export function IntegrationEditDrawer({
               items={[
                 { value: 'CLASSPASS', label: 'ClassPass' },
                 { value: 'EGYM', label: 'EGYM Wellpass' },
+                { value: 'EGYM2', label: 'EGYM Wellpass portal' },
                 { value: 'LASTSPOT', label: 'LastSpot · coming soon', disabled: true },
               ]}
               disabled={Boolean(integration)}
               container={containerRef}
             />
-            {provider === 'CLASSPASS' ? (
+            {provider === 'CLASSPASS' || provider === 'EGYM2' ? (
               <div className="space-y-5 rounded-lg border border-border p-4">
                 <div>
-                  <h3 className="text-sm font-semibold">ClassPass credentials</h3>
+                  <h3 className="text-sm font-semibold">{provider === 'EGYM2' ? 'EGYM Wellpass portal credentials' : 'ClassPass credentials'}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">Credentials are encrypted before storage and tested when you save.</p>
                 </div>
                 <label className="grid gap-1.5 text-sm font-medium">

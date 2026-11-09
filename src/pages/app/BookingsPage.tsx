@@ -12,13 +12,13 @@ import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import type { Booking } from '@/types/booking'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
-import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
+import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { getCoachFilterOptionsRequest } from '@/features/coaches/api'
 import { getUserFilterOptionsRequest } from '@/features/users/api'
 
-const statuses = ['CONFIRMED', 'WAITLISTED', 'ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED']
+const statuses = ['CONFIRMED', 'PENDING_APPROVAL', 'WAITLISTED', 'ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED']
 
 export default function BookingsPage() {
   const [createOpen, setCreateOpen] = useState(false)
@@ -71,6 +71,7 @@ export default function BookingsPage() {
           onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
           onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
           onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
+          onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },
           onRebook: () => {
             const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
             void rebookClientForSession({

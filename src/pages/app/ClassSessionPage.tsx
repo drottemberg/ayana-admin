@@ -15,7 +15,7 @@ import { NO_VALUE_STR } from '@/constants'
 import { getClassBookingColumns } from '@/features/classes/class-session-columns'
 import { ClassBookingListCard } from '@/features/bookings/BookingListCard'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
-import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
+import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
@@ -493,6 +493,7 @@ export default function ClassSessionPage() {
         onCancel: () => { void cancelBookingWithChoice(booking.id, resolvedLocationId, invalidateBookingViews) },
         onSetAttendance: (attended) => { void setBookingAttendance(booking.id, attended) },
         onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, resolvedLocationId, invalidateBookingViews) },
+        onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, resolvedLocationId, action, invalidateBookingViews) },
         onRebook: () => {
           if (!classSession?.customerId) {
             toast.error('Could not determine the customer for this class session.')

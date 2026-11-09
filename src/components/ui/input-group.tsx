@@ -116,6 +116,7 @@ function InputGroupInput({ className, ...props }: React.ComponentProps<'input'>)
         className,
       )}
       {...props}
+      autoComplete="off"
     />
   )
 }

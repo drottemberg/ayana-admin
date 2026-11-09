@@ -4,7 +4,7 @@ import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Modals } from '@/providers/modal'
 import { BookingCancellationConfirmation } from './BookingCancellationConfirmation'
-import { cancelBookingForManagementRequest, cancelClassPassBookingForManagementRequest, createManualBookingRequest, getBookingCancellationQuoteRequest, updateBookingAttendanceRequest } from './api'
+import { cancelBookingForManagementRequest, cancelClassPassBookingForManagementRequest, createManualBookingRequest, getBookingCancellationQuoteRequest, updateBookingAttendanceRequest, updateEgym2BookingDecisionRequest } from './api'
 
 export async function cancelBookingWithChoice(bookingId: string, locationId: string, invalidate: () => Promise<unknown>) {
   try {
@@ -85,6 +85,27 @@ export async function cancelClassPassBookingWithConfirmation(bookingId: string, 
   }
 }
 
+export async function decideEgym2Booking(bookingId: string, locationId: string, action: 'ACCEPT' | 'REJECT', invalidate: () => Promise<unknown>) {
+  const accept = action === 'ACCEPT'
+  const confirmed = await Modals.confirm({
+    title: accept ? 'Accept this EGYM booking?' : 'Refuse this EGYM booking?',
+    content: accept
+      ? 'The booking will be accepted in EGYM Wellpass and confirmed in Ayana.'
+      : 'The booking will be refused in EGYM Wellpass and cancelled in Ayana.',
+    okText: accept ? 'Accept booking' : 'Refuse booking',
+    cancelText: 'Back',
+    ...(accept ? {} : { okButtonProps: { variant: 'destructive' as const } }),
+  })
+  if (!confirmed) return
+  try {
+    await updateEgym2BookingDecisionRequest(bookingId, locationId, action)
+    await invalidate()
+    toast.success(accept ? 'EGYM booking accepted.' : 'EGYM booking refused.')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Could not update the EGYM booking.')
+  }
+}
+
 export function getBookingRowActions(input: {
   status: string
   canEdit: boolean
@@ -95,9 +116,16 @@ export function getBookingRowActions(input: {
   onRebook: () => void
   onSetAttendance: (attended: boolean | null) => void
   onCancelClassPass: () => void
+  onEgym2Decision?: (action: 'ACCEPT' | 'REJECT') => void
   showAttendanceActionsInMenu?: boolean
 }): DropdownActionItem[] {
   const commands: DropdownActionItem[] = []
+  if (input.canEdit && input.source === 'EGYM' && input.status === 'PENDING_APPROVAL' && input.onEgym2Decision) {
+    commands.push(
+      { label: 'Accept EGYM booking', onClick: () => input.onEgym2Decision?.('ACCEPT') },
+      { label: 'Refuse EGYM booking', variant: 'destructive', onClick: () => input.onEgym2Decision?.('REJECT') },
+    )
+  }
   if (input.canEdit && ['CONFIRMED', 'WAITLISTED'].includes(input.status)) {
     commands.push({ label: 'Cancel booking…', icon: Cancel01Icon, variant: 'destructive', onClick: input.onCancel })
   }
