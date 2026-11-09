@@ -3,7 +3,7 @@
 import * as React from 'react'
 
 import logo from '@/assets/logo.svg'
-import icon from '@/assets/icon.svg'
+import ayanaPictogram from '@/assets/pictogram.png'
 import { AppModeBadge } from '@/components/app/AppModeBadge'
 import { NavMain } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
@@ -196,10 +196,10 @@ function SidebarBrand() {
     <div className="mx-2 my-3 group-data-[collapsible=icon]:mx-1 group-data-[collapsible=icon]:my-2">
       <Link to="/">
         {isCollapsed ? (
-          <img src={icon} alt="Gaudier" className="h-8 w-8" />
+          <img src={ayanaPictogram} alt="Ayana" className="h-8 w-8" />
         ) : (
           <span className="flex items-start gap-1.5">
-            <img src={logo} alt="Gaudier" className="h-8 w-auto" />
+            <img src={logo} alt="Ayana Feelness Club" className="h-8 w-auto" />
             <AppModeBadge />
           </span>
         )}
@@ -243,7 +243,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {isCollapsed ? (
           <div className="relative flex h-10 items-center justify-center">
             <div className="transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0">
-              <img src={icon} alt="Gaudier" className="h-8 w-8" />
+              <img src={ayanaPictogram} alt="Ayana" className="h-8 w-8" />
             </div>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
               <SidebarCollapseTrigger />
