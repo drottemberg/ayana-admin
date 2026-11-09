@@ -90,8 +90,8 @@ export default function BookingsPage() {
         filters={[
           { id: 'status', label: 'Status', column: 'status' as const, options: statuses, getValue: (booking: Booking) => booking.status },
           {
-            id: 'source', label: 'Source', column: 'source' as const, options: ['Direct', 'ClassPass', 'EGYM Wellpass'],
-            getValue: (booking: Booking) => booking.source === 'CLASSPASS' ? 'ClassPass' : booking.source === 'EGYM' ? 'EGYM Wellpass' : 'Direct',
+            id: 'source', label: 'Source', column: 'source' as const, options: ['Direct', 'ClassPass', 'EGYM'],
+            getValue: (booking: Booking) => booking.source === 'CLASSPASS' ? 'ClassPass' : booking.source === 'EGYM' ? 'EGYM' : 'Direct',
           },
           {
             id: 'isFreeTrial', label: 'Free trial', column: 'isFreeTrial' as const, options: ['Yes', 'No'],
