@@ -1132,7 +1132,7 @@ function BookingPortalRoute() {
               ? (t("Booked"))
               : session.isWaitlist || session.availableSpots <= 0
                 ? (t("Full"))
-                : session.availableSpots <= 2
+                : session.availableSpots <= 3
                   ? (t("{{value0}} {{value1}}", { value0: session.availableSpots, value1: (session.availableSpots === 1 ? t("spot left") : t("spots left")) }))
                   : null
             return <article className="booking-session" key={session.id}>
