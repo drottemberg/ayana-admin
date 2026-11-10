@@ -45,6 +45,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
   const accessHandoffTask = useRef<Promise<void> | null>(null)
   const token = apiClient.getAuthToken()
   const hasToken = Boolean(token)
+  const hasSession = hasToken || Boolean(apiClient.getRefreshToken())
   const connectQuery = useQuery({
     queryKey: appQueryKeys.connect,
     queryFn: connectAppRequest,
@@ -60,7 +61,10 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
   // one-time access handoff has been checked and app.connect has resolved.
   // Otherwise a refresh briefly looks unauthenticated while connect is gated,
   // sending the router through /login and back to the home page.
-  const isLoading = !accessHandoffReady || (hasToken && !sessionInvalidated && connectQuery.isLoading)
+  // A refresh token alone is enough to restore the access token through
+  // /app/connect. Keep protected routes mounted until that request finishes;
+  // otherwise they briefly see an unauthenticated user and redirect to login.
+  const isLoading = !accessHandoffReady || (hasSession && !sessionInvalidated && connectQuery.isLoading)
 
   useEffect(() => {
     const originalHash = window.location.hash.replace(/^#/, '')

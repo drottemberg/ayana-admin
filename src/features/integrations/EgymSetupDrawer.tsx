@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { SelectInput } from '@/components/ui/select-input'
 import { getIntegrationSetupRequest, saveEgymLocationMappingsRequest, type CustomerIntegration, type IntegrationSetup } from './api'
 
@@ -31,7 +32,7 @@ export function EgymSetupDrawer({
       setSetup(result)
       setRows(result.venueMappings.map((mapping) => ({
         locationId: mapping.locationId,
-        clubId: mapping.externalVenueId,
+        clubId: mapping.externalVenueId.replace(/^pip-/i, ''),
         referencePrice: mapping.metadata?.referencePrice == null ? '' : String(mapping.metadata.referencePrice),
         allowedClassTypeIds: mapping.metadata?.allowedClassTypeIds ?? [],
       })))
@@ -71,7 +72,7 @@ export function EgymSetupDrawer({
           return <section key={`${row.locationId || 'new'}-${index}`} className="space-y-4 rounded-lg border border-border p-4">
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
               <SelectInput label="Ayana location" value={row.locationId} onValueChange={(value) => updateRow(index, { locationId: String(value), allowedClassTypeIds: [] })} items={(setup.locations ?? []).filter((item) => item.id === row.locationId || !usedLocations.has(item.id)).map((item) => ({ value: item.id, label: item.name }))} placeholder="Select a location" searchable container={containerRef} />
-              <label className="grid gap-1.5 text-sm font-medium">EGYM club ID<Input value={row.clubId} onChange={(event) => updateRow(index, { clubId: event.target.value })} placeholder="Club ID" /></label>
+              <label className="grid gap-1.5 text-sm font-medium">EGYM gym ID<InputGroup className="h-9"><InputGroupAddon><InputGroupText>pip-</InputGroupText></InputGroupAddon><InputGroupInput value={row.clubId} onChange={(event) => updateRow(index, { clubId: event.target.value })} placeholder="1000306" inputMode="numeric" /></InputGroup></label>
               <label className="grid gap-1.5 text-sm font-medium">Reference price<Input type="number" min="0.01" step="0.01" value={row.referencePrice} onChange={(event) => updateRow(index, { referencePrice: event.target.value })} placeholder="35.00" /></label>
               <Button type="button" variant="outline" onClick={() => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}>Remove</Button>
             </div>
