@@ -35,6 +35,7 @@ export type PageHeaderActionProps = Omit<NativeButtonProps, 'onClick'> & {
 
 type PageHeaderProps = {
   title: ReactNode
+  titleClassName?: string
   subtitle?: ReactNode
   breadcrumbs?: PageHeaderBreadcrumb[]
   backTo?: LinkProps['to']
@@ -50,6 +51,7 @@ type PageHeaderProps = {
 
 function PageHeader({
   title,
+  titleClassName,
   subtitle,
   breadcrumbs,
   backTo,
@@ -112,7 +114,7 @@ function PageHeader({
 
             <div className="min-w-0 flex-1">
               <div className="grid min-w-0 gap-1">
-                <div className="text-h2 mb-0 truncate font-semibold tracking-tight text-foreground">{title}</div>
+                <div className={cn('text-h2 mb-0 truncate font-semibold tracking-tight text-foreground', titleClassName)}>{title}</div>
                 {subtitle ? <p className="text-sm font-normal text-muted-foreground">{subtitle}</p> : null}
               </div>
 

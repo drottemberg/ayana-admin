@@ -115,6 +115,32 @@ export async function getClassSessionRequest(id: string, locationId: string) {
   })
 }
 
+export async function getAdjacentClassSessionRequest(
+  session: Pick<ClassSession, 'id' | 'startTime'>,
+  locationId: string,
+  direction: 'previous' | 'next',
+): Promise<ClassSession | null> {
+  const result = await apiClient.post<ApiListResult<ClassSession>>('/class-sessions/list', {
+    page: 1,
+    limit: 100,
+    filters: { locationId: [locationId] },
+    ...(direction === 'previous' ? { to: session.startTime } : { from: session.startTime }),
+    orderBy: 'startTime',
+    order: direction === 'previous' ? 'desc' : 'asc',
+  }, { headers: { 'x-org-id': locationId } })
+
+  const adjacent = result.items
+    .filter((item) => item.id !== session.id)
+    .filter((item) => direction === 'previous'
+      ? new Date(item.startTime).getTime() <= new Date(session.startTime).getTime()
+      : new Date(item.startTime).getTime() >= new Date(session.startTime).getTime())
+    .sort((a, b) => direction === 'previous'
+      ? new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+      : new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  return adjacent[0] ?? null
+}
+
 export type UpdateClassSessionPayload = {
   startTime: string
   endTime: string

@@ -92,12 +92,39 @@ function StudioVisitPill({ previousVisits = 0 }: { previousVisits?: number }) {
   </Badge>
 }
 
+function CoachVisitPill({ previousVisits }: { previousVisits?: number | null }) {
+  if (previousVisits == null) return null
+  const visitNumber = previousVisits + 1
+  return <Badge
+    variant="outline"
+    className="h-5 min-w-5 shrink-0 justify-center rounded-full border-[#d7e4d2] bg-[#f1f6ee] px-1 text-[10px] font-medium text-[#4e6545]"
+    title={`Class with this coach number ${visitNumber}`}
+    aria-label={`Class with this coach number ${visitNumber}`}
+  >
+    {visitNumber}
+  </Badge>
+}
+
+type CurrentContractData = Pick<Booking, 'currentContractName' | 'currentContractCreditsRemaining' | 'hasCurrentContractBalance'>
+
+function CurrentContractPill({ booking }: { booking: CurrentContractData }) {
+  if (!booking.hasCurrentContractBalance) return null
+  const balance = booking.currentContractCreditsRemaining === null
+    ? 'Unlimited credits'
+    : `${booking.currentContractCreditsRemaining ?? 0} credits left`
+  const label = [booking.currentContractName || 'Credits', balance].join(' · ')
+  return <Badge variant="secondary" className="h-6 max-w-full rounded-full border-0 bg-[#eef3e9] px-3 text-xs font-medium text-[#4e6545]" title={label}>
+    <span className="truncate">{label}</span>
+  </Badge>
+}
+
 export function BookingListCard({
   booking,
   actions,
   showUser = true,
   showCustomer = false,
   showSessionDateAside = false,
+  showContractDetails = false,
   grouped = false,
 }: {
   booking: Booking
@@ -105,6 +132,7 @@ export function BookingListCard({
   showUser?: boolean
   showCustomer?: boolean
   showSessionDateAside?: boolean
+  showContractDetails?: boolean
   grouped?: boolean
 }) {
   const memberName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
@@ -127,6 +155,7 @@ export function BookingListCard({
           {showUser ? <div className="flex min-w-0 items-center gap-1.5">
             <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="min-w-0 truncate text-base font-semibold leading-5 text-foreground hover:underline">{memberName}</Link>
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
+            <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div> : null}
           <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.location.id)}`} className={cn('block truncate text-sm leading-5 text-[#625b56] hover:underline', showUser && 'mt-0.5 font-medium')}>
             {booking.className || booking.sessionId}
@@ -135,6 +164,7 @@ export function BookingListCard({
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
             {booking.isFreeTrial ? <FreeTrialPill /> : null}
+            {showContractDetails && booking.source === 'DIRECT' ? <CurrentContractPill booking={booking} /> : null}
             <Link to={`/bookings/${encodeURIComponent(booking.id)}`} className="max-w-48 truncate text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" title={booking.id}>#{booking.id}</Link>
           </div>
           {secondaryDetails ? <div className="mt-1 truncate text-xs text-muted-foreground">{secondaryDetails}</div> : null}
@@ -146,7 +176,9 @@ export function BookingListCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">
         <span>{Number(booking.creditsUsed ?? 0)} credit{Number(booking.creditsUsed ?? 0) === 1 ? '' : 's'} used</span>
-        <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>
+        {isCancelled && booking.cancelledAt
+          ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">Cancelled {bookingDateTime(booking.cancelledAt)}</time>
+          : <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>}
       </div>
     </div>
   </article>
@@ -175,6 +207,7 @@ export function ClassBookingListCard({
   booking,
   actions,
   locationName,
+  showContractDetails = false,
   instructorView = false,
   canUpdateAttendance = false,
   attendanceAvailable = false,
@@ -185,6 +218,7 @@ export function ClassBookingListCard({
   booking: ClassBooking
   actions: ReactNode
   locationName?: string | null
+  showContractDetails?: boolean
   instructorView?: boolean
   canUpdateAttendance?: boolean
   attendanceAvailable?: boolean
@@ -207,9 +241,12 @@ export function ClassBookingListCard({
           <div className="flex min-w-0 items-center gap-1.5">
             <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="truncate text-sm font-semibold text-foreground underline-offset-2 hover:underline">{name}</Link>
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
+            <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div>
           <StatusPill status={booking.status} />
           <SourcePill source={booking.source} />
+          {showContractDetails && booking.source === 'DIRECT' && booking.hasCurrentContractBalance ? <CurrentContractPill booking={booking} /> : null}
+          {isCancelled && booking.cancelledAt ? <time dateTime={booking.cancelledAt} className="text-xs font-medium text-red-600">Cancelled {bookingDateTime(booking.cancelledAt)}</time> : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -227,10 +264,12 @@ export function ClassBookingListCard({
           <div className="flex min-w-0 items-center gap-1.5">
             <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 truncate text-base font-semibold leading-5 text-foreground hover:underline">{name}</Link>
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
+            <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
             {booking.isFreeTrial ? <FreeTrialPill /> : null}
+            {showContractDetails && booking.source === 'DIRECT' && booking.hasCurrentContractBalance ? <CurrentContractPill booking={booking} /> : null}
           </div>
         </div>
         <div className="flex shrink-0 items-start gap-2">
@@ -240,7 +279,9 @@ export function ClassBookingListCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">
         <span>{locationName || NO_VALUE_STR}</span>
-        <time dateTime={booking.createdAt}>{bookingDateTime(booking.createdAt)}</time>
+        {isCancelled && booking.cancelledAt
+          ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">Cancelled {bookingDateTime(booking.cancelledAt)}</time>
+          : <time dateTime={booking.createdAt}>{bookingDateTime(booking.createdAt)}</time>}
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
         <Link to={`/bookings/${encodeURIComponent(booking.id)}`} className="max-w-full truncate text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">#{booking.id}</Link>

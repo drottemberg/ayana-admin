@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
 import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
@@ -13,6 +15,7 @@ import { PageHeader, PageHeaderIconAction } from '@/components/ui/page-header'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { getClassBookingColumns } from '@/features/classes/class-session-columns'
+import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
 import { ClassBookingListCard } from '@/features/bookings/BookingListCard'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
 import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
@@ -20,10 +23,11 @@ import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { deleteClassSessionWithConfirmation } from '@/features/classes/delete-class-session'
-import { cancelClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getAdjacentClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { useConnect } from '@/features/app/use-connect'
+import { getAppMode } from '@/features/app/app-mode'
 import { Modals } from '@/providers/modal'
 import type { ClassPassScheduleInsight, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
@@ -33,6 +37,7 @@ import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
 import { CoachRosterMemberProfileDrawer } from '@/features/coaches/CoachRosterMemberProfileDrawer'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -132,6 +137,26 @@ export default function ClassSessionPage() {
   })
   const classSession = data as ClassSession | undefined
   const resolvedLocationId = classSession?.organizationId ?? locationId
+  const previousSessionQuery = useQuery({
+    queryKey: [...classSessionsQueryKeys.detail(sessionId), 'adjacent', 'previous', classSession?.startTime, resolvedLocationId],
+    queryFn: () => getAdjacentClassSessionRequest(classSession!, resolvedLocationId, 'previous'),
+    enabled: Boolean(classSession?.startTime && resolvedLocationId),
+  })
+  const nextSessionQuery = useQuery({
+    queryKey: [...classSessionsQueryKeys.detail(sessionId), 'adjacent', 'next', classSession?.startTime, resolvedLocationId],
+    queryFn: () => getAdjacentClassSessionRequest(classSession!, resolvedLocationId, 'next'),
+    enabled: Boolean(classSession?.startTime && resolvedLocationId),
+  })
+  const navigateToAdjacentSession = (adjacent: ClassSession) => {
+    const params = new URLSearchParams(searchParams)
+    params.set('locationId', adjacent.organizationId)
+    params.delete('memberUserId')
+    navigate({
+      pathname: `/class-sessions/${encodeURIComponent(adjacent.id)}`,
+      search: `?${params.toString()}`,
+      hash: window.location.hash,
+    })
+  }
   const instructorMembership = classSession?.customerId
     ? appSession?.user.customerMemberships.find((membership) => membership.customerId === classSession.customerId)
     : undefined
@@ -389,35 +414,46 @@ export default function ClassSessionPage() {
   return <DetailPageLayout
     header={{
       title: classSession?.className ?? 'Class session',
+      titleClassName: 'line-clamp-2 whitespace-normal',
       subtitle: formatDate(classSession?.startTime, classSession?.timezone),
       backTo: '/class-sessions',
-      commands: (classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit)
-        || ((classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete)
-        || (classSession && String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete)
-        ? <>
-            {classSession?.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
-              ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
-              : null}
-            {(classSession?.status === 'SCHEDULED' || classSession?.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
-              ? <PageHeaderIconAction icon={CalendarRemove01Icon} label="Cancel session" variant="destructive" onClick={cancelSession} />
-              : null}
-            {classSession && String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete
-              ? <PageHeaderIconAction
-                  icon={Delete02Icon}
-                  label="Delete session"
-                  variant="destructive"
-                  onClick={async () => {
-                    try {
-                      const result = await deleteClassSessionWithConfirmation(classSession, resolvedLocationId, queryClient)
-                      if (result) navigate('/class-sessions')
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
-                    }
-                  }}
-                />
-              : null}
-          </>
-        : undefined,
+      commands: classSession ? <div className="flex flex-col items-end gap-1.5 md:flex-row-reverse md:items-center md:gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button type="button" variant="outline" size="icon" aria-label="Previous session" title="Previous session" disabled={!previousSessionQuery.data} onClick={() => previousSessionQuery.data && navigateToAdjacentSession(previousSessionQuery.data)}>
+            <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+          </Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Next session" title="Next session" disabled={!nextSessionQuery.data} onClick={() => nextSessionQuery.data && navigateToAdjacentSession(nextSessionQuery.data)}>
+            <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+          </Button>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+        {((classSession.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit)
+          || ((classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete)
+          || (String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete)) ? <>
+          {classSession.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
+            ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
+            : null}
+          {(classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
+            ? <PageHeaderIconAction icon={CalendarRemove01Icon} label="Cancel session" variant="destructive" onClick={cancelSession} />
+            : null}
+          {String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete
+            ? <PageHeaderIconAction
+                icon={Delete02Icon}
+                label="Delete session"
+                variant="destructive"
+                onClick={async () => {
+                  try {
+                    const result = await deleteClassSessionWithConfirmation(classSession, resolvedLocationId, queryClient)
+                    if (result) navigate('/class-sessions')
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
+                  }
+                }}
+              />
+            : null}
+        </> : null}
+        </div>
+      </div> : undefined,
       primaryAction: classSession?.status === 'CANCELLED'
         && new Date(classSession.startTime).getTime() > Date.now()
         && appSession?.permissions.classSessions?.edit
@@ -477,6 +513,7 @@ export default function ClassSessionPage() {
         actions={actions}
         grouped={grouped}
         locationName={classSession?.locationName}
+        showContractDetails={canViewBookingContractDetails(appSession?.user, getAppMode(), classSession?.customerId)}
         instructorView={isInstructorContext}
         canUpdateAttendance={isInstructorContext ? canTakeAttendance : Boolean(appSession?.permissions.bookings?.edit)}
         attendanceAvailable={attendanceAvailable}

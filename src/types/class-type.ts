@@ -103,6 +103,10 @@ export type ClassBooking = {
   status: string
   source: 'DIRECT' | 'CLASSPASS' | 'EGYM'
   studioVisitCount?: number
+  coachVisitCount?: number | null
+  currentContractName?: string | null
+  currentContractCreditsRemaining?: number | null
+  hasCurrentContractBalance?: boolean
   isFreeTrial?: boolean
   attended?: boolean | null
   checkInAt?: string | null

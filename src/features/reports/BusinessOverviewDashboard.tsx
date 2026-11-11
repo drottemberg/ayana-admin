@@ -14,6 +14,7 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import type { DataTableState } from '@/components/data-table'
 import { getBookingColumns } from '@/features/bookings/booking-columns'
 import { BookingListCard } from '@/features/bookings/BookingListCard'
+import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { getBookingsRequest } from '@/features/bookings/api'
 import { decideEgym2Booking, getBookingRowActions } from '@/features/bookings/booking-row-actions'
@@ -209,7 +210,7 @@ export function BusinessOverviewDashboard() {
         title="Pending Bookings"
         icon={EntityIcon.classes}
         columns={getBookingColumns({ showUser: true, showLocation: true }) as ColumnDef<Booking & Record<string, unknown>>[]}
-        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} />}
+        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showContractDetails={canViewBookingContractDetails(session?.user, mode, customerContextId)} />}
         queryKey={[...bookingsQueryKeys.all, 'home', 'pending-approval', customerContextId, pendingLocationId]}
         loadData={async (state: DataTableState<Booking & Record<string, unknown>>) => {
           const result = await getBookingsRequest(state as DataTableState<Booking>, {

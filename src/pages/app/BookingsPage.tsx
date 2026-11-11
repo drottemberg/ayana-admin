@@ -17,6 +17,7 @@ import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { getCoachFilterOptionsRequest } from '@/features/coaches/api'
 import { getUserFilterOptionsRequest } from '@/features/users/api'
+import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
 
 const statuses = ['CONFIRMED', 'PENDING_APPROVAL', 'WAITLISTED', 'ATTENDED', 'NO_SHOW', 'CANCELLED', 'LATE_CANCELLED']
 
@@ -27,6 +28,7 @@ export default function BookingsPage() {
   const queryClient = useQueryClient()
   const isAdminContext = getAppMode() === 'admin'
   const currentCustomerId = session?.currentOrganization?.id
+  const showContractDetails = canViewBookingContractDetails(session?.user, isAdminContext ? 'admin' : 'customer', currentCustomerId)
   const columns = useMemo(() => getBookingColumns({ showCustomer: isAdminContext }), [isAdminContext])
   const canCreateBooking = Boolean(session?.permissions.bookings?.create)
   const canEditBooking = Boolean(session?.permissions.bookings?.edit)
@@ -55,7 +57,7 @@ export default function BookingsPage() {
         tableKey="bookings.root"
         initialFilters={Object.keys(initialFilters).length ? initialFilters : undefined}
         columns={columns}
-        renderCard={(booking, actions, grouped) => <BookingListCard booking={booking} actions={actions} grouped={grouped} showCustomer={isAdminContext} />}
+        renderCard={(booking, actions, grouped) => <BookingListCard booking={booking} actions={actions} grouped={grouped} showCustomer={isAdminContext} showContractDetails={showContractDetails} />}
         getCardGroupKey={(booking) => bookingCreatedDateKey(booking.createdAt)}
         sortCardGroups={(left, right) => right.localeCompare(left)}
         sortCardGroupItems={(left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()}

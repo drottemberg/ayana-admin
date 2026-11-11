@@ -31,6 +31,7 @@ import { getUserMarketingPreferencesRequest, getUserRequest, updateUserMarketing
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
+import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
 import { Drawer, DrawerId } from '@/providers/drawer'
 import { LocationScope } from '@/types/membership'
 import type { Location } from '@/types/location'
@@ -513,7 +514,7 @@ export default function UserPage() {
         })}
         tableKey={`bookings.user.${userId}`}
         columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
-        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} showSessionDateAside />}
+        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} showSessionDateAside showContractDetails={canViewBookingContractDetails(session?.user, isAdminContext ? 'admin' : 'customer', currentCustomerId)} />}
         getRowCommands={(booking) => getBookingRowActions({
           status: booking.status,
           canEdit: canEditBookings,
