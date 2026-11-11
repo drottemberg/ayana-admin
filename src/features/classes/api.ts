@@ -143,9 +143,9 @@ export async function getAdjacentClassSessionRequest(
 
 export type UpdateClassSessionPayload = {
   classTypeId?: string
-  startTime: string
-  endTime: string
-  capacity: number
+  startTime?: string
+  endTime?: string
+  capacity?: number
   coachId: string | null
   coachName?: string | null
   useScheduleCoach?: boolean

@@ -73,8 +73,9 @@ export function ClassSessionEditDrawer({
     setCreateClassPassSchedule(false)
     setClassPassSpots(String(session.capacity))
     setClassTypeId(session.classTypeId)
-    setCoachId(session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
-    setCoachName(session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
+    const isPast = session.status === 'COMPLETED' || new Date(session.endTime).getTime() <= Date.now()
+    setCoachId(isPast ? session.coachId ?? NO_COACH_VALUE : session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
+    setCoachName(isPast ? session.coachCustomName ?? session.coachName ?? '' : session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
     setRoomId(session.scheduleId && !session.roomOverride ? SCHEDULE_ROOM_VALUE : session.roomId ?? NO_ROOM_VALUE)
   }, [open, session, timeZone])
 
@@ -87,6 +88,7 @@ export function ClassSessionEditDrawer({
     }
   }
   const hasMappedClassPassSchedule = classPassSchedules.length > 0
+  const pastSession = Boolean(session && (session.status === 'COMPLETED' || new Date(session.endTime).getTime() <= Date.now()))
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -102,14 +104,17 @@ export function ClassSessionEditDrawer({
       toast.error(error instanceof Error ? error.message : 'Check the session times.')
       return
     }
-    if (new Date(endIso) <= new Date(startIso) || !Number.isInteger(capacityValue) || capacityValue < session.bookedCount) {
+    if (!pastSession && (new Date(endIso) <= new Date(startIso) || !Number.isInteger(capacityValue) || capacityValue < session.bookedCount)) {
       toast.error(`Check the session times and capacity. Capacity must be at least ${session.bookedCount}.`)
       return
     }
 
     setIsSaving(true)
     try {
-      await updateClassSessionRequest(session.id, locationId, {
+      await updateClassSessionRequest(session.id, locationId, pastSession ? {
+        coachId: coachId === NO_COACH_VALUE ? null : coachId,
+        coachName: coachName.trim() || null,
+      } : {
         classTypeId,
         startTime: startIso,
         endTime: endIso,
@@ -143,7 +148,7 @@ export function ClassSessionEditDrawer({
   >
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
-        <SelectInputAsync<ClassType>
+        {!pastSession ? <><SelectInputAsync<ClassType>
           label="Class"
           placeholder="Search classes"
           required
@@ -184,11 +189,12 @@ export function ClassSessionEditDrawer({
             emptyMessage="No enabled rooms at this location."
           />
         </Field>
+        </> : null}
         <Field label="Coach">
           <SelectInput
             aria-label="Coach"
             items={[
-              ...(session?.scheduleId ? [{ value: SCHEDULE_COACH_VALUE, label: 'Use schedule coach' }] : []),
+              ...(session?.scheduleId && !pastSession ? [{ value: SCHEDULE_COACH_VALUE, label: 'Use schedule coach' }] : []),
               { value: NO_COACH_VALUE, label: 'No coach' },
               ...coaches.map((coach) => ({ value: coach.userId, label: coach.coachName })),
             ]}
@@ -205,7 +211,7 @@ export function ClassSessionEditDrawer({
           if (event.target.value.trim() && coachId === SCHEDULE_COACH_VALUE) setCoachId(NO_COACH_VALUE)
         }} placeholder="Enter a name if the coach isn't in the system" /></Field>
         <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
-        <p className="text-sm text-muted-foreground">Existing bookings stay attached to this session when its class changes.</p>
+        {!pastSession ? <p className="text-sm text-muted-foreground">Existing bookings stay attached to this session when its class changes.</p> : null}
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>

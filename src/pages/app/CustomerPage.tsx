@@ -652,7 +652,7 @@ export default function CustomerPage() {
                   tableKey="customers.detail.modules.class-sessions"
                   columns={getClassSessionColumns({ showLocation: true })}
                   renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
-                  getRowCommands={(classSession) => session?.permissions.classSessions?.edit && classSession.status === 'SCHEDULED'
+                  getRowCommands={(classSession) => session?.permissions.classSessions?.edit && (classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED')
                     ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setEditingClassSession(classSession) }]
                     : []}
                   loadingMessage="Loading class sessions..."

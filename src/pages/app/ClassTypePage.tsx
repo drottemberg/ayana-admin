@@ -274,7 +274,7 @@ export default function ClassTypePage() {
         renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
         getRowCommands={(classSession) => [
           { label: 'View session', onClick: () => navigate(`/class-sessions/${classSession.id}?locationId=${encodeURIComponent(locationId)}`) },
-          ...(canEditSession && classSession.status === 'SCHEDULED' ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setEditingSession(classSession) }] : []),
+          ...(canEditSession && (classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setEditingSession(classSession) }] : []),
           ...(canCancelSessions && (classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') ? [{
             label: 'Cancel session',
             icon: CalendarRemove01Icon,

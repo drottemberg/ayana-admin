@@ -428,10 +428,10 @@ export default function ClassSessionPage() {
           </Button>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-        {((classSession.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit)
+        {(((classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') && appSession?.permissions.classSessions?.edit)
           || ((classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete)
           || (String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete)) ? <>
-          {classSession.status === 'SCHEDULED' && appSession?.permissions.classSessions?.edit
+          {(classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') && appSession?.permissions.classSessions?.edit
             ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
             : null}
           {(classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete

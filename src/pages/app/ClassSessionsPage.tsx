@@ -263,7 +263,7 @@ export default function ClassSessionsPage() {
               label: 'View session',
               onClick: () => navigate(`/class-sessions/${item.id}?locationId=${encodeURIComponent(item.locationId ?? item.organizationId)}`),
             },
-            ...(canResumeSessions && item.status === 'SCHEDULED' ? [{
+            ...(canResumeSessions && (item.status === 'SCHEDULED' || item.status === 'COMPLETED') ? [{
               label: 'Edit session',
               icon: PencilEdit02Icon,
               onClick: () => setEditingSession(item),
