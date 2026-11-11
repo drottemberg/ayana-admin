@@ -151,6 +151,8 @@ export type UpdateClassSessionPayload = {
   useScheduleCoach?: boolean
   roomId?: string | null
   useScheduleRoom?: boolean
+  createClassPassSchedule?: boolean
+  classPassSpots?: number
 }
 
 export type LocationCoach = { userId: string; coachName: string }
@@ -176,6 +178,14 @@ export type CreateClassSessionPayload = {
   startTime: string
   endTime: string
   capacity?: number
+  createClassPassSchedule?: boolean
+  classPassSpots?: number
+}
+
+export async function getClassPassScheduleAvailabilityRequest(locationId: string, classTypeId: string): Promise<boolean> {
+  return apiClient.get<boolean>(`/class-sessions/classpass-availability?classTypeId=${encodeURIComponent(classTypeId)}`, {
+    headers: { 'x-org-id': locationId },
+  })
 }
 
 export async function createClassSessionRequest(locationId: string, payload: CreateClassSessionPayload) {

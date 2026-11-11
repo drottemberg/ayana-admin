@@ -6,11 +6,12 @@ import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SelectInput, SelectInputAsync } from '@/components/ui/select-input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getAllLocationsForCustomerRequest, getLocationRequest } from '@/features/locations/api'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
-import { createClassSessionRequest, getActiveClassTypeOptionsForLocationRequest, getLocationCoachesRequest, type LocationCoach } from '@/features/classes/api'
+import { createClassSessionRequest, getActiveClassTypeOptionsForLocationRequest, getClassPassScheduleAvailabilityRequest, getLocationCoachesRequest, type LocationCoach } from '@/features/classes/api'
 import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
@@ -60,6 +61,8 @@ export function ClassSessionCreateDrawer({
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [capacity, setCapacity] = useState('')
+  const [createClassPassSchedule, setCreateClassPassSchedule] = useState(false)
+  const [classPassSpots, setClassPassSpots] = useState('')
   const [coachId, setCoachId] = useState(NO_COACH_VALUE)
   const [coachName, setCoachName] = useState('')
   const [roomId, setRoomId] = useState(PENDING_ROOM_VALUE)
@@ -72,6 +75,11 @@ export function ClassSessionCreateDrawer({
     queryKey: ['coaches', 'location', locationId, 'create-session'],
     queryFn: () => getLocationCoachesRequest(locationId),
     enabled: Boolean(open && locationId),
+  })
+  const { data: hasClassPassIntegration = false } = useQuery({
+    queryKey: ['classpass-session-availability', locationId, classType?.id],
+    queryFn: () => getClassPassScheduleAvailabilityRequest(locationId, classType!.id),
+    enabled: Boolean(open && locationId && classType?.id),
   })
   const { data: rooms = [], isLoading: isLoadingRooms } = useQuery<Room[]>({
     queryKey: ['rooms', 'location', locationId],
@@ -98,6 +106,8 @@ export function ClassSessionCreateDrawer({
     setStartTime('')
     setEndTime('')
     setCapacity(fixedClassType ? String(fixedClassType.maxCapacity) : '')
+    setCreateClassPassSchedule(false)
+    setClassPassSpots('')
     setCoachId(NO_COACH_VALUE)
     setCoachName('')
     setRoomId(PENDING_ROOM_VALUE)
@@ -175,6 +185,8 @@ export function ClassSessionCreateDrawer({
         startTime: startIso,
         endTime: endIso,
         capacity: capacityValue,
+        createClassPassSchedule,
+        ...(createClassPassSchedule ? { classPassSpots: Number(classPassSpots || capacityValue) } : {}),
       })
       await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
       toast.success('Class session created.')
@@ -251,6 +263,13 @@ export function ClassSessionCreateDrawer({
           <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setSessionStart} />
           <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
           <Field label="Capacity"><Input required type="number" min="1" step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
+          {hasClassPassIntegration ? <div className="space-y-3 rounded-lg border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox checked={createClassPassSchedule} onCheckedChange={(checked) => setCreateClassPassSchedule(checked === true)} />
+              Create this session on ClassPass
+            </label>
+            {createClassPassSchedule ? <Field label="ClassPass spots"><Input required type="number" min="1" step="1" value={classPassSpots || capacity} onChange={(event) => setClassPassSpots(event.target.value)} /></Field> : null}
+          </div> : null}
           <Field label="Room">
             <SelectInput
               aria-label="Room"

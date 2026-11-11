@@ -6,7 +6,8 @@ import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SelectInput, SelectInputAsync } from '@/components/ui/select-input'
-import { getActiveClassTypeOptionsForLocationRequest, getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
+import { Checkbox } from '@/components/ui/checkbox'
+import { getActiveClassTypeOptionsForLocationRequest, getClassSessionRequest, getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
 import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
@@ -40,11 +41,19 @@ export function ClassSessionEditDrawer({
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [capacity, setCapacity] = useState('')
+  const [createClassPassSchedule, setCreateClassPassSchedule] = useState(false)
+  const [classPassSpots, setClassPassSpots] = useState('')
   const [classTypeId, setClassTypeId] = useState('')
   const [coachId, setCoachId] = useState('')
   const [coachName, setCoachName] = useState('')
   const [roomId, setRoomId] = useState(NO_ROOM_VALUE)
   const [isSaving, setIsSaving] = useState(false)
+  const { data: sessionDetails, isLoading: isLoadingSessionDetails } = useQuery<ClassSession>({
+    queryKey: ['class-sessions', 'detail', locationId, session?.id],
+    queryFn: () => getClassSessionRequest(session!.id, locationId),
+    enabled: Boolean(open && session?.id && locationId),
+  })
+  const classPassSchedules = sessionDetails?.classPassSchedules ?? session?.classPassSchedules ?? []
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, session?.classTypeId],
     queryFn: () => getLocationCoachesRequest(locationId),
@@ -61,11 +70,23 @@ export function ClassSessionEditDrawer({
     setStartTime(toClassSessionLocalInput(session.startTime, timeZone))
     setEndTime(toClassSessionLocalInput(session.endTime, timeZone))
     setCapacity(String(session.capacity))
+    setCreateClassPassSchedule(false)
+    setClassPassSpots(String(session.capacity))
     setClassTypeId(session.classTypeId)
     setCoachId(session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
     setCoachName(session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
     setRoomId(session.scheduleId && !session.roomOverride ? SCHEDULE_ROOM_VALUE : session.roomId ?? NO_ROOM_VALUE)
   }, [open, session, timeZone])
+
+  let startMoved = false
+  if (session && startTime) {
+    try {
+      startMoved = new Date(classSessionLocalInputToIso(startTime, timeZone)).getTime() !== new Date(session.startTime).getTime()
+    } catch {
+      startMoved = false
+    }
+  }
+  const hasMappedClassPassSchedule = classPassSchedules.length > 0
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -98,6 +119,10 @@ export function ClassSessionEditDrawer({
         useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
         roomId: roomId === SCHEDULE_ROOM_VALUE || roomId === NO_ROOM_VALUE ? null : roomId,
         useScheduleRoom: roomId === SCHEDULE_ROOM_VALUE,
+        ...(startMoved && hasMappedClassPassSchedule ? {
+          createClassPassSchedule,
+          ...(createClassPassSchedule ? { classPassSpots: Number(classPassSpots || capacityValue) } : {}),
+        } : {}),
       })
       await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
       toast.success('Class session updated.')
@@ -134,6 +159,14 @@ export function ClassSessionEditDrawer({
         <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setStartTime} />
         <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
         <Field label="Capacity"><Input required type="number" min={session?.bookedCount ?? 0} step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
+        {startMoved && hasMappedClassPassSchedule ? <div className="space-y-3 rounded-lg border p-3">
+          <p className="text-sm text-muted-foreground">The current ClassPass schedule will be cancelled because this session is moving.</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <Checkbox checked={createClassPassSchedule} onCheckedChange={(checked) => setCreateClassPassSchedule(checked === true)} />
+            Create a new ClassPass schedule at the new time
+          </label>
+          {createClassPassSchedule ? <Field label="ClassPass spots"><Input required type="number" min="1" step="1" value={classPassSpots || capacity} onChange={(event) => setClassPassSpots(event.target.value)} /></Field> : null}
+        </div> : null}
         <Field label="Room">
           <SelectInput
             aria-label="Room"
@@ -176,7 +209,7 @@ export function ClassSessionEditDrawer({
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>
-        <Button type="submit" disabled={isSaving || !session}>{isSaving ? 'Saving…' : 'Save changes'}</Button>
+        <Button type="submit" disabled={isSaving || isLoadingSessionDetails || !session}>{isSaving ? 'Saving…' : 'Save changes'}</Button>
       </div>
     </form>
   </AppDrawer>
