@@ -5,11 +5,12 @@ import { toast } from 'sonner'
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { SelectInput } from '@/components/ui/select-input'
-import { getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
+import { SelectInput, SelectInputAsync } from '@/components/ui/select-input'
+import { getActiveClassTypeOptionsForLocationRequest, getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
 import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
+import type { ClassType } from '@/types/class-type'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
 import { ClassSessionDateTimeField } from '@/features/classes/ClassSessionDateTimeField'
 
@@ -39,6 +40,7 @@ export function ClassSessionEditDrawer({
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [capacity, setCapacity] = useState('')
+  const [classTypeId, setClassTypeId] = useState('')
   const [coachId, setCoachId] = useState('')
   const [coachName, setCoachName] = useState('')
   const [roomId, setRoomId] = useState(NO_ROOM_VALUE)
@@ -59,6 +61,7 @@ export function ClassSessionEditDrawer({
     setStartTime(toClassSessionLocalInput(session.startTime, timeZone))
     setEndTime(toClassSessionLocalInput(session.endTime, timeZone))
     setCapacity(String(session.capacity))
+    setClassTypeId(session.classTypeId)
     setCoachId(session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
     setCoachName(session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
     setRoomId(session.scheduleId && !session.roomOverride ? SCHEDULE_ROOM_VALUE : session.roomId ?? NO_ROOM_VALUE)
@@ -86,6 +89,7 @@ export function ClassSessionEditDrawer({
     setIsSaving(true)
     try {
       await updateClassSessionRequest(session.id, locationId, {
+        classTypeId,
         startTime: startIso,
         endTime: endIso,
         capacity: capacityValue,
@@ -114,6 +118,19 @@ export function ClassSessionEditDrawer({
   >
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-3">
+        <SelectInputAsync<ClassType>
+          label="Class"
+          placeholder="Search classes"
+          required
+          queryKey={['class-session-edit-classes', locationId]}
+          queryFn={(search) => getActiveClassTypeOptionsForLocationRequest(locationId, search)}
+          getOption={(item) => ({ value: item.id, label: item.name })}
+          selectedItems={classTypeId ? [{ id: classTypeId, name: classTypeId === session?.classTypeId ? session?.className ?? classTypeId : classTypeId } as ClassType] : []}
+          value={classTypeId}
+          onValueChange={() => setClassTypeId('')}
+          onSelectedItemsChange={(items) => setClassTypeId(items[0]?.id ?? '')}
+          disabled={!locationId}
+        />
         <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setStartTime} />
         <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
         <Field label="Capacity"><Input required type="number" min={session?.bookedCount ?? 0} step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
@@ -155,7 +172,7 @@ export function ClassSessionEditDrawer({
           if (event.target.value.trim() && coachId === SCHEDULE_COACH_VALUE) setCoachId(NO_COACH_VALUE)
         }} placeholder="Enter a name if the coach isn't in the system" /></Field>
         <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
-        <p className="text-sm text-muted-foreground">The class type and existing bookings stay attached to this session.</p>
+        <p className="text-sm text-muted-foreground">Existing bookings stay attached to this session when its class changes.</p>
       </div>
       <div className="flex justify-end gap-2 border-t border-border p-5">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>

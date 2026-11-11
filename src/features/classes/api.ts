@@ -142,6 +142,7 @@ export async function getAdjacentClassSessionRequest(
 }
 
 export type UpdateClassSessionPayload = {
+  classTypeId?: string
   startTime: string
   endTime: string
   capacity: number
