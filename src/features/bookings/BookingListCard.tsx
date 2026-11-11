@@ -63,11 +63,6 @@ function bookingCreatedDateTime(value: string) {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
-function bookingDateTime(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
-}
-
 function sourceLabel(source?: string) {
   return source === 'CLASSPASS' ? 'ClassPass' : source === 'EGYM' ? 'EGYM Wellpass' : 'Direct'
 }
@@ -109,12 +104,10 @@ type CurrentContractData = Pick<Booking, 'currentContractName' | 'currentContrac
 
 function CurrentContractPill({ booking }: { booking: CurrentContractData }) {
   if (!booking.hasCurrentContractBalance) return null
-  const balance = booking.currentContractCreditsRemaining === null
-    ? 'Unlimited credits'
-    : `${booking.currentContractCreditsRemaining ?? 0} credits left`
-  const label = [booking.currentContractName || 'Credits', balance].join(' · ')
-  return <Badge variant="secondary" className="h-6 max-w-full rounded-full border-0 bg-[#eef3e9] px-3 text-xs font-medium text-[#4e6545]" title={label}>
-    <span className="truncate">{label}</span>
+  const balance = booking.currentContractCreditsRemaining === null ? '∞' : String(booking.currentContractCreditsRemaining ?? 0)
+  const title = booking.currentContractName || 'Current contract balance'
+  return <Badge variant="secondary" className="h-6 max-w-full rounded-full border-0 bg-[#eef3e9] px-2.5 text-xs font-medium text-[#4e6545]" title={title} aria-label={`${title}: ${balance}`}>
+    <span className="truncate">{balance}</span>
   </Badge>
 }
 
@@ -176,9 +169,10 @@ export function BookingListCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">
         <span>{Number(booking.creditsUsed ?? 0)} credit{Number(booking.creditsUsed ?? 0) === 1 ? '' : 's'} used</span>
-        {isCancelled && booking.cancelledAt
-          ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">Cancelled {bookingDateTime(booking.cancelledAt)}</time>
-          : <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>}
+        <div className="flex flex-col items-end">
+          <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>
+          {isCancelled && booking.cancelledAt ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">{bookingCreatedDateTime(booking.cancelledAt)}</time> : null}
+        </div>
       </div>
     </div>
   </article>
@@ -246,8 +240,11 @@ export function ClassBookingListCard({
           <StatusPill status={booking.status} />
           <SourcePill source={booking.source} />
           {showContractDetails && booking.source === 'DIRECT' && booking.hasCurrentContractBalance ? <CurrentContractPill booking={booking} /> : null}
-          {isCancelled && booking.cancelledAt ? <time dateTime={booking.cancelledAt} className="text-xs font-medium text-red-600">Cancelled {bookingDateTime(booking.cancelledAt)}</time> : null}
         </div>
+      </div>
+      <div className="ml-[52px] mt-1 flex flex-col text-xs text-[#a29b96]">
+        <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>
+        {isCancelled && booking.cancelledAt ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">{bookingCreatedDateTime(booking.cancelledAt)}</time> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <span className="sr-only">Attendance</span>{attendance}
@@ -279,9 +276,10 @@ export function ClassBookingListCard({
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">
         <span>{locationName || NO_VALUE_STR}</span>
-        {isCancelled && booking.cancelledAt
-          ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">Cancelled {bookingDateTime(booking.cancelledAt)}</time>
-          : <time dateTime={booking.createdAt}>{bookingDateTime(booking.createdAt)}</time>}
+        <div className="flex flex-col items-end">
+          <time dateTime={booking.createdAt}>{bookingCreatedDateTime(booking.createdAt)}</time>
+          {isCancelled && booking.cancelledAt ? <time dateTime={booking.cancelledAt} className="font-medium text-red-600">{bookingCreatedDateTime(booking.cancelledAt)}</time> : null}
+        </div>
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
         <Link to={`/bookings/${encodeURIComponent(booking.id)}`} className="max-w-full truncate text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">#{booking.id}</Link>

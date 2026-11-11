@@ -53,5 +53,5 @@ export type ClientContractCreditMovement = {
   createdByUserId?: string | null
   createdAt: string
   creator?: { id: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null
-  bookingInfo?: { className?: string | null; startTime: string } | null
+  bookingInfo?: { className?: string | null; startTime: string; sessionId: string; locationId: string } | null
 }

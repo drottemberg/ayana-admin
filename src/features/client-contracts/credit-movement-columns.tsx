@@ -86,7 +86,9 @@ export function getCreditMovementColumns(options: { showUser?: boolean; showCust
         const booking = movement.bookingInfo
         return (
           <div className="min-w-36 text-sm">
-            <div>{booking?.className ?? movement.reason ?? (movement.bookingId ? `Booking ${movement.bookingId}` : NO_VALUE_STR)}</div>
+            <div>{booking?.sessionId
+              ? <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.locationId)}`} className="underline-offset-2 hover:underline">{booking.className ?? booking.sessionId}</Link>
+              : movement.reason ?? (movement.bookingId ? `Booking ${movement.bookingId}` : NO_VALUE_STR)}</div>
             {movement.reason && booking?.className ? <div className="text-xs text-muted-foreground">{movement.reason}</div> : null}
             {booking?.startTime ? <div className="text-xs text-muted-foreground">{DateUtils.formatDateTime(booking.startTime)}</div> : null}
           </div>
