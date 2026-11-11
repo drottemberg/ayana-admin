@@ -49,6 +49,7 @@ export type ClassSession = {
   coachName?: string | null
   coachCustomName?: string | null
   coachOverride?: boolean
+  canClaim?: boolean
   roomOverride?: boolean
   scheduleId?: string | null
   roomId?: string | null

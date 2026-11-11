@@ -5,6 +5,14 @@ import type { CreatePricingOptionPayload, PricingOption, UpdatePricingOptionPayl
 
 const PRICING_OPTIONS_LIST_URL = '/pricing-options/list'
 
+export async function getPurchaseBenefitTargetsRequest(customerId: string) {
+  return apiClient.get<{ products: Array<{ id: string; name: string }>; pricingOptions: Array<{ id: string; name: string }> }>(withCustomer('/pricing-options/benefit-targets', customerId))
+}
+
+export async function getClassAccessTargetsRequest(customerId: string) {
+  return apiClient.get<Array<{ id: string; name: string; organizationId: string }>>(withCustomer('/pricing-options/class-access-targets', customerId))
+}
+
 function withCustomer(path: string, customerId?: string) {
   if (!customerId) return path
   const params = new URLSearchParams({ customerId })

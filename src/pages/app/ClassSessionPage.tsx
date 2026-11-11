@@ -176,6 +176,7 @@ export default function ClassSessionPage() {
   const canClaimSession = Boolean(
     isInstructorContext
     && classSession
+    && classSession.canClaim === true
     && !classSession.coachId
     && !classSession.coachName
     && classSession.status === 'SCHEDULED'

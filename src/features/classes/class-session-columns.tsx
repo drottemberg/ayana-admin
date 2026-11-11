@@ -59,6 +59,7 @@ export function ClassSessionListCard({
   const pendingApprovalCount = Math.max(0, session.pendingApprovalCount ?? 0)
   const confirmedBookingCount = Math.max(0, session.bookedCount - pendingApprovalCount)
   const canClaim = allowClaim
+    && session.canClaim === true
     && !session.coachId
     && !session.coachName
     && session.status === 'SCHEDULED'
@@ -139,6 +140,7 @@ export function getClassSessionColumns(options: {
       cell: ({ row }) => {
         const session = row.original
         const canClaim = options.allowClaim
+          && session.canClaim === true
           && !session.coachId
           && !session.coachName
           && session.status === 'SCHEDULED'

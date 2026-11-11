@@ -434,7 +434,7 @@ export default function HomePage() {
             const offers = await getMyCoachCoverageRequestsRequest()
             const sessions = offers
               .filter((offer) => offer.kind === 'COVER_REQUEST' || offer.kind === 'UNASSIGNED')
-              .map((offer: CoachCoverageRequest) => offer.session)
+              .map((offer: CoachCoverageRequest) => ({ ...offer.session, canClaim: true }))
               .filter((item) => item.status === 'SCHEDULED' && new Date(item.startTime).getTime() >= Date.now())
             return toTableResult(sessions as HomeSessionRow[], state)
           }}

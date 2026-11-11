@@ -10,16 +10,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { customersQueryKeys } from '@/features/customers/query-keys'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
-import { createPricingOptionRequest, getPricingOptionRequest, updatePricingOptionRequest } from '@/features/pricing-options/api'
+import { createPricingOptionRequest, getClassAccessTargetsRequest, getPricingOptionRequest, getPurchaseBenefitTargetsRequest, updatePricingOptionRequest } from '@/features/pricing-options/api'
 import { pricingOptionsQueryKeys } from '@/features/pricing-options/query-keys'
 import {
   BillingInterval,
-  ApplicableTo,
   CreditRefreshInterval,
   PricingOptionScope,
   PricingOptionType,
   type CreatePricingOptionPayload,
+  type ClassAccessScope,
   type PricingOption,
+  type PurchaseBenefits,
+  type PurchaseBenefitRule,
 } from '@/types/pricing-option'
 
 const types = [
@@ -45,12 +47,6 @@ const creditRefreshIntervals = [
   { value: CreditRefreshInterval.YEARLY, label: 'Yearly' },
 ]
 
-const applicableToOptions = [
-  { value: ApplicableTo.BOTH, label: 'Group and private classes' },
-  { value: ApplicableTo.GROUP, label: 'Group classes only' },
-  { value: ApplicableTo.PRIVATE, label: 'Private classes only' },
-]
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium">
@@ -58,6 +54,48 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   )
+}
+
+function PercentInput({ value, onValueChange, label, className }: {
+  value: number | null | undefined
+  onValueChange: (value: number | null) => void
+  label: string
+  className?: string
+}) {
+  const [draft, setDraft] = useState(value == null ? '' : String(value))
+  useEffect(() => setDraft(value == null ? '' : String(value)), [value])
+  return <Input
+    aria-label={label}
+    className={className}
+    type="number"
+    min="0.01"
+    max="99.99"
+    step="0.01"
+    placeholder="0.00"
+    value={draft}
+    onChange={(event) => {
+      const next = event.target.value
+      setDraft(next)
+      onValueChange(next === '' ? null : Number(next))
+    }}
+  />
+}
+
+function normalizeBenefits(value: PricingOption['purchaseBenefits']): PurchaseBenefits {
+  const result: PurchaseBenefits = {}
+  for (const kind of ['products', 'pricingOptions'] as const) {
+    const rule = value?.[kind] as (PurchaseBenefitRule & { targetIds?: string[] }) | undefined
+    if (!rule) continue
+    result[kind] = {
+      scope: rule.scope,
+      ...(rule.scope === 'ALL' ? { percent: rule.percent } : {}),
+      ...(rule.scope === 'SPECIFIC' ? { referencePercent: rule.referencePercent ?? rule.percent ?? null } : {}),
+      targets: rule.scope === 'SPECIFIC'
+        ? rule.targets ?? (rule.targetIds ?? []).map((id) => ({ id, percent: rule.percent ?? 0 }))
+        : [],
+    }
+  }
+  return result
 }
 
 export function CreatePricingOptionDialog({
@@ -96,8 +134,10 @@ export function CreatePricingOptionDialog({
   const [creditsRollover, setCreditsRollover] = useState(false)
   const [validityDays, setValidityDays] = useState('')
   const [minimumCommitmentMonths, setMinimumCommitmentMonths] = useState('')
-  const [applicableTo, setApplicableTo] = useState<ApplicableTo>(ApplicableTo.BOTH)
+  const [classAccessScope, setClassAccessScope] = useState<ClassAccessScope>('ALL')
+  const [classTypeIds, setClassTypeIds] = useState<string[]>([])
   const [perksText, setPerksText] = useState('')
+  const [purchaseBenefits, setPurchaseBenefits] = useState<PurchaseBenefits>({})
   const [isIntro, setIsIntro] = useState(false)
   const [isSellable, setIsSellable] = useState(true)
   const [isActive, setIsActive] = useState(true)
@@ -119,6 +159,16 @@ export function CreatePricingOptionDialog({
   const locations = useQuery({
     queryKey: ['locations', 'pricing-option-form', effectiveCustomerId],
     queryFn: () => getAllLocationsForCustomerRequest(effectiveCustomerId),
+    enabled: open && Boolean(effectiveCustomerId),
+  })
+  const benefitTargets = useQuery({
+    queryKey: ['pricing-option-benefit-targets', effectiveCustomerId],
+    queryFn: () => getPurchaseBenefitTargetsRequest(effectiveCustomerId),
+    enabled: open && Boolean(effectiveCustomerId),
+  })
+  const classAccessTargets = useQuery({
+    queryKey: ['pricing-option-class-access-targets', effectiveCustomerId],
+    queryFn: () => getClassAccessTargetsRequest(effectiveCustomerId),
     enabled: open && Boolean(effectiveCustomerId),
   })
 
@@ -149,8 +199,10 @@ export function CreatePricingOptionDialog({
     setCreditsRollover(source?.creditsRollover ?? false)
     setValidityDays(source?.validityDays == null ? '' : String(source.validityDays))
     setMinimumCommitmentMonths(source?.minimumCommitmentMonths == null ? '' : String(source.minimumCommitmentMonths))
-    setApplicableTo(source?.applicableTo ?? ApplicableTo.BOTH)
+    setClassAccessScope(source?.classAccessScope ?? 'ALL')
+    setClassTypeIds(source?.classTypeIds ?? [])
     setPerksText((source?.perks ?? []).join('\n'))
+    setPurchaseBenefits(normalizeBenefits(source?.purchaseBenefits))
     setIsIntro(source?.isIntro ?? false)
     setIsSellable(source?.isSellable ?? true)
     setIsActive(source?.isActive ?? true)
@@ -172,6 +224,15 @@ export function CreatePricingOptionDialog({
     setSelectedLocationIds((current) =>
       current.includes(locationId) ? current.filter((id) => id !== locationId) : [...current, locationId],
     )
+  }
+
+  const updateBenefit = (kind: keyof PurchaseBenefits, value?: PurchaseBenefitRule) => {
+    setPurchaseBenefits((current) => {
+      const next = { ...current }
+      if (value) next[kind] = value
+      else delete next[kind]
+      return next
+    })
   }
 
   const getOverride = (locationId: string) =>
@@ -226,6 +287,17 @@ export function CreatePricingOptionDialog({
       toast.error('Select at least one location for a specific scope.')
       return
     }
+    if (classAccessScope === 'SPECIFIC' && classTypeIds.length === 0) {
+      toast.error('Select at least one class covered by this plan.')
+      return
+    }
+    for (const [kind, benefit] of Object.entries(purchaseBenefits)) {
+      const percentages = benefit?.scope === 'ALL' ? [benefit.percent] : benefit?.targets.map((target) => target.percent) ?? []
+      if (benefit && (!percentages.length || percentages.some((percent) => percent == null || !Number.isFinite(percent) || percent <= 0 || percent >= 100))) {
+        toast.error(`Enter a valid discount and select targets for ${kind}.`)
+        return
+      }
+    }
 
     const locationAssignments = scope === PricingOptionScope.SPECIFIC
       ? selectedLocationIds
@@ -271,11 +343,13 @@ export function CreatePricingOptionDialog({
       creditsRollover: type === PricingOptionType.CAPPED_MEMBERSHIP ? creditsRollover : false,
       validityDays: validityDays ? Number(validityDays) : null,
       minimumCommitmentMonths: minimumCommitmentMonths ? Number(minimumCommitmentMonths) : null,
-      applicableTo,
+      classAccessScope,
+      classTypeIds: classAccessScope === 'SPECIFIC' ? classTypeIds : [],
       isIntro,
       isSellable,
       isActive,
       perks: perksText.split('\n').map((perk) => perk.trim()).filter(Boolean),
+      purchaseBenefits,
     })
   }
 
@@ -396,14 +470,15 @@ export function CreatePricingOptionDialog({
             </Field>
           </div>
 
-          <Field label="Applicable to">
-            <SelectInput
-              aria-label="Applicable to"
-              items={applicableToOptions}
-              value={applicableTo}
-              onValueChange={(value) => setApplicableTo(String(value) as ApplicableTo)}
-            />
+          <Field label="Classes covered">
+            <SelectInput aria-label="Classes covered" items={[{ value: 'ALL', label: 'All classes' }, { value: 'SPECIFIC', label: 'Selected classes' }]} value={classAccessScope} onValueChange={(value) => setClassAccessScope(String(value) as ClassAccessScope)} />
           </Field>
+          {classAccessScope === 'SPECIFIC' && <div className="grid gap-2 rounded-lg border p-3">
+            {(classAccessTargets.data ?? []).map((classType) => <label key={classType.id} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={classTypeIds.includes(classType.id)} onChange={(event) => setClassTypeIds((ids) => event.target.checked ? [...ids, classType.id] : ids.filter((id) => id !== classType.id))} />
+              <span>{classType.name} · {locations.data?.find((location) => location.id === classType.organizationId)?.name}</span>
+            </label>)}
+          </div>}
 
           <Field label="Included benefits (one per line)">
             <Textarea
@@ -413,6 +488,50 @@ export function CreatePricingOptionDialog({
               placeholder={'One free drink\nLocker access'}
             />
           </Field>
+
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="font-medium">Purchase discounts</div>
+            <p className="text-sm text-muted-foreground">Available while the purchased contract is active. The best eligible discount is applied.</p>
+            {(['products', 'pricingOptions'] as const).map((kind) => {
+              const rule = purchaseBenefits[kind]
+              const targets = (benefitTargets.data?.[kind] ?? []).filter((target) => kind !== 'pricingOptions' || target.id !== option?.id)
+              return <div key={kind} className="space-y-2 rounded-md border p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" checked={Boolean(rule)} onChange={(event) => updateBenefit(kind, event.target.checked ? { percent: null, scope: 'ALL', targets: [] } : undefined)} />
+                  {kind === 'products' ? 'Discount on products' : 'Discount on other pricing options'}
+                </label>
+                {rule ? <>
+                  <Field label="Applies to">
+                    <SelectInput aria-label={`${kind} benefit scope`} items={[{ value: 'ALL', label: 'All' }, { value: 'SPECIFIC', label: 'Specific items' }]} value={rule.scope} onValueChange={(value) => updateBenefit(kind, String(value) === 'ALL' ? { scope: 'ALL', percent: rule.percent ?? rule.referencePercent ?? null, targets: [] } : { scope: 'SPECIFIC', referencePercent: rule.percent ?? null, targets: [] })} />
+                  </Field>
+                  {rule.scope === 'ALL' ? <Field label="Discount (%)">
+                    <PercentInput label={`${kind} discount percentage`} value={rule.percent} onValueChange={(percent) => updateBenefit(kind, { ...rule, percent })} />
+                  </Field> : null}
+                  {rule.scope === 'SPECIFIC' ? <div className="flex flex-wrap items-end gap-2">
+                    <Field label="Reference discount (%)">
+                      <PercentInput label={`${kind} reference discount percentage`} className="w-32" value={rule.referencePercent} onValueChange={(referencePercent) => updateBenefit(kind, { ...rule, referencePercent })} />
+                    </Field>
+                    <Button type="button" variant="outline" disabled={rule.referencePercent == null || rule.referencePercent <= 0 || rule.referencePercent >= 100 || !rule.targets.length} onClick={() => updateBenefit(kind, { ...rule, targets: rule.targets.map((target) => ({ ...target, percent: rule.referencePercent ?? null })) })}>Apply to selected</Button>
+                  </div> : null}
+                  {rule.scope === 'SPECIFIC' ? <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-2">
+                    {benefitTargets.isLoading ? <span className="text-sm text-muted-foreground">Loading items...</span> : null}
+                    {targets.map((target) => {
+                      const selected = rule.targets.find((item) => item.id === target.id)
+                      return <div key={target.id} className="flex items-center gap-3 text-sm">
+                        <label className="flex min-w-0 flex-1 items-center gap-2">
+                          <input type="checkbox" checked={Boolean(selected)} onChange={(event) => updateBenefit(kind, { ...rule, targets: event.target.checked ? [...rule.targets, { id: target.id, percent: rule.referencePercent ?? null }] : rule.targets.filter((item) => item.id !== target.id) })} />
+                          <span className="truncate">{target.name}</span>
+                        </label>
+                        {selected ? <PercentInput label={`${target.name} discount percentage`} className="w-24" value={selected.percent} onValueChange={(percent) => updateBenefit(kind, { ...rule, targets: rule.targets.map((item) => item.id === target.id ? { ...item, percent } : item) })} /> : null}
+                        {selected ? <span>%</span> : null}
+                      </div>
+                    })}
+                    {!targets.length && !benefitTargets.isLoading ? <span className="text-sm text-muted-foreground">No items available.</span> : null}
+                  </div> : null}
+                </> : null}
+              </div>
+            })}
+          </div>
 
           <div className="grid gap-3 rounded-lg border p-3">
             <label className="flex items-center gap-2 text-sm font-normal">

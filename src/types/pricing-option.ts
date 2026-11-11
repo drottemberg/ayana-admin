@@ -3,6 +3,7 @@ export const PricingOptionScope = {
   SPECIFIC: 'SPECIFIC',
 } as const
 export type PricingOptionScope = (typeof PricingOptionScope)[keyof typeof PricingOptionScope]
+export type ClassAccessScope = 'ALL' | 'SPECIFIC'
 
 export const PricingOptionType = {
   DROP_IN: 'DROP_IN',
@@ -45,11 +46,16 @@ export type PricingOptionLocation = {
   stripePriceIdOverride?: string | null
 }
 
+export type PurchaseBenefitRule = { scope: 'ALL' | 'SPECIFIC'; percent?: number | null; referencePercent?: number | null; targets: Array<{ id: string; percent: number | null }> }
+export type PurchaseBenefits = { products?: PurchaseBenefitRule; pricingOptions?: PurchaseBenefitRule }
+
 export type PricingOption = {
   id: string
   organizationId: string
   customerId?: string
   scope: PricingOptionScope
+  classAccessScope?: ClassAccessScope
+  classTypeIds?: string[]
   name: string
   description?: string | null
   type: PricingOptionType
@@ -71,6 +77,7 @@ export type PricingOption = {
   isSellable: boolean
   isIntro: boolean
   perks?: string[]
+  purchaseBenefits?: PurchaseBenefits | null
   stripePriceId?: string | null
   locations: PricingOptionLocation[]
   isPriceOverridden?: boolean
@@ -83,6 +90,8 @@ export type PricingOption = {
 
 export type CreatePricingOptionPayload = {
   name: string
+  classAccessScope?: ClassAccessScope
+  classTypeIds?: string[]
   description?: string | null
   type: PricingOptionType
   price: number
@@ -107,6 +116,7 @@ export type CreatePricingOptionPayload = {
   perks?: string[]
   isSellable: boolean
   isActive: boolean
+  purchaseBenefits?: PurchaseBenefits
 }
 
 export type UpdatePricingOptionPayload = Partial<CreatePricingOptionPayload>

@@ -13,6 +13,7 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
 
 type ClassSession = {
   id: string
+  classTypeId: string
   name: string
   category?: string | null
   description?: string | null
@@ -72,6 +73,7 @@ type MemberState = {
   identity: { firstName?: string | null; lastName?: string | null; phone?: string | null; email?: string | null; language?: string | null }
   creditBalance: number
   hasUnlimitedContract: boolean
+  classCreditBalances?: Record<string, { credits: number; unlimited: boolean }>
   bookedSessionIds: string[]
   bookings: Array<{ bookingId: string; sessionId: string; status: 'CONFIRMED' | 'WAITLISTED' }>
 }
@@ -267,6 +269,7 @@ function BookingPortalRoute() {
   const [cancellationQuote, setCancellationQuote] = useState<CancellationQuote | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [offers, setOffers] = useState<PricingOffer[]>([])
+  const [offersReloadKey, setOffersReloadKey] = useState(0)
   const [offersLoading, setOffersLoading] = useState(false)
   const [offersError, setOffersError] = useState('')
   const [offerCheckoutError, setOfferCheckoutError] = useState('')
@@ -370,7 +373,7 @@ function BookingPortalRoute() {
       setLoading(true)
       setError('')
       try {
-        const scheduleResponse = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`)
+        const scheduleResponse = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`, { cache: 'no-store' })
         const schedulePayload = await scheduleResponse.json().catch(() => ({})) as Schedule & { message?: string | string[] }
         if (!scheduleResponse.ok) throw new Error(responseMessage(schedulePayload, t("This schedule could not be found.")))
         if (!active) return
@@ -475,7 +478,8 @@ function BookingPortalRoute() {
     const nextIndex = Math.max(0, Math.min(sessionDates.length - 1, selectedDateIndex + offset))
     if (sessionDates[nextIndex]) setSelectedDate(sessionDates[nextIndex])
   }
-  const needsCredits = Boolean(selected && member && selectedAction === 'book' && !member.hasUnlimitedContract && (forcedOfferFlow || member.creditBalance < selected.creditCost))
+  const selectedClassBalance = selected && member ? member.classCreditBalances?.[selected.classTypeId] : undefined
+  const needsCredits = Boolean(selected && member && selectedAction === 'book' && !selectedClassBalance?.unlimited && (forcedOfferFlow || (selectedClassBalance?.credits ?? 0) < selected.creditCost))
   const openAccessLink = async (channel: PublicAccessChannel, state: Record<string, unknown>) => {
     setAccessLoading(channel)
     setAccessError('')
@@ -603,7 +607,7 @@ function BookingPortalRoute() {
   }, [offers, searchParams])
 
   useEffect(() => {
-    const shouldLoadOffers = activeSection === 'offers' || Boolean(member && needsCredits && selectedAction === 'book')
+    const shouldLoadOffers = activeSection === 'offers' || Boolean(selected && selectedAction === 'book')
     if (!shouldLoadOffers) {
       setOffers([])
       setOffersError('')
@@ -613,7 +617,8 @@ function BookingPortalRoute() {
     setOffersLoading(true)
     setOffersError('')
     const url = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/offers`
-    void fetch(url, { method: 'POST', headers: member?.token ? { authorization: `Bearer ${member.token}` } : {} })
+    setOffers([])
+    void fetch(url, { method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json', ...(member?.token ? { authorization: `Bearer ${member.token}` } : {}) }, body: JSON.stringify(activeSection === 'offers' ? {} : selected ? { sessionId: selected.id } : {}) })
       .then(async (response) => {
         const payload = await response.json().catch(() => []) as PricingOffer[] & { message?: string | string[] }
         if (!response.ok) throw new Error(responseMessage(payload, t("Could not load available plans.")))
@@ -622,7 +627,7 @@ function BookingPortalRoute() {
       .catch((reason) => { if (active) setOffersError(reason instanceof Error ? reason.message : (t("Could not load available plans."))) })
       .finally(() => { if (active) setOffersLoading(false) })
     return () => { active = false }
-  }, [customerSlug, locationSlug, member?.token, needsCredits, selectedAction, activeSection, language])
+  }, [customerSlug, locationSlug, member?.token, needsCredits, selected?.id, selectedAction, activeSection, language, offersReloadKey])
 
   useEffect(() => {
     if (!member) return
@@ -689,7 +694,8 @@ function BookingPortalRoute() {
             const updated = { ...member, ...payload, token: member.token } as MemberState
             setMember(updated)
             localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updated))
-            if (!session || updated.hasUnlimitedContract || updated.creditBalance >= session.creditCost) {
+            const usable = session ? updated.classCreditBalances?.[session.classTypeId] : undefined
+            if (!session || usable?.unlimited || (usable?.credits ?? 0) >= session.creditCost) {
               setNotice((session ? t("Your credits are up to date. You can now confirm this booking.") : t("Your credits are up to date. You can view your plans and book a class.")))
               return
             }
@@ -704,6 +710,7 @@ function BookingPortalRoute() {
   }, [customerSlug, locationSlug, member?.token, schedule, searchParams, language])
 
   const openBooking = (session: ClassSession) => {
+    setOffersReloadKey((value) => value + 1)
     setBookingError('')
     setEgymCode('')
     setEgymEmail(member?.identity.email ?? guestEmail)
@@ -831,6 +838,14 @@ function BookingPortalRoute() {
       }
       localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(nextMember))
       setMember(nextMember)
+      void fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/me`, {
+        method: 'POST', headers: { authorization: `Bearer ${member.token}` },
+      }).then(async (response) => response.ok ? response.json() : null).then((latest: Partial<MemberState> | null) => {
+        if (!latest?.identity) return
+        const refreshed = { ...nextMember, ...latest, token: member.token } as MemberState
+        setMember(refreshed)
+        localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(refreshed))
+      }).catch(() => undefined)
       setSchedule((current) => current ? {
         ...current,
         sessions: current.sessions.map((session) => session.id === selected.id ? {
@@ -1033,7 +1048,7 @@ function BookingPortalRoute() {
     const creditsLabel = offer.creditsTotal != null
       ? `${offer.creditsTotal} ${t("total credits")}`
       : offer.creditsPerPeriod != null
-        ? `${offer.creditsPerPeriod} ${t("credits")} / ${offer.creditsRefreshInterval?.toLowerCase() ?? (t("period"))}`
+        ? `${offer.creditsPerPeriod} ${t("credits")} / ${t((offer.creditsRefreshInterval ?? 'MONTHLY').toLowerCase())}`
         : (t("Unlimited access"))
     const billingLabel = offer.billingInterval && offer.billingInterval !== 'ONCE'
       ? `${t("Billed")} ${offer.billingInterval.toLowerCase()}`
@@ -1045,6 +1060,22 @@ function BookingPortalRoute() {
       {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
       <button type="button" className="booking-offer-buy" onClick={() => { setOfferToPurchase(offer); setOfferCheckoutError('') }}>{t("Buy")}<span>→</span></button>
     </article>
+  }
+
+  const refreshPlanning = async () => {
+    setSchedule(null)
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({})) as Schedule & { message?: string | string[] }
+      if (!response.ok) throw new Error(responseMessage(payload, t("Could not load the schedule.")))
+      setSchedule(payload)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("Could not load the schedule."))
+    } finally {
+      setLoading(false)
+    }
   }
 
   return <main className="ayana-booking">
@@ -1066,14 +1097,14 @@ function BookingPortalRoute() {
       {member
         ? <section className="booking-member">
           <div className="booking-member-identity"><span className="booking-avatar">{(member.identity.firstName?.[0] ?? member.identity.lastName?.[0] ?? 'A').toUpperCase()}</span><div><span>{t("Signed in")}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ')}</strong></div></div>
-          <div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (t("unlimited")) : (t("credits"))}</span></div><button type="button" className="booking-member-plans" onClick={() => setActiveSection('offers')}><span aria-hidden="true">▤</span>{t("Packs & memberships")}<b>→</b></button><button type="button" className="booking-logout" onClick={logout} aria-label={t("Log out")} title={t("Log out")}>↪</button></div>
+          <div className="booking-member-actions"><div className="booking-balance"><b>{member.hasUnlimitedContract ? '∞' : new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(member.creditBalance)}</b><span>{member.hasUnlimitedContract ? (t("unlimited")) : (t("credits"))}</span></div><button type="button" className="booking-member-plans" onClick={() => { setActiveSection('offers'); setOffersReloadKey((value) => value + 1) }}><span aria-hidden="true">▤</span>{t("Packs & memberships")}<b>→</b></button><button type="button" className="booking-logout" onClick={logout} aria-label={t("Log out")} title={t("Log out")}>↪</button></div>
         </section>
         : activeSection !== 'offers' && sessionFilter !== 'booked' && <section className="booking-login-card"><div><strong>{t("Sign in to your Ayana account")}</strong><span>{t("Return to the schedule with your bookings and credits.")}</span></div><div>{renderAccessButtons(accessState(), 'booking-whatsapp-cta')}{accessError && <p className="booking-error" role="alert">{accessError}</p>}</div></section>}
       {notice && <div className="booking-notice" role="status">{notice}</div>}
 
       <nav className="booking-section-tabs" role="tablist" aria-label={t("Schedule and plans")}>
-        <button type="button" role="tab" aria-selected={activeSection === 'planning'} className={activeSection === 'planning' ? 'active' : ''} onClick={() => setActiveSection('planning')}><span aria-hidden="true">▣</span>{t("Schedule")}</button>
-        <button type="button" role="tab" aria-selected={activeSection === 'offers'} className={activeSection === 'offers' ? 'active' : ''} onClick={() => setActiveSection('offers')}><span aria-hidden="true">◇</span>{t("Packs & memberships")}</button>
+      <button type="button" role="tab" aria-selected={activeSection === 'planning'} className={activeSection === 'planning' ? 'active' : ''} onClick={() => { setActiveSection('planning'); setOffersReloadKey((value) => value + 1); void refreshPlanning() }}><span aria-hidden="true">▣</span>{t("Schedule")}</button>
+      <button type="button" role="tab" aria-selected={activeSection === 'offers'} className={activeSection === 'offers' ? 'active' : ''} onClick={() => { setActiveSection('offers'); setOffersReloadKey((value) => value + 1) }}><span aria-hidden="true">◇</span>{t("Packs & memberships")}</button>
       </nav>
 
       {activeSection === 'planning' && <>
@@ -1255,7 +1286,7 @@ function BookingPortalRoute() {
           </> : null}
         </div>
         : needsCredits ? <div className="booking-offers">
-          <div className="booking-no-credit"><strong>{t("Not enough credits")}</strong><span>{t("This class requires {{value0}} credit(s). Your balance is {{value1}}. Here are the plans available to buy.", { value0: selected.creditCost, value1: member.creditBalance })}</span></div>
+          <div className="booking-no-credit"><strong>{t("Not enough credits")}</strong><span>{t("This class requires {{value0}} credit(s). Your balance is {{value1}}. Here are the plans available to buy.", { value0: selected.creditCost, value1: selectedClassBalance?.credits ?? 0 })}</span></div>
           {offersLoading && <p className="booking-confirm-hint">{t("Loading plans…")}</p>}
           {!offersLoading && offers.length === 0 && !offersError && <p className="booking-confirm-hint">{t("No plans are currently available to buy for this studio.")}</p>}
           {offers.map((offer) => renderPricingOffer(offer))}
