@@ -105,9 +105,10 @@ type CurrentContractData = Pick<Booking, 'currentContractName' | 'currentContrac
 function CurrentContractPill({ booking }: { booking: CurrentContractData }) {
   if (!booking.hasCurrentContractBalance) return null
   const balance = booking.currentContractCreditsRemaining === null ? '∞' : String(booking.currentContractCreditsRemaining ?? 0)
-  const title = booking.currentContractName || 'Current contract balance'
-  return <Badge variant="secondary" className="h-6 max-w-full rounded-full border-0 bg-[#eef3e9] px-2.5 text-xs font-medium text-[#4e6545]" title={title} aria-label={`${title}: ${balance}`}>
-    <span className="truncate">{balance}</span>
+  const contractName = booking.currentContractName || 'Credits'
+  const label = `${contractName} · ${balance}`
+  return <Badge variant="secondary" className="h-6 max-w-full rounded-full border-0 bg-[#eef3e9] px-3 text-xs font-medium text-[#4e6545]" title={label} aria-label={label}>
+    <span className="truncate">{label}</span>
   </Badge>
 }
 
