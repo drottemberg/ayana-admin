@@ -376,6 +376,12 @@ function BaseDataTable<TData extends Record<string, unknown>>({
   const [searchParams, setSearchParams] = useSearchParams()
   const searchParamsString = searchParams.toString()
   const shouldSyncQueryParams = Boolean(syncQueryParams && tableKey)
+  const filtersRef = React.useRef(filters)
+  filtersRef.current = filters
+  const initialFiltersRef = React.useRef(initialFilters)
+  initialFiltersRef.current = initialFilters
+  const filterMappingKey = filters.map((filter) => `${filter.id}:${filter.column}`).join('\u0000')
+  const initialFiltersKey = JSON.stringify(initialFilters ?? {})
   const initialQueryState = React.useMemo(() => {
     const currentSearchParams = new URLSearchParams(searchParamsString)
     return shouldSyncQueryParams && hasTableQueryParams(currentSearchParams)
@@ -403,7 +409,7 @@ function BaseDataTable<TData extends Record<string, unknown>>({
     Object.fromEntries((initialSelectedIds ?? []).map((id) => [id, true])),
   )
   const [pagination, setPagination] = React.useState<PaginationState>({
-    pageIndex: 0,
+    pageIndex: Math.max((initialSettings.p ?? 1) - 1, 0),
     pageSize: initialSettings.s ?? pageSize,
   })
   const selectionDragValueRef = React.useRef<boolean | null>(null)
@@ -668,7 +674,7 @@ function BaseDataTable<TData extends Record<string, unknown>>({
       suppressNextQueryParamsWriteRef.current = true
       setGlobalFilter((current) => (current ? '' : current))
       setColumnFilters((current) => {
-        const nextFilters = toColumnFilters(initialFilters, filters)
+        const nextFilters = toColumnFilters(initialFiltersRef.current, filtersRef.current)
         return areColumnFiltersEqual(current, nextFilters) ? current : nextFilters
       })
       setSorting((current) => (current.length ? [] : current))
@@ -679,17 +685,21 @@ function BaseDataTable<TData extends Record<string, unknown>>({
     }
 
     hadTableQueryParamsRef.current = true
+    // The URL is authoritative during navigation (including browser back/forward).
+    // Prevent the writer effect below from replacing it with the previous render's
+    // table state before these parsed values have been applied.
+    suppressNextQueryParamsWriteRef.current = true
 
     const nextState = getInitialDataTableState<TData>({
       tableKey,
       pageSize,
-      initialFilters,
+      initialFilters: initialFiltersRef.current,
       queryState: parseTableQueryParams<TData>(currentSearchParams),
     })
 
     setGlobalFilter((current) => (current === nextState.search ? current : nextState.search))
     setColumnFilters((current) => {
-      const nextFilters = toColumnFilters(nextState.filters, filters)
+      const nextFilters = toColumnFilters(nextState.filters, filtersRef.current)
       return areColumnFiltersEqual(current, nextFilters) ? current : nextFilters
     })
     setSorting((current) => (areSortingStatesEqual(current, nextState.sorting) ? current : nextState.sorting))
@@ -698,7 +708,7 @@ function BaseDataTable<TData extends Record<string, unknown>>({
         ? current
         : nextState.pagination,
     )
-  }, [filters, initialFilters, pageSize, searchParamsString, shouldSyncQueryParams, tableKey])
+  }, [filterMappingKey, initialFiltersKey, pageSize, searchParamsString, shouldSyncQueryParams, tableKey])
 
   React.useEffect(() => {
     const settingsKey = getTableSettingsKey(tableKey)

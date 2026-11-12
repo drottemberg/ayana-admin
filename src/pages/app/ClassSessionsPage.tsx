@@ -14,7 +14,7 @@ import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { ClassSessionListCard, getClassSessionColumns } from '@/features/classes/class-session-columns'
-import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getClassCategoryOptions, getClassFilterOptionsRequest, getClassSessionsRequest, getClassTypeLocationOptions, reactivateClassSessionRequest, resumeClassSessionRequest, withdrawSessionCoachRequest } from '@/features/classes/api'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { deleteClassSessionWithConfirmation } from '@/features/classes/delete-class-session'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
@@ -25,6 +25,7 @@ import { getAppMode } from '@/features/app/app-mode'
 import { Modals } from '@/providers/modal'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import type { ClassSession } from '@/types/class-type'
+import { CustomerRole } from '@/types/membership'
 import { getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
 import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
@@ -96,6 +97,7 @@ export default function ClassSessionsPage() {
   const canResumeSessions = Boolean(session?.permissions.classSessions?.edit)
   const canCreateSessions = Boolean(session?.permissions.classSessions?.create)
   const isInstructor = session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)?.role === 'INSTRUCTOR'
+  const canManageCoachAssignments = !isAdminContext && Boolean(session?.permissions.classSessions?.edit)
   const currentUserId = String(session?.user.id ?? '')
   const [editingSession, setEditingSession] = useState<ClassSession | null>(null)
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
@@ -258,7 +260,12 @@ export default function ClassSessionsPage() {
               onClaim={claimSession}
             />
           )}
-          getRowCommands={(item) => [
+          getRowCommands={(item) => {
+            const membership = session?.user.customerMemberships.find((entry) => entry.customerId === item.customerId)
+            const effectiveRole = membership?.locations?.find((entry) => entry.locationId === (item.locationId ?? item.organizationId))?.role ?? membership?.role
+            const canWithdrawCoach = canManageCoachAssignments
+              && (effectiveRole === CustomerRole.OWNER || effectiveRole === CustomerRole.ADMIN || effectiveRole === CustomerRole.MANAGER)
+            return [
             {
               label: 'View session',
               onClick: () => navigate(`/class-sessions/${item.id}?locationId=${encodeURIComponent(item.locationId ?? item.organizationId)}`),
@@ -330,6 +337,23 @@ export default function ClassSessionsPage() {
                 }
               },
             }] : []),
+            ...(canWithdrawCoach && item.coachId && item.status === 'SCHEDULED' && new Date(item.startTime).getTime() > Date.now() ? [{
+              label: 'Withdraw coach',
+              onClick: async () => {
+                const confirmed = await Modals.confirm({ operation: 'withdraw the coach and request a cover for this session' })
+                if (!confirmed) return
+                try {
+                  await withdrawSessionCoachRequest(item.id, item.locationId ?? item.organizationId)
+                  await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+                    queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+                  ])
+                  toast.success('The coach was withdrawn and qualified coaches were notified to cover this session.')
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : 'Could not withdraw the coach.')
+                }
+              },
+            }] : []),
             ...(isInstructor && item.coachId === currentUserId && item.status === 'SCHEDULED' && new Date(item.startTime).getTime() >= Date.now() ? [{
               label: 'Request cover',
               onClick: async () => {
@@ -347,7 +371,8 @@ export default function ClassSessionsPage() {
                 }
               },
             }] : []),
-          ]}
+          ]
+          }}
           disabledSelection
           toolbarLayout="filters-below"
           searchPlaceholder="Search by class, session, or coach"

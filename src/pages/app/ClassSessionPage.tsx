@@ -8,6 +8,7 @@ import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
 import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
+import UserRemove01Icon from '@hugeicons/core-free-icons/UserRemove01Icon'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +24,7 @@ import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
 import { deleteClassSessionWithConfirmation } from '@/features/classes/delete-class-session'
-import { cancelClassSessionRequest, getAdjacentClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, reactivateClassSessionRequest, resumeClassSessionRequest } from '@/features/classes/api'
+import { cancelClassSessionRequest, getAdjacentClassSessionRequest, getClassBookingsRequest, getClassSessionRequest, reactivateClassSessionRequest, resumeClassSessionRequest, withdrawSessionCoachRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useDetailQuery } from '@/lib/query-hooks'
 import { useConnect } from '@/features/app/use-connect'
@@ -33,6 +34,7 @@ import type { ClassPassScheduleInsight, ClassSession } from '@/types/class-type'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { saveCoachSessionAttendanceRequest } from '@/features/coaches/api'
 import { claimCoachSession } from '@/features/coaches/claim-coach-session'
+import { CustomerRole } from '@/types/membership'
 import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
 import { CoachRosterMemberProfileDrawer } from '@/features/coaches/CoachRosterMemberProfileDrawer'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -160,7 +162,11 @@ export default function ClassSessionPage() {
   const instructorMembership = classSession?.customerId
     ? appSession?.user.customerMemberships.find((membership) => membership.customerId === classSession.customerId)
     : undefined
+  const locationRole = instructorMembership?.locations?.find((entry) => entry.locationId === resolvedLocationId)?.role ?? instructorMembership?.role
   const isInstructorContext = instructorMembership?.role === 'INSTRUCTOR'
+  const canWithdrawCoach = getAppMode() === 'customer'
+    && Boolean(appSession?.permissions.classSessions?.edit)
+    && (locationRole === CustomerRole.OWNER || locationRole === CustomerRole.ADMIN || locationRole === CustomerRole.MANAGER)
   const isAssignedInstructor = instructorMembership?.role === 'INSTRUCTOR'
     && classSession?.coachId === appSession?.user.id
   const attendanceAvailable = Boolean(
@@ -433,6 +439,26 @@ export default function ClassSessionPage() {
           || (String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete)) ? <>
           {(classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') && appSession?.permissions.classSessions?.edit
             ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
+            : null}
+          {canWithdrawCoach && classSession.status === 'SCHEDULED' && classSession.coachId && new Date(classSession.startTime).getTime() > Date.now()
+            ? <PageHeaderIconAction
+                icon={UserRemove01Icon}
+                label="Withdraw coach"
+                onClick={async () => {
+                  const confirmed = await Modals.confirm({ operation: 'withdraw the coach and request a cover for this session' })
+                  if (!confirmed) return
+                  try {
+                    await withdrawSessionCoachRequest(classSession.id, resolvedLocationId)
+                    await Promise.all([
+                      queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+                      queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+                    ])
+                    toast.success('The coach was withdrawn and qualified coaches were notified to cover this session.')
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Could not withdraw the coach.')
+                  }
+                }}
+              />
             : null}
           {(classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
             ? <PageHeaderIconAction icon={CalendarRemove01Icon} label="Cancel session" variant="destructive" onClick={cancelSession} />

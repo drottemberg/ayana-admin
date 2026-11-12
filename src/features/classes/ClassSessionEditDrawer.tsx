@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SelectInput, SelectInputAsync } from '@/components/ui/select-input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { getActiveClassTypeOptionsForLocationRequest, getClassSessionRequest, getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
+import { getActiveClassTypeOptionsForLocationRequest, getClassPassScheduleAvailabilityRequest, getClassSessionRequest, getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
 import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
@@ -54,6 +54,11 @@ export function ClassSessionEditDrawer({
     enabled: Boolean(open && session?.id && locationId),
   })
   const classPassSchedules = sessionDetails?.classPassSchedules ?? session?.classPassSchedules ?? []
+  const { data: hasClassPassIntegration = false } = useQuery({
+    queryKey: ['classpass-session-availability', locationId, classTypeId],
+    queryFn: () => getClassPassScheduleAvailabilityRequest(locationId, classTypeId),
+    enabled: Boolean(open && locationId && classTypeId),
+  })
   const { data: coaches = [], isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['coaches', 'location', locationId, session?.classTypeId],
     queryFn: () => getLocationCoachesRequest(locationId),
@@ -164,11 +169,11 @@ export function ClassSessionEditDrawer({
         <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setStartTime} />
         <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
         <Field label="Capacity"><Input required type="number" min={session?.bookedCount ?? 0} step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
-        {startMoved && hasMappedClassPassSchedule ? <div className="space-y-3 rounded-lg border p-3">
-          <p className="text-sm text-muted-foreground">The current ClassPass schedule will be cancelled because this session is moving.</p>
+        {hasClassPassIntegration && (!hasMappedClassPassSchedule || startMoved) ? <div className="space-y-3 rounded-lg border p-3">
+          {startMoved && hasMappedClassPassSchedule ? <p className="text-sm text-muted-foreground">The current ClassPass schedule will be cancelled because this session is moving.</p> : null}
           <label className="flex items-center gap-2 text-sm font-medium">
             <Checkbox checked={createClassPassSchedule} onCheckedChange={(checked) => setCreateClassPassSchedule(checked === true)} />
-            Create a new ClassPass schedule at the new time
+            {startMoved && hasMappedClassPassSchedule ? 'Create a new ClassPass schedule at the new time' : 'Create this session on ClassPass'}
           </label>
           {createClassPassSchedule ? <Field label="ClassPass spots"><Input required type="number" min="1" step="1" value={classPassSpots || capacity} onChange={(event) => setClassPassSpots(event.target.value)} /></Field> : null}
         </div> : null}

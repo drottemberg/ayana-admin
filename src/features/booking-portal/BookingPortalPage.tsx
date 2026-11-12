@@ -474,9 +474,27 @@ function BookingPortalRoute() {
   const dateWindowStart = Math.max(0, Math.min(selectedDateIndex - 3, sessionDates.length - 7))
   const dateWindow = sessionDates.slice(dateWindowStart, dateWindowStart + 7)
   const selectedDateSessions = sessionsByDate[selectedDate] ?? []
+  const refreshScheduleForDate = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({})) as Schedule & { message?: string | string[] }
+      if (!response.ok) throw new Error(responseMessage(payload, t("This schedule could not be found.")))
+      setSchedule(payload)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("Could not load the schedule."))
+    } finally {
+      setLoading(false)
+    }
+  }
+  const selectDate = (date: string) => {
+    setSelectedDate(date)
+    void refreshScheduleForDate()
+  }
   const moveSelectedDate = (offset: number) => {
     const nextIndex = Math.max(0, Math.min(sessionDates.length - 1, selectedDateIndex + offset))
-    if (sessionDates[nextIndex]) setSelectedDate(sessionDates[nextIndex])
+    if (sessionDates[nextIndex]) selectDate(sessionDates[nextIndex])
   }
   const selectedClassBalance = selected && member ? member.classCreditBalances?.[selected.classTypeId] : undefined
   const needsCredits = Boolean(selected && member && selectedAction === 'book' && !selectedClassBalance?.unlimited && (forcedOfferFlow || (selectedClassBalance?.credits ?? 0) < selected.creditCost))
@@ -1114,7 +1132,7 @@ function BookingPortalRoute() {
             <div className="booking-date-strip">
               {dateWindow.map((date) => {
                 const parts = formatDateParts(date)
-                return <button type="button" key={date} className={`booking-date-option${date === selectedDate ? ' active' : ''}`} aria-pressed={date === selectedDate} onClick={() => setSelectedDate(date)}>
+                return <button type="button" key={date} className={`booking-date-option${date === selectedDate ? ' active' : ''}`} aria-pressed={date === selectedDate} onClick={() => selectDate(date)}>
                   <span>{parts.weekday}</span><strong>{parts.day}</strong>
                 </button>
               })}
