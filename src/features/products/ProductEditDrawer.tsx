@@ -568,7 +568,6 @@ export function ProductEditDrawer({
                             <TextInput
                               label={`Shared price${currency ? ` (${currency})` : ''}`}
                               type="number"
-                              min="0"
                               step="0.01"
                               value={modifier.price}
                               onChange={(event) =>
@@ -578,7 +577,6 @@ export function ProductEditDrawer({
                             <TextInput
                               label={`Product price override${currency ? ` (${currency})` : ''}`}
                               type="number"
-                              min="0"
                               step="0.01"
                               placeholder="Use shared price"
                               value={modifier.priceOverride ?? ''}
