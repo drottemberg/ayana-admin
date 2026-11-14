@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -36,6 +36,10 @@ type AccountFormValues = z.infer<typeof accountFormSchema>
 export default function AccountPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [emailVerificationId, setEmailVerificationId] = useState('')
+  const [emailCode, setEmailCode] = useState('')
+  const [emailVerificationError, setEmailVerificationError] = useState('')
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false)
   const {
     control,
     register,
@@ -53,12 +57,9 @@ export default function AccountPage() {
     },
   })
   const updateAccountMutation = useMutation({
-    mutationFn: (payload: { firstName: string; lastName: string; email: string; phone?: string | null }) =>
+    mutationFn: (payload: { firstName: string; lastName: string; phone?: string | null }) =>
       apiClient.patch('/auth/me', payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: appQueryKeys.connect })
-      toast.success('Profile updated successfully.')
-    },
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: appQueryKeys.connect }),
   })
 
   useEffect(() => {
@@ -76,13 +77,51 @@ export default function AccountPage() {
       await updateAccountMutation.mutateAsync({
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
-        email: values.email.trim(),
         phone: values.phone ? normalizePhone(values.phone) : null,
       })
-    } catch {
-      // error displayed via updateAccountMutation.error
+      if (values.email.trim().toLowerCase() !== user.email?.toLowerCase()) {
+        const result = await apiClient.post<{ verificationId: string }>('/auth/me/email-verification', {
+          email: values.email.trim(),
+        })
+        setEmailVerificationId(result.verificationId)
+        setEmailCode('')
+        setEmailVerificationError('')
+        toast.success('Verification code sent to the new email address.')
+      } else {
+        toast.success('Profile updated successfully.')
+      }
+    } catch (error) {
+      if (error instanceof Error && !updateAccountMutation.error) {
+        setEmailVerificationError(error.message)
+      }
     }
   })
+
+  const verifyEmail = async () => {
+    setEmailVerificationError('')
+    setIsVerifyingEmail(true)
+    try {
+      const result = await apiClient.post<{ success: boolean; message?: string }>('/auth/me/verify-email', {
+        verificationId: emailVerificationId,
+        code: emailCode,
+      })
+      if (!result.success) throw new Error(result.message || 'Email verification failed.')
+      await queryClient.invalidateQueries({ queryKey: appQueryKeys.connect })
+      setEmailVerificationId('')
+      setEmailCode('')
+      reset({
+        firstName: user?.firstName ?? '',
+        lastName: user?.lastName ?? '',
+        email: user?.email ?? '',
+        phone: user?.phone ?? '',
+      })
+      toast.success('Email address verified and updated.')
+    } catch (error) {
+      setEmailVerificationError(error instanceof Error ? error.message : 'Email verification failed.')
+    } finally {
+      setIsVerifyingEmail(false)
+    }
+  }
 
   const errorMessage = updateAccountMutation.error instanceof Error ? updateAccountMutation.error.message : undefined
 
@@ -120,6 +159,24 @@ export default function AccountPage() {
                 error={errors.email?.message}
                 {...register('email')}
               />
+              {emailVerificationId && (
+                  <div className="grid gap-3 rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to the new email. Your account keeps its current email until this code is verified.</p>
+                  <TextInput
+                    label="Verification code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={emailCode}
+                    onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    error={emailVerificationError || undefined}
+                  />
+                  <div className="flex justify-end">
+                    <Button type="button" size="lg" disabled={emailCode.length !== 6 || isVerifyingEmail} loading={isVerifyingEmail} onClick={verifyEmail}>
+                      Verify email
+                    </Button>
+                  </div>
+                </div>
+              )}
               <Controller
                 control={control}
                 name="phone"
@@ -140,7 +197,7 @@ export default function AccountPage() {
             </FieldGroup>
 
             <div className="flex flex-col gap-3">
-              <FormError message={errorMessage} />
+              <FormError message={errorMessage || (!emailVerificationId ? emailVerificationError : undefined)} />
               <div className="flex justify-end gap-3">
                 <Button
                   type="button"
