@@ -180,6 +180,11 @@ const data = {
       feature: Feature.LLM_CONFIG,
     },
     {
+      title: 'System settings',
+      url: '/platform-settings',
+      icon: <Icon icon={EntityIcon.deviceTypes} />,
+    },
+    {
       title: 'Integrations',
       url: '/integrations',
       icon: <Icon icon={EntityIcon.devices} />,
@@ -233,6 +238,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     () => data.settings.filter((item) =>
       canUseFeature(item, hasFeature)
       && (item.title !== 'Integrations' || getAppMode() === 'customer')
+      && (item.title !== 'System settings' || getAppMode() === 'admin')
       && (item.title !== 'Settings' || (getAppMode() === 'customer' && Boolean(session?.permissions.organization?.editSelf))),
     ),
     [hasFeature, session?.permissions.organization?.editSelf],
