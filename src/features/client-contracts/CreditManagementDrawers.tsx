@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { MultiselectInput, MultiselectInputAsync, SelectInput, SelectInputAsync } from '@/components/ui/select-input'
 import { Spinner } from '@/components/ui/spinner'
@@ -92,8 +93,9 @@ export function GrantCreditsDrawer({
       description="Add credits to the selected active client contracts."
       contentClassName="sm:max-w-xl"
     >
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+      {({ containerRef }) => (
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
           <div className="rounded-lg border p-3 text-sm">
             <div className="font-medium">{contracts.length} contract(s) · {recipients.length} user(s)</div>
             <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-muted-foreground">
@@ -108,23 +110,26 @@ export function GrantCreditsDrawer({
             <span>Credits to add to each contract</span>
             <Input required type="number" min="0.01" max="1000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            <span>Expiration date (optional)</span>
-            <Input type="date" value={expirationDate} onChange={(event) => setExpirationDate(event.target.value)} />
-            <span className="text-xs font-normal text-muted-foreground">Leave empty if these credits should never expire.</span>
-          </label>
+          <DatePicker
+            label="Expiration date (optional)"
+            hint="Leave empty if these credits should never expire."
+            value={expirationDate}
+            onValueChange={setExpirationDate}
+            container={containerRef}
+          />
           <label className="grid gap-1.5 text-sm font-medium">
             <span>Reason</span>
             <Textarea required minLength={3} maxLength={500} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Goodwill gesture, service recovery…" />
           </label>
-        </div>
-        <div className="flex justify-end gap-2 border-t p-4">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" disabled={grant.isPending || !contracts.length}>
-            {grant.isPending ? <><Spinner /> Granting…</> : 'Grant credits'}
-          </Button>
-        </div>
-      </form>
+          </div>
+          <div className="flex justify-end gap-2 border-t p-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={grant.isPending || !contracts.length}>
+              {grant.isPending ? <><Spinner /> Granting…</> : 'Grant credits'}
+            </Button>
+          </div>
+        </form>
+      )}
     </AppDrawer>
   )
 }
@@ -325,11 +330,15 @@ export function GiftCreditsDrawer({
               <span>Credits per person</span>
               <Input required type="number" min="0.01" max="1000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
             </label>
-            {operation === 'ADD' ? <label className="grid gap-1.5 text-sm font-medium">
-              <span>Expiration date (optional)</span>
-              <Input type="date" value={expirationDate} onChange={(event) => setExpirationDate(event.target.value)} />
-              <span className="text-xs font-normal text-muted-foreground">Leave empty if these credits should never expire.</span>
-            </label> : null}
+            {operation === 'ADD' ? (
+              <DatePicker
+                label="Expiration date (optional)"
+                hint="Leave empty if these credits should never expire."
+                value={expirationDate}
+                onValueChange={setExpirationDate}
+                container={containerRef}
+              />
+            ) : null}
             <label className="grid gap-1.5 text-sm font-medium">
               <span>Reason</span>
               <Textarea required minLength={3} maxLength={500} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Goodwill gesture, service recovery…" />

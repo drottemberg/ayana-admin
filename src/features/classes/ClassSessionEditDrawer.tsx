@@ -14,6 +14,8 @@ import type { ClassSession } from '@/types/class-type'
 import type { ClassType } from '@/types/class-type'
 import { classSessionLocalInputToIso, toClassSessionLocalInput } from '@/features/classes/time-zone'
 import { ClassSessionDateTimeField } from '@/features/classes/ClassSessionDateTimeField'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import type { UpdateClassSessionPayload } from '@/features/classes/api'
 
 const NO_COACH_VALUE = '__no_coach__'
 const SCHEDULE_COACH_VALUE = '__schedule_coach__'
@@ -48,6 +50,7 @@ export function ClassSessionEditDrawer({
   const [coachName, setCoachName] = useState('')
   const [roomId, setRoomId] = useState(NO_ROOM_VALUE)
   const [isSaving, setIsSaving] = useState(false)
+  const [pendingUpdate, setPendingUpdate] = useState<UpdateClassSessionPayload | null>(null)
   const { data: sessionDetails, isLoading: isLoadingSessionDetails } = useQuery<ClassSession>({
     queryKey: ['class-sessions', 'detail', locationId, session?.id],
     queryFn: () => getClassSessionRequest(session!.id, locationId),
@@ -95,6 +98,22 @@ export function ClassSessionEditDrawer({
   const hasMappedClassPassSchedule = classPassSchedules.length > 0
   const pastSession = Boolean(session && (session.status === 'COMPLETED' || new Date(session.endTime).getTime() <= Date.now()))
 
+  const saveChanges = async (payload: UpdateClassSessionPayload, applyToFuture: boolean) => {
+    if (!session) return
+    setIsSaving(true)
+    try {
+      await updateClassSessionRequest(session.id, locationId, { ...payload, ...(session.scheduleId ? { applyToFuture } : {}) })
+      await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
+      toast.success('Class session updated.')
+      setPendingUpdate(null)
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the class session.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!session) return
@@ -114,34 +133,29 @@ export function ClassSessionEditDrawer({
       return
     }
 
-    setIsSaving(true)
-    try {
-      await updateClassSessionRequest(session.id, locationId, pastSession ? {
-        coachId: coachId === NO_COACH_VALUE ? null : coachId,
-        coachName: coachName.trim() || null,
-      } : {
-        classTypeId,
-        startTime: startIso,
-        endTime: endIso,
-        capacity: capacityValue,
-        coachId: coachId === SCHEDULE_COACH_VALUE || coachId === NO_COACH_VALUE ? null : coachId,
-        coachName: coachName.trim() || null,
-        useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
-        roomId: roomId === SCHEDULE_ROOM_VALUE || roomId === NO_ROOM_VALUE ? null : roomId,
-        useScheduleRoom: roomId === SCHEDULE_ROOM_VALUE,
-        ...(startMoved && hasMappedClassPassSchedule ? {
-          createClassPassSchedule,
-          ...(createClassPassSchedule ? { classPassSpots: Number(classPassSpots || capacityValue) } : {}),
-        } : {}),
-      })
-      await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
-      toast.success('Class session updated.')
-      onOpenChange(false)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not update the class session.')
-    } finally {
-      setIsSaving(false)
+    const payload: UpdateClassSessionPayload = pastSession ? {
+      coachId: coachId === NO_COACH_VALUE ? null : coachId,
+      coachName: coachName.trim() || null,
+    } : {
+      classTypeId,
+      startTime: startIso,
+      endTime: endIso,
+      capacity: capacityValue,
+      coachId: coachId === SCHEDULE_COACH_VALUE || coachId === NO_COACH_VALUE ? null : coachId,
+      coachName: coachName.trim() || null,
+      useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
+      roomId: roomId === SCHEDULE_ROOM_VALUE || roomId === NO_ROOM_VALUE ? null : roomId,
+      useScheduleRoom: roomId === SCHEDULE_ROOM_VALUE,
+      ...(startMoved && hasMappedClassPassSchedule ? {
+        createClassPassSchedule,
+        ...(createClassPassSchedule ? { classPassSpots: Number(classPassSpots || capacityValue) } : {}),
+      } : {}),
     }
+    if (session.scheduleId && !pastSession) {
+      setPendingUpdate(payload)
+      return
+    }
+    await saveChanges(payload, false)
   }
 
   return <AppDrawer
@@ -223,5 +237,23 @@ export function ClassSessionEditDrawer({
         <Button type="submit" disabled={isSaving || isLoadingSessionDetails || !session}>{isSaving ? 'Saving…' : 'Save changes'}</Button>
       </div>
     </form>
+    <Dialog open={Boolean(pendingUpdate)} onOpenChange={(nextOpen) => { if (!nextOpen && !isSaving) setPendingUpdate(null) }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader showCloseButton>
+          <DialogTitle>Apply changes to future sessions?</DialogTitle>
+          <DialogDescription>
+            Choose whether these changes apply only to this session or to this and all upcoming sessions in the same schedule. Members booked on changed sessions will be notified.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="sm:justify-end">
+          <Button type="button" variant="outline" disabled={isSaving} onClick={() => { if (pendingUpdate) void saveChanges(pendingUpdate, false) }}>
+            {isSaving ? 'Saving…' : 'Only this session'}
+          </Button>
+          <Button type="button" disabled={isSaving} onClick={() => { if (pendingUpdate) void saveChanges(pendingUpdate, true) }}>
+            {isSaving ? 'Saving…' : 'This and future sessions'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </AppDrawer>
 }

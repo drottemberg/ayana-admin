@@ -142,6 +142,7 @@ export async function getAdjacentClassSessionRequest(
 }
 
 export type UpdateClassSessionPayload = {
+  applyToFuture?: boolean
   classTypeId?: string
   startTime?: string
   endTime?: string
