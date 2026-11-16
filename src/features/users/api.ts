@@ -54,6 +54,7 @@ type UserRecord = {
 export type UserMarketingPreference = {
   customerId: string
   customerName: string
+  optedIn: boolean
   optedOut: boolean
   optedOutAt: string | null
   source: string | null
@@ -232,8 +233,8 @@ export async function getUserMarketingPreferencesRequest(userId: string): Promis
 export async function updateUserMarketingPreferenceRequest(
   userId: string,
   input: { customerId: string; optedOut: boolean },
-): Promise<{ customerId: string; optedOut: boolean; optedOutAt: string | null; source: string | null }> {
-  return apiClient.patch<{ customerId: string; optedOut: boolean; optedOutAt: string | null; source: string | null }>(`/users/${userId}/marketing-preferences`, input)
+): Promise<{ customerId: string; optedIn: boolean; optedOut: boolean; optedOutAt: string | null; source: string | null }> {
+  return apiClient.patch<{ customerId: string; optedIn: boolean; optedOut: boolean; optedOutAt: string | null; source: string | null }>(`/users/${userId}/marketing-preferences`, input)
 }
 
 export async function createUserRequest(payload: CreateUserPayload): Promise<User> {

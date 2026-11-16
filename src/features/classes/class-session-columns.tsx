@@ -118,6 +118,7 @@ export function getClassSessionColumns(options: {
       cell: ({ row }) => <Link className="font-medium underline-offset-2 hover:underline" to={`/class-sessions/${row.original.id}?locationId=${encodeURIComponent(row.original.locationId ?? row.original.organizationId)}`}>{row.original.className || row.original.classTypeId}</Link>,
     },
     { accessorKey: 'classCategory', header: 'Category', cell: ({ row }) => row.original.classCategory || NO_VALUE_STR },
+    { accessorKey: 'creditCost', header: 'Credits', cell: ({ row }) => row.original.creditCost ?? NO_VALUE_STR },
     { accessorKey: 'type', header: 'Format', cell: ({ row }) => sessionTypeLabels[row.original.type] ?? row.original.type },
     {
       accessorKey: 'startTime', header: 'Starts',

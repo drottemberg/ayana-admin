@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom'
-import ayanaLogo from '@/assets/ayana-logo.png'
+import ayanaLogo from '@/assets/logo.png'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { createPublicAccessLink, type PublicAccessChannel } from '@/lib/public-access'
 import './storefront.css'
