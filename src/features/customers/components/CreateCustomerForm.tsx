@@ -68,6 +68,23 @@ const customerFormSchema = z.object({
 
 type CustomerFormValues = z.infer<typeof customerFormSchema>
 
+function customerFormDefaults(customer?: Customer): CustomerFormValues {
+  return {
+    name: customer?.name ?? '',
+    slug: customer?.slug ?? '',
+    email: customer?.email ?? '',
+    phone: customer?.phone ?? '',
+    timezone: customer?.timezone ?? '',
+    currency: customer?.currency ?? 'EUR',
+    description: customer?.description ?? '',
+    contactName: customer?.contactName ?? '',
+    contactEmail: customer?.contactEmail ?? '',
+    contactPhone: customer?.contactPhone ?? '',
+    websiteUrl: customer?.websiteUrl ?? '',
+    instagramUrl: customer?.instagramUrl ?? '',
+  }
+}
+
 const timezoneItems: SelectInputItem[] = TimezoneUtils.getTimezones().map((timezone) => ({
   value: timezone.name,
   label: TimezoneUtils.getTimezoneLabel(timezone),
@@ -142,25 +159,17 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
     control,
     register,
     handleSubmit,
+    reset,
     formState: { errors, isDirty, isSubmitting, isValid },
   } = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
     mode: 'onChange',
-    defaultValues: {
-      name: customer?.name ?? '',
-      slug: customer?.slug ?? '',
-      email: customer?.email ?? '',
-      phone: customer?.phone ?? '',
-      timezone: customer?.timezone ?? '',
-      currency: customer?.currency ?? 'EUR',
-      description: customer?.description ?? '',
-      contactName: customer?.contactName ?? '',
-      contactEmail: customer?.contactEmail ?? '',
-      contactPhone: customer?.contactPhone ?? '',
-      websiteUrl: customer?.websiteUrl ?? '',
-      instagramUrl: customer?.instagramUrl ?? '',
-    },
+    defaultValues: customerFormDefaults(customer),
   })
+
+  useEffect(() => {
+    reset(customerFormDefaults(customer))
+  }, [customer, reset])
 
   useEffect(() => {
     setBrandingDraft({})

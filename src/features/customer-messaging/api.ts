@@ -256,3 +256,18 @@ export async function sendCustomerBroadcastRequest(input: {
     body,
   )
 }
+
+export async function sendCustomerBroadcastTestEmailRequest(input: {
+  customerId: string
+  to: string
+  subject: string
+  message: string
+  files: File[]
+}): Promise<{ queued: boolean; to: string }> {
+  const body = new FormData()
+  body.append('to', input.to.trim())
+  body.append('subject', input.subject.trim())
+  body.append('message', input.message)
+  input.files.forEach((file) => body.append('files', file, file.name))
+  return apiClient.post(`/messaging/broadcast/customers/${input.customerId}/test-email`, body)
+}

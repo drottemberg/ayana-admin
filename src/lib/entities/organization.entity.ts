@@ -28,6 +28,8 @@ export type OrganizationShortDto = {
   status?: string | null
   parentId?: string | null
   parent?: OrganizationShortDto | null
+  websiteUrl?: string | null
+  instagramUrl?: string | null
   isActive?: boolean | null
   isMaster?: boolean | null
   isCustomer?: boolean | null
@@ -144,6 +146,8 @@ export class OrganizationEntity {
       isDeleted: this.dto.isDeleted ?? false,
       email: this.email,
       phone: this.phone,
+      websiteUrl: this.dto.websiteUrl ?? undefined,
+      instagramUrl: this.dto.instagramUrl ?? undefined,
       timezone: this.timezone,
       users: this.users,
       stores: this.stores,

@@ -31,6 +31,7 @@ import {
   retryBroadcastCampaignRequest,
   getCustomerBroadcastAudienceRequest,
   sendCustomerBroadcastRequest,
+  sendCustomerBroadcastTestEmailRequest,
   type BroadcastActivity,
   type BroadcastAudienceFilters,
   type BroadcastChannel,
@@ -67,6 +68,7 @@ export default function MessagesPage() {
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
   const [emailSubject, setEmailSubject] = useState('')
+  const [testEmail, setTestEmail] = useState('')
   const [message, setMessage] = useState('')
   const [replyButtons, setReplyButtons] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
@@ -203,6 +205,11 @@ export default function MessagesPage() {
       setMode('DETAIL')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not send the message.'),
+  })
+  const sendTestEmailMutation = useMutation({
+    mutationFn: () => sendCustomerBroadcastTestEmailRequest({ customerId, to: testEmail, subject: emailSubject, message, files }),
+    onSuccess: ({ to }) => toast.success(`Test email queued for ${to}.`),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not send the test email.'),
   })
   const retryCampaignMutation = useMutation({
     mutationFn: retryBroadcastCampaignRequest,
@@ -778,10 +785,16 @@ export default function MessagesPage() {
                 </fieldset>
               ) : null}
               {selectedChannels.includes('EMAIL') ? (
-                <label className="grid gap-1.5 text-sm font-medium">
-                  <span>Email subject</span>
-                  <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
-                </label>
+                <div className="grid gap-3">
+                  <label className="grid gap-1.5 text-sm font-medium">
+                    <span>Email subject</span>
+                    <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-medium">
+                    <span>Test email address</span>
+                    <Input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} maxLength={254} placeholder="you@example.com" />
+                  </label>
+                </div>
               ) : null}
               <label className="grid gap-1.5 text-sm font-medium">
                 <span>Message</span>
@@ -838,6 +851,14 @@ export default function MessagesPage() {
                 </p>
               ) : null}
               <div className="flex justify-end border-t border-border pt-3">
+                <div className="flex flex-wrap justify-end gap-2">
+                {selectedChannels.includes('EMAIL') ? <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => sendTestEmailMutation.mutate()}
+                  loading={sendTestEmailMutation.isPending}
+                  disabled={!customerId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.trim()) || !emailSubject.trim() || (!message.trim() && !files.length)}
+                >Send test email</Button> : null}
                 <Button
                   onClick={handleSend}
                   loading={sendMutation.isPending}
@@ -845,6 +866,7 @@ export default function MessagesPage() {
                 >
                   Send to {selectedChatCount} chat channels + {selectedEmailCount} emails
                 </Button>
+                </div>
               </div>
             </section>
           </div>
