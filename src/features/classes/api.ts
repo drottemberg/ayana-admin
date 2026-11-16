@@ -171,6 +171,12 @@ export async function updateClassSessionRequest(id: string, locationId: string, 
   })
 }
 
+export async function updateClassSessionCreditOverrideRequest(id: string, locationId: string, creditCostOverride: number | null) {
+  return apiClient.patch<ClassSession>(`/class-sessions/${encodeURIComponent(id)}/credit-cost-override`, { creditCostOverride }, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
 export type CreateClassSessionPayload = {
   classTypeId: string
   coachId?: string | null

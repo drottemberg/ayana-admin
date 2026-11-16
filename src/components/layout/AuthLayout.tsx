@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import logoImg from '@/assets/logo.svg'
+import logoImg from '@/assets/logo.png'
 import { AppModeBadge } from '@/components/app/AppModeBadge'
 
 type AuthLayoutProps = {
@@ -21,7 +21,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
       </div>
 
       <footer className="text-body-small flex pb-2 text-center text-[--primary-light]">
-        <span>© Ayana {currentYear}</span>
+        <span>© AYANA ONE {currentYear}</span>
         <span className="mx-2">|</span>
         <a href="/privacy" className="underline underline-offset-2">
           Privacy & legal

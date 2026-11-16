@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import logo from '@/assets/logo.svg'
+import logo from '@/assets/logo.png'
 import ayanaPictogram from '@/assets/pictogram.png'
 import { AppModeBadge } from '@/components/app/AppModeBadge'
 import { NavMain } from '@/components/nav-main'

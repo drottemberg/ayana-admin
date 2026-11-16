@@ -45,6 +45,9 @@ export type ClassSession = {
   classTypeId: string
   className?: string | null
   classCategory?: string | null
+  creditCost?: number | string
+  creditCostOverride?: number | string | null
+  classCreditCost?: number | string
   coachId?: string | null
   coachName?: string | null
   coachCustomName?: string | null

@@ -21,6 +21,7 @@ import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
 import { getCampaignColumns } from '@/features/customer-messaging/campaign-columns'
+import { CampaignMessageEditor } from '@/features/customer-messaging/CampaignMessageEditor'
 import {
   getBroadcastCustomerOptions,
   getApprovedWhatsappTemplatesRequest,
@@ -673,6 +674,7 @@ export default function MessagesPage() {
                   <p className="text-sm text-muted-foreground">
                     {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.length} chat channels · ${availableEmailCount} with email`}
                   </p>
+                  <p className="text-xs text-muted-foreground">Only users opted in to campaigns for this customer are listed.</p>
                   {selectedWhatsappRecipients.length ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       WhatsApp: {selectedWhatsappRecipients.length - selectedWhatsappOutsideWindow} direct message(s) · {selectedWhatsappOutsideWindow} approved-template fallback(s) needed.
@@ -898,20 +900,20 @@ export default function MessagesPage() {
               {selectedChannels.includes('EMAIL') ? (
                 <div className="grid gap-3">
                   <label className="grid gap-1.5 text-sm font-medium">
-                    <span>Email subject</span>
-                    <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
-                  </label>
-                  <label className="grid gap-1.5 text-sm font-medium">
                     <span>Test email address</span>
                     <Input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} maxLength={254} placeholder="you@example.com" />
                   </label>
+                  <label className="grid gap-1.5 text-sm font-medium">
+                    <span>Email subject</span>
+                    <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
+                  </label>
                 </div>
               ) : null}
-              <label className="grid gap-1.5 text-sm font-medium">
+              <div className="grid gap-1.5 text-sm font-medium">
                 <span>Message</span>
-                <Textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={4096} rows={6} placeholder="Write your message..." />
+                <CampaignMessageEditor value={message} onChange={setMessage} maxLength={4096} />
                 <span className="text-right text-xs font-normal text-muted-foreground">{message.length}/4096</span>
-              </label>
+              </div>
               {selectedChannels.some((channel) => channel === 'WHATSAPP' || channel === 'TELEGRAM') ? (
                 <fieldset className="grid gap-3 rounded-lg border border-border p-3">
                   <legend className="px-1 text-sm font-medium">Reply buttons · WhatsApp and Telegram</legend>
@@ -1020,7 +1022,7 @@ function CampaignDetailPage({
     enabled: Boolean(detail?.customerId),
   })
   const locationNames = new Map((locationsQuery.data ?? []).map((location) => [location.id, location.name]))
-  const sentCount = (detail?.counts.ACCEPTED ?? 0) + (detail?.counts.SENT ?? 0) + (detail?.counts.DELIVERED ?? 0) + (detail?.counts.READ ?? 0)
+  const sentCount = (detail?.counts.SENT ?? 0) + (detail?.counts.DELIVERED ?? 0) + (detail?.counts.READ ?? 0)
   const sideSections: DetailPanelSection[] = detail ? [{
     title: 'Campaign',
     fields: [
@@ -1029,7 +1031,8 @@ function CampaignDetailPage({
       { label: 'Customer', value: detail.customerName ? <Link to={`/customers/${detail.customerId}`} className="underline-offset-2 hover:underline">{detail.customerName}</Link> : detail.customerId },
       { label: 'Created', value: new Date(detail.createdAt).toLocaleString() },
       { label: 'Recipients', value: detail.total },
-      { label: 'Accepted', value: sentCount },
+      { label: 'Accepted by queue', value: detail.counts.ACCEPTED ?? 0 },
+      { label: 'Sent', value: sentCount },
       { label: 'Failed', value: detail.counts.FAILED ?? 0 },
       { label: 'Suppressed', value: detail.counts.SUPPRESSED ?? 0 },
       { label: 'Channels', value: (detail.filters?.channels ?? []).map(channelLabel).join(', ') || 'All channels' },

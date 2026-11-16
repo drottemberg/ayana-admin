@@ -620,7 +620,7 @@ function MarketingMessagesModule({
       <CardHeader>
         <CardTitle>Marketing messages</CardTitle>
         <CardDescription>
-          Opting out stops bulk campaigns for that customer. Transactional messages such as booking and order updates remain enabled.
+          Only opted-in users receive bulk campaigns for that customer. Transactional messages such as booking and order updates remain enabled.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -661,16 +661,16 @@ function MarketingMessagesModule({
             <span className="min-w-0">
               <span className="block truncate font-medium">{preference.customerName}</span>
               <span className="block text-muted-foreground">
-                {preference.optedOut ? 'Excluded from bulk campaigns' : 'Included in eligible bulk campaigns'}
+                {preference.optedIn ? 'Opted in to bulk campaigns' : preference.optedOut ? 'Opted out of bulk campaigns' : 'Not opted in · excluded from bulk campaigns'}
               </span>
             </span>
             <input
-              aria-label={`Opt out of bulk campaigns from ${preference.customerName}`}
+              aria-label={`Opt in to bulk campaigns from ${preference.customerName}`}
               type="checkbox"
               className="size-5 shrink-0 accent-primary"
-              checked={preference.optedOut}
+              checked={preference.optedIn}
               disabled={updatePreference.isPending}
-              onChange={(event) => updatePreference.mutate({ customerId: preference.customerId, optedOut: event.currentTarget.checked })}
+              onChange={(event) => updatePreference.mutate({ customerId: preference.customerId, optedOut: !event.currentTarget.checked })}
             />
           </label>
         ))}

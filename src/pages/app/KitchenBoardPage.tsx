@@ -14,7 +14,7 @@ import type { Customer } from '@/types/customer'
 import { apiClient, AUTH_TOKEN_REFRESHED_EVENT_NAME } from '@/lib/api-client'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
-import ayanaLogo from '@/assets/ayana-logo.png'
+import ayanaLogo from '@/assets/logo.png'
 import './KitchenBoardPage.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'

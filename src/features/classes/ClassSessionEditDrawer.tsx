@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SelectInput, SelectInputAsync } from '@/components/ui/select-input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { getActiveClassTypeOptionsForLocationRequest, getClassPassScheduleAvailabilityRequest, getClassSessionRequest, getLocationCoachesRequest, updateClassSessionRequest } from '@/features/classes/api'
+import { getActiveClassTypeOptionsForLocationRequest, getClassPassScheduleAvailabilityRequest, getClassSessionRequest, getLocationCoachesRequest, updateClassSessionCreditOverrideRequest, updateClassSessionRequest } from '@/features/classes/api'
 import { getLocationRoomsRequest, type Room } from '@/features/rooms/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import type { ClassSession } from '@/types/class-type'
@@ -43,6 +43,7 @@ export function ClassSessionEditDrawer({
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [capacity, setCapacity] = useState('')
+  const [creditCostOverride, setCreditCostOverride] = useState('')
   const [createClassPassSchedule, setCreateClassPassSchedule] = useState(false)
   const [classPassSpots, setClassPassSpots] = useState('')
   const [classTypeId, setClassTypeId] = useState('')
@@ -78,6 +79,7 @@ export function ClassSessionEditDrawer({
     setStartTime(toClassSessionLocalInput(session.startTime, timeZone))
     setEndTime(toClassSessionLocalInput(session.endTime, timeZone))
     setCapacity(String(session.capacity))
+    setCreditCostOverride(session.creditCostOverride == null ? '' : String(session.creditCostOverride))
     setCreateClassPassSchedule(false)
     setClassPassSpots(String(session.capacity))
     setClassTypeId(session.classTypeId)
@@ -86,6 +88,11 @@ export function ClassSessionEditDrawer({
     setCoachName(isPast ? session.coachCustomName ?? session.coachName ?? '' : session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
     setRoomId(session.scheduleId && !session.roomOverride ? SCHEDULE_ROOM_VALUE : session.roomId ?? NO_ROOM_VALUE)
   }, [open, session, timeZone])
+
+  useEffect(() => {
+    if (!open || !sessionDetails) return
+    setCreditCostOverride(sessionDetails.creditCostOverride == null ? '' : String(sessionDetails.creditCostOverride))
+  }, [open, sessionDetails])
 
   let startMoved = false
   if (session && startTime) {
@@ -100,10 +107,20 @@ export function ClassSessionEditDrawer({
 
   const saveChanges = async (payload: UpdateClassSessionPayload, applyToFuture: boolean) => {
     if (!session) return
+    const creditCost = creditCostOverride.trim() ? Number(creditCostOverride) : null
+    if (creditCost !== null && (!Number.isFinite(creditCost) || creditCost < 0 || Math.round(creditCost * 100) !== creditCost * 100)) {
+      toast.error('Enter a non-negative credit amount with at most two decimal places.')
+      return
+    }
     setIsSaving(true)
     try {
       await updateClassSessionRequest(session.id, locationId, { ...payload, ...(session.scheduleId ? { applyToFuture } : {}) })
+      const savedCreditCost = sessionDetails?.creditCostOverride ?? session.creditCostOverride ?? null
+      if (creditCost !== savedCreditCost) {
+        await updateClassSessionCreditOverrideRequest(session.id, locationId, creditCost)
+      }
       await queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all })
+      await queryClient.invalidateQueries({ queryKey: ['class-sessions', 'detail', locationId, session.id] })
       toast.success('Class session updated.')
       setPendingUpdate(null)
       onOpenChange(false)
@@ -183,6 +200,10 @@ export function ClassSessionEditDrawer({
         <ClassSessionDateTimeField label="Starts" value={startTime} onValueChange={setStartTime} />
         <ClassSessionDateTimeField label="Ends" value={endTime} onValueChange={setEndTime} />
         <Field label="Capacity"><Input required type="number" min={session?.bookedCount ?? 0} step="1" value={capacity} onChange={(event) => setCapacity(event.target.value)} /></Field>
+        <div className="grid gap-2 rounded-lg border p-3">
+          <Field label="Credits for this session"><Input type="number" min="0" step="0.01" value={creditCostOverride} onChange={(event) => setCreditCostOverride(event.target.value)} placeholder={`Class default: ${sessionDetails?.classCreditCost ?? session?.classCreditCost ?? '—'}`} /></Field>
+          <p className="text-xs text-muted-foreground">Set a session-only override. Leave empty to use the class default. The value is saved with the form and does not notify members.</p>
+        </div>
         {hasClassPassIntegration && (!hasMappedClassPassSchedule || startMoved) ? <div className="space-y-3 rounded-lg border p-3">
           {startMoved && hasMappedClassPassSchedule ? <p className="text-sm text-muted-foreground">The current ClassPass schedule will be cancelled because this session is moving.</p> : null}
           <label className="flex items-center gap-2 text-sm font-medium">
