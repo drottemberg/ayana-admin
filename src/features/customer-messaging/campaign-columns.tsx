@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import type { BroadcastHistoryItem } from '@/features/customer-messaging/api'
 
-export function getCampaignColumns(onOpen: (campaignId: string) => void): ColumnDef<BroadcastHistoryItem>[] {
+export function getCampaignColumns(onOpen: (campaign: BroadcastHistoryItem) => void): ColumnDef<BroadcastHistoryItem>[] {
   return [
     {
       accessorKey: 'status',
@@ -16,7 +16,7 @@ export function getCampaignColumns(onOpen: (campaignId: string) => void): Column
       header: 'Campaign',
       cell: ({ row }) => (
         <div className="grid min-w-40 gap-0.5">
-          <button type="button" className="w-fit max-w-full truncate text-left font-medium underline-offset-2 hover:underline" onClick={() => onOpen(row.original.id)}>
+          <button type="button" className="w-fit max-w-full truncate text-left font-medium underline-offset-2 hover:underline" onClick={() => onOpen(row.original)}>
             {row.original.message || 'Image campaign'}
           </button>
           <span className="text-xs text-muted-foreground">{row.original.id}</span>
@@ -55,8 +55,8 @@ export function getCampaignColumns(onOpen: (campaignId: string) => void): Column
 }
 
 function CampaignStatus({ status }: { status: BroadcastHistoryItem['status'] }) {
-  const variant = status === 'FAILED' ? 'destructive' : status === 'SENDING' ? 'outline' : status === 'PARTIAL' ? 'secondary' : 'default'
-  return <Badge variant={variant}>{({ SENDING: 'Sending', SENT: 'Sent', PARTIAL: 'Partial', FAILED: 'Failed' } as const)[status]}</Badge>
+  const variant = status === 'FAILED' ? 'destructive' : status === 'SENDING' || status === 'DRAFT' ? 'outline' : status === 'PARTIAL' ? 'secondary' : 'default'
+  return <Badge variant={variant}>{({ DRAFT: 'Draft', SENDING: 'Sending', SENT: 'Sent', PARTIAL: 'Partial', FAILED: 'Failed' } as const)[status]}</Badge>
 }
 
 function activityLabel(activity: string) {

@@ -99,7 +99,7 @@ export type BroadcastHistoryItem = Record<string, unknown> & {
   id: string
   customerId: string
   customerName: string | null
-  status: 'SENDING' | 'SENT' | 'PARTIAL' | 'FAILED'
+  status: 'DRAFT' | 'SENDING' | 'SENT' | 'PARTIAL' | 'FAILED'
   message: string
   media: Array<{ name: string; mimeType: string; size: number; url: string }>
   createdAt: string
@@ -178,6 +178,34 @@ export async function getCustomerBroadcastHistoryRequest(customerId: string): Pr
   return apiClient.get<BroadcastHistoryItem[]>(`/messaging/broadcast/customers/${customerId}/history`)
 }
 
+export type CustomerBroadcastDraft = {
+  id: string
+  customerId: string
+  message: string
+  filters: Record<string, unknown>
+  media: Array<{ name: string; mimeType: string; size: number }>
+  updatedAt: string
+}
+
+export async function getCustomerBroadcastDraftRequest(customerId: string): Promise<CustomerBroadcastDraft | null> {
+  return apiClient.get<CustomerBroadcastDraft | null>(`/messaging/broadcast/customers/${customerId}/draft`)
+}
+
+export async function getCustomerBroadcastDraftMediaRequest(customerId: string, draftId: string, index: number): Promise<Blob> {
+  return apiClient.get<Blob>(`/messaging/broadcast/customers/${customerId}/draft/${draftId}/media/${index}`, { responseType: 'blob' })
+}
+
+export async function saveCustomerBroadcastDraftRequest(customerId: string, draft: Record<string, unknown>, files: File[]): Promise<CustomerBroadcastDraft> {
+  const body = new FormData()
+  body.append('draft', JSON.stringify(draft))
+  files.forEach((file) => body.append('files', file, file.name))
+  return apiClient.post<CustomerBroadcastDraft>(`/messaging/broadcast/customers/${customerId}/draft`, body)
+}
+
+export async function deleteCustomerBroadcastDraftRequest(customerId: string): Promise<{ deleted: boolean }> {
+  return apiClient.delete<{ deleted: boolean }>(`/messaging/broadcast/customers/${customerId}/draft`)
+}
+
 export async function getCustomerBroadcastHistoryDetailRequest(customerId: string, broadcastId: string): Promise<BroadcastHistoryDetail> {
   return apiClient.get<BroadcastHistoryDetail>(`/messaging/broadcast/customers/${customerId}/history/${broadcastId}`)
 }
@@ -224,6 +252,7 @@ export async function createWhatsappTemplateFromLibraryRequest(input: {
 export async function sendCustomerBroadcastRequest(input: {
   customerId: string
   idempotencyKey: string
+  draftId?: string
   recipientIds: string[]
   filters: BroadcastAudienceFilters
   channels: BroadcastChannel[]
@@ -235,6 +264,7 @@ export async function sendCustomerBroadcastRequest(input: {
 }): Promise<BroadcastSendResult> {
   const body = new FormData()
   body.append('idempotencyKey', input.idempotencyKey)
+  if (input.draftId) body.append('draftId', input.draftId)
   body.append('recipientIds', JSON.stringify(input.recipientIds))
   body.append('locationIds', JSON.stringify(input.filters.locationIds))
   body.append('activity', input.filters.activity)

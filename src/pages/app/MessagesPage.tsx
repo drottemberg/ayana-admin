@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -30,6 +30,10 @@ import {
   getBroadcastCampaignsRequest,
   retryBroadcastCampaignRequest,
   getCustomerBroadcastAudienceRequest,
+  getCustomerBroadcastDraftRequest,
+  getCustomerBroadcastDraftMediaRequest,
+  saveCustomerBroadcastDraftRequest,
+  deleteCustomerBroadcastDraftRequest,
   sendCustomerBroadcastRequest,
   sendCustomerBroadcastTestEmailRequest,
   type BroadcastActivity,
@@ -69,6 +73,8 @@ export default function MessagesPage() {
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
   const [emailSubject, setEmailSubject] = useState('')
   const [testEmail, setTestEmail] = useState('')
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const [draftId, setDraftId] = useState('')
   const [message, setMessage] = useState('')
   const [replyButtons, setReplyButtons] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
@@ -91,6 +97,8 @@ export default function MessagesPage() {
   const [failedDeliveries, setFailedDeliveries] = useState<BroadcastAudienceResult['failed']>([])
   const [deliveryWarnings, setDeliveryWarnings] = useState<BroadcastAudienceResult['warnings']>([])
   const [suppressedDeliveryCount, setSuppressedDeliveryCount] = useState(0)
+  const draftLoadingKey = useRef('')
+  const restoredDraftKey = useRef('')
   const queryClient = useQueryClient()
   const isCustomerContext = getAppMode() === 'customer'
   const activeCustomer = session?.currentOrganization
@@ -157,6 +165,7 @@ export default function MessagesPage() {
     mutationFn: () => sendCustomerBroadcastRequest({
       customerId,
       idempotencyKey: campaignRequestKey,
+      draftId: draftId || undefined,
       recipientIds: selectedRecipientIds,
       filters,
       channels: selectedChannels,
@@ -193,8 +202,12 @@ export default function MessagesPage() {
       }
       setMessage('')
       setEmailSubject('')
+      setTestEmail('')
       setReplyButtons([])
       setFiles([])
+      restoredDraftKey.current = ''
+      setDraftId('')
+      setDraftSavedAt(null)
       setSendWhatsappTemplate(false)
       setWhatsappTemplateName('')
       setWhatsappTemplateLanguage('')
@@ -277,6 +290,54 @@ export default function MessagesPage() {
   }, [customerId, mode, selectedBroadcastId, setSearchParams])
 
   useEffect(() => {
+    if (mode !== 'CREATE' || !customerId) return
+    let active = true
+    draftLoadingKey.current = customerId
+    void getCustomerBroadcastDraftRequest(customerId)
+      .then(async (draft) => {
+        if (!active) return
+        if (draft) {
+          const data = draft.filters as Record<string, any>
+          const restoredFiles = await Promise.all(draft.media.map(async (item, index) => {
+            const blob = await getCustomerBroadcastDraftMediaRequest(customerId, draft.id, index)
+            return new File([blob], item.name, { type: item.mimeType })
+          }))
+          if (!active) return
+          restoredDraftKey.current = customerId
+          setDraftId(draft.id)
+          setLocationIds(data.locationIds ?? [])
+          setActivity(data.activity ?? 'ALL')
+          setSelectedRecipientIds(data.selectedRecipientIds ?? [])
+          setSelectedChannels(data.selectedChannels ?? ['WHATSAPP', 'TELEGRAM', 'EMAIL'])
+          setEmailSubject(data.emailSubject ?? '')
+          setTestEmail(data.testEmail ?? '')
+          setMessage(draft.message ?? '')
+          setReplyButtons(data.replyButtons ?? [])
+          setFiles(restoredFiles)
+          setSendWhatsappTemplate(data.sendWhatsappTemplate ?? false)
+          setWhatsappTemplateName(data.whatsappTemplateName ?? '')
+          setWhatsappTemplateLanguage(data.whatsappTemplateLanguage ?? '')
+          setWhatsappTemplateParameters(data.whatsappTemplateParameters ?? '')
+          setWhatsappTemplateParameterNames(data.whatsappTemplateParameterNames ?? '')
+          setWhatsappTemplateHeaderImage(data.whatsappTemplateHeaderImage ?? false)
+          setDraftSavedAt(draft.updatedAt)
+          toast.info('Draft restored. You can continue where you left off.')
+        }
+      })
+      .catch(() => { if (active) toast.error('Could not load the saved campaign draft.') })
+      .finally(() => { if (active && draftLoadingKey.current === customerId) draftLoadingKey.current = '' })
+    return () => { active = false }
+  }, [customerId, mode])
+
+  useEffect(() => {
+    restoredDraftKey.current = ''
+    draftLoadingKey.current = ''
+    setDraftId('')
+    setDraftSavedAt(null)
+    setMessage('')
+    setEmailSubject('')
+    setTestEmail('')
+    setFiles([])
     setLocationIds([])
     setSelectedRecipientIds([])
     setFailedDeliveries([])
@@ -296,9 +357,54 @@ export default function MessagesPage() {
   }, [customerId])
 
   useEffect(() => {
+    if (draftLoadingKey.current === customerId || restoredDraftKey.current === customerId) return
     setSelectedRecipientIds(recipients.map((recipient) => recipient.id))
     setFailedDeliveries([])
-  }, [recipients])
+  }, [customerId, recipients])
+
+  const saveDraft = async () => {
+    if (!customerId) return toast.error('Select a customer before saving a draft.')
+    const draft = {
+      locationIds,
+      activity,
+      selectedRecipientIds,
+      selectedChannels,
+      emailSubject,
+      testEmail,
+      message,
+      replyButtons,
+      sendWhatsappTemplate,
+      whatsappTemplateName,
+      whatsappTemplateLanguage,
+      whatsappTemplateParameters,
+      whatsappTemplateParameterNames,
+      whatsappTemplateHeaderImage,
+    }
+    try {
+      const saved = await saveCustomerBroadcastDraftRequest(customerId, draft, files)
+      setDraftId(saved.id)
+      setDraftSavedAt(saved.updatedAt)
+      restoredDraftKey.current = customerId
+      toast.success('Campaign draft saved.')
+      void queryClient.invalidateQueries({ queryKey: ['customer-broadcast', 'campaigns'] })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save the campaign draft.')
+    }
+  }
+
+  const removeDraft = async () => {
+    if (!customerId || !draftId) return
+    try {
+      await deleteCustomerBroadcastDraftRequest(customerId)
+      setDraftId('')
+      setDraftSavedAt(null)
+      restoredDraftKey.current = customerId
+      void queryClient.invalidateQueries({ queryKey: ['customer-broadcast', 'campaigns'] })
+      toast.success('Campaign draft deleted.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete the campaign draft.')
+    }
+  }
 
   const filteredCustomers = useMemo(() => {
     const normalized = customerSearch.trim().toLowerCase()
@@ -308,8 +414,13 @@ export default function MessagesPage() {
   }, [customerSearch, customers])
 
   const loadCampaigns = useCallback((state: DataTableState<BroadcastHistoryItem>) => getBroadcastCampaignsRequest(state), [])
-  const campaignColumns = useMemo(() => getCampaignColumns((id) => {
-    setSelectedBroadcastId(id)
+  const campaignColumns = useMemo(() => getCampaignColumns((campaign) => {
+    if (campaign.status === 'DRAFT') {
+      setCustomerId(campaign.customerId)
+      setMode('CREATE')
+      return
+    }
+    setSelectedBroadcastId(campaign.id)
     setMode('DETAIL')
   }), [])
   const backToCampaignList = () => {
@@ -461,7 +572,7 @@ export default function MessagesPage() {
               id: 'status',
               label: 'Status',
               column: 'status',
-              options: ['SENDING', 'SENT', 'PARTIAL', 'FAILED'],
+              options: ['DRAFT', 'SENDING', 'SENT', 'PARTIAL', 'FAILED'],
               getValue: (campaign) => campaign.status,
             }, ...(!isCustomerContext ? [{
               id: 'customerId',
@@ -852,6 +963,9 @@ export default function MessagesPage() {
               ) : null}
               <div className="flex justify-end border-t border-border pt-3">
                 <div className="flex flex-wrap justify-end gap-2">
+                {draftSavedAt ? <span className="self-center pr-1 text-xs text-muted-foreground">Draft saved at {new Date(draftSavedAt).toLocaleTimeString()}</span> : null}
+                {draftId ? <Button type="button" variant="outline" onClick={() => void removeDraft()}>Delete draft</Button> : null}
+                <Button type="button" variant="outline" onClick={() => void saveDraft()} disabled={!customerId}>Save draft</Button>
                 {selectedChannels.includes('EMAIL') ? <Button
                   type="button"
                   variant="outline"
@@ -1042,8 +1156,8 @@ function BackIconButton({ onClick }: { onClick: () => void }) {
 }
 
 function CampaignStatusBadge({ status }: { status: BroadcastHistoryItem['status'] }) {
-  const variant = status === 'FAILED' ? 'destructive' : status === 'SENDING' ? 'outline' : status === 'PARTIAL' ? 'secondary' : 'default'
-  return <Badge variant={variant}>{({ SENDING: 'Sending', SENT: 'Sent', PARTIAL: 'Partial', FAILED: 'Failed' } as const)[status]}</Badge>
+  const variant = status === 'FAILED' ? 'destructive' : status === 'SENDING' || status === 'DRAFT' ? 'outline' : status === 'PARTIAL' ? 'secondary' : 'default'
+  return <Badge variant={variant}>{({ DRAFT: 'Draft', SENDING: 'Sending', SENT: 'Sent', PARTIAL: 'Partial', FAILED: 'Failed' } as const)[status]}</Badge>
 }
 
 function getCampaignDeliveryColumns(onOpenHistory: (delivery: BroadcastDelivery) => void) {
