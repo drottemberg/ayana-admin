@@ -34,8 +34,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<CustomerSettingKind | null>(null)
   const customer = session?.currentOrganization
   const customerId = customer?.id ?? ''
-  const isCustomerOwner = Boolean(customerId && session?.user.customerMemberships.find((membership) => membership.customerId === customerId)?.role === 'OWNER')
-  const canManageSettings = getAppMode() === 'customer' && isCustomerOwner
+  const canManageSettings = getAppMode() === 'customer' && Boolean(session?.permissions.organization?.editSelf)
   const editTarget = useMemo(() => editing ? { kind: editing } : null, [editing])
 
   if (isLoading) {
