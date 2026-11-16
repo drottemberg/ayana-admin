@@ -46,6 +46,8 @@ export type Organization = {
   address?: Address
   description?: string
   googleReviewUrl?: string | null
+  websiteUrl?: string | null
+  instagramUrl?: string | null
   timezone?: string
   currency?: string
   phone?: string
@@ -53,6 +55,8 @@ export type Organization = {
   contactName?: string
   contactPhone?: string
   contactEmail?: string
+  logoAttachmentId?: string | null
+  logoIconAttachmentId?: string | null
   counters?: OrganizationCounters
   users?: number
   stores?: number

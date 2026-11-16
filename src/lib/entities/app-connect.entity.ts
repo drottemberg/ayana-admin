@@ -30,6 +30,8 @@ export type AppPermissions = {
   classSessions?: EntityPermissions
   rooms?: EntityPermissions
   bookings?: EntityPermissions
+  messaging?: { broadcast: boolean }
+  aiSupportIssues?: { view: boolean; edit: boolean }
   organization?: { editSelf: boolean }
 }
 

@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
+import TransactionHistoryIcon from '@hugeicons/core-free-icons/TransactionHistoryIcon'
 
 import { DataTable, DataTableAsync, type DataTableState } from '@/components/data-table'
 import { DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
@@ -13,10 +14,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { useConnect } from '@/features/app/use-connect'
+import { getAppMode } from '@/features/app/app-mode'
 import { getCampaignColumns } from '@/features/customer-messaging/campaign-columns'
 import {
   getBroadcastCustomerOptions,
@@ -25,11 +28,13 @@ import {
   createWhatsappTemplateFromLibraryRequest,
   getBroadcastCampaignDetailRequest,
   getBroadcastCampaignsRequest,
+  retryBroadcastCampaignRequest,
   getCustomerBroadcastAudienceRequest,
   sendCustomerBroadcastRequest,
   type BroadcastActivity,
   type BroadcastAudienceFilters,
   type BroadcastChannel,
+  type BroadcastDelivery,
   type BroadcastHistoryDetail,
   type BroadcastHistoryItem,
   type BroadcastRecipient,
@@ -57,10 +62,11 @@ export default function MessagesPage() {
   const { session } = useConnect()
   const [customerSearch, setCustomerSearch] = useState('')
   const [recipientSearch, setRecipientSearch] = useState('')
-  const [customerId, setCustomerId] = useState(searchParams.get('customerId') ?? '')
+  const [customerIdState, setCustomerId] = useState(searchParams.get('customerId') ?? '')
   const [locationIds, setLocationIds] = useState<string[]>([])
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
+  const [emailSubject, setEmailSubject] = useState('')
   const [message, setMessage] = useState('')
   const [replyButtons, setReplyButtons] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
@@ -84,15 +90,19 @@ export default function MessagesPage() {
   const [deliveryWarnings, setDeliveryWarnings] = useState<BroadcastAudienceResult['warnings']>([])
   const [suppressedDeliveryCount, setSuppressedDeliveryCount] = useState(0)
   const queryClient = useQueryClient()
+  const isCustomerContext = getAppMode() === 'customer'
+  const activeCustomer = session?.currentOrganization
+  const customerId = isCustomerContext ? activeCustomer?.id || session?.orgId || '' : customerIdState
 
-  const canSend = Boolean(session?.permissions.customers?.edit)
+  const canSend = Boolean(session?.permissions.messaging?.broadcast)
   const customersQuery = useQuery({
     queryKey: ['customer-broadcast', 'customers'],
     queryFn: () => getCustomersListRequest({ contractId: null }),
-    enabled: canSend,
+    enabled: canSend && !isCustomerContext,
   })
   const customers = customersQuery.data ?? []
   const selectedCustomer = customers.find((customer) => customer.id === customerId)
+    ?? (isCustomerContext && activeCustomer ? { id: activeCustomer.id, name: activeCustomer.name } : undefined)
 
   const locationsQuery = useQuery({
     queryKey: ['customer-broadcast', customerId, 'locations'],
@@ -148,6 +158,7 @@ export default function MessagesPage() {
       recipientIds: selectedRecipientIds,
       filters,
       channels: selectedChannels,
+      emailSubject,
       message,
       files,
       buttons: replyButtons.map((label) => label.trim()).filter(Boolean).map((label) => ({ label })),
@@ -172,13 +183,14 @@ export default function MessagesPage() {
       if (result.inProgress) {
         toast.info('This campaign is already being processed. No duplicate messages were sent.')
       } else if (result.failed.length) {
-        toast.warning(`Sent via ${result.channelsSent}/${result.channelsTotal} chat channels and emailed ${result.emailsSent}/${result.emailsTotal} people.`)
+        toast.warning(`Accepted by the notification queue: ${result.channelsAccepted}/${result.channelsTotal} chat messages and ${result.emailsAccepted}/${result.emailsTotal} emails.`)
       } else if (result.warnings?.length) {
         toast.warning(`Another WhatsApp message failed for ${result.warnings.length} recipient(s); the template or regular message was accepted.`)
       } else {
-        toast.success(`Message sent via ${result.channelsSent} chat channels and emailed ${result.emailsSent} people.`)
+        toast.success(`Accepted by the notification queue: ${result.channelsAccepted} chat messages and ${result.emailsAccepted} emails.`)
       }
       setMessage('')
+      setEmailSubject('')
       setReplyButtons([])
       setFiles([])
       setSendWhatsappTemplate(false)
@@ -191,6 +203,14 @@ export default function MessagesPage() {
       setMode('DETAIL')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not send the message.'),
+  })
+  const retryCampaignMutation = useMutation({
+    mutationFn: retryBroadcastCampaignRequest,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['customer-broadcast', 'campaigns'] })
+      toast.success(`Retried ${result.retried} failed delivery(s): ${result.sent} sent, ${result.failed} still failed.`)
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not retry the campaign.'),
   })
   const importLibraryTemplateMutation = useMutation({
     mutationFn: () => {
@@ -347,6 +367,7 @@ export default function MessagesPage() {
     if (sendMutation.isPending) return
     if (!selectedRecipientIds.length) return toast.error('Select at least one recipient.')
     if (!selectedChannels.length) return toast.error('Select at least one channel.')
+    if (selectedChannels.includes('EMAIL') && !emailSubject.trim()) return toast.error('Enter an email subject.')
     if (selectedWhatsappOutsideWindow && !sendWhatsappTemplate) {
       return toast.error(`${selectedWhatsappOutsideWindow} WhatsApp recipient(s) need an approved template because their last message was over 24 hours ago.`)
     }
@@ -400,7 +421,15 @@ export default function MessagesPage() {
   return (
     <>
       {mode === 'DETAIL' ? (
-        <CampaignDetailPage campaignId={selectedBroadcastId} detail={detailQuery.data} isLoading={detailQuery.isLoading} isError={detailQuery.isError} onBack={backToCampaignList} />
+        <CampaignDetailPage
+          campaignId={selectedBroadcastId}
+          detail={detailQuery.data}
+          isLoading={detailQuery.isLoading}
+          isError={detailQuery.isError}
+          onBack={backToCampaignList}
+          onRetry={() => retryCampaignMutation.mutate(selectedBroadcastId)}
+          isRetrying={retryCampaignMutation.isPending}
+        />
       ) : (
         <>
       <PageHeader
@@ -419,29 +448,32 @@ export default function MessagesPage() {
             tableKey="customer-broadcast.campaigns"
             columns={campaignColumns}
             disabledSelection
-            searchPlaceholder="Search by campaign, customer or ID"
-            searchColumns={['id', 'message', 'customerName']}
+            searchPlaceholder={isCustomerContext ? 'Search by campaign or ID' : 'Search by campaign, customer or ID'}
+            searchColumns={isCustomerContext ? ['id', 'message'] : ['id', 'message', 'customerName']}
             filters={[{
               id: 'status',
               label: 'Status',
               column: 'status',
               options: ['SENDING', 'SENT', 'PARTIAL', 'FAILED'],
               getValue: (campaign) => campaign.status,
-            }, {
+            }, ...(!isCustomerContext ? [{
               id: 'customerId',
               label: 'Customer',
               column: 'customerId',
-              selectionMode: 'single',
+              selectionMode: 'single' as const,
               queryFn: getBroadcastCustomerOptions,
-              getValue: (campaign) => campaign.customerId,
-            }, {
+              getValue: (campaign: BroadcastHistoryItem) => campaign.customerId,
+            }] : []), {
               id: 'activity',
               label: 'Audience',
               column: 'filters',
               options: ['ALL', 'CLASS_BOOKING', 'PRODUCT_PURCHASE', 'BOTH'],
               getValue: (campaign) => campaign.filters?.activity ?? 'ALL',
             }]}
-            getRowCommands={(campaign) => [{ label: 'View details', onClick: () => { setSelectedBroadcastId(campaign.id); setMode('DETAIL') } }]}
+            getRowCommands={(campaign) => [
+              ...(campaign.counts.FAILED ? [{ label: 'Retry failed deliveries', onClick: () => retryCampaignMutation.mutate(campaign.id) }] : []),
+              { label: 'View details', onClick: () => { setSelectedBroadcastId(campaign.id); setMode('DETAIL') } },
+            ]}
             loadingMessage="Loading campaigns..."
             emptyMessage="No campaigns found."
             errorMessage="Failed to load campaigns."
@@ -454,19 +486,26 @@ export default function MessagesPage() {
             <p className="text-sm text-muted-foreground">Choose a customer, then filter their reachable contacts by location and activity.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium">
-              <span>Customer</span>
-              <Input value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers..." />
-              <select
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                disabled={customersQuery.isLoading}
-              >
-                <option value="">Select a customer</option>
-                {filteredCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-              </select>
-            </label>
+            {isCustomerContext ? (
+              <div className="grid content-start gap-1.5 text-sm">
+                <span className="font-medium">Customer</span>
+                <p className="rounded-lg border border-input bg-muted/40 px-3 py-2">{activeCustomer?.name ?? 'Loading customer…'}</p>
+              </div>
+            ) : (
+              <label className="grid gap-1.5 text-sm font-medium">
+                <span>Customer</span>
+                <Input value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers..." />
+                <select
+                  value={customerId}
+                  onChange={(event) => setCustomerId(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  disabled={customersQuery.isLoading}
+                >
+                  <option value="">Select a customer</option>
+                  {filteredCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+                </select>
+              </label>
+            )}
             <label className="grid content-start gap-1.5 text-sm font-medium">
               <span>People</span>
               <Select value={activity} onValueChange={(value) => setActivity(value as BroadcastActivity)}>
@@ -738,6 +777,12 @@ export default function MessagesPage() {
                   </> : null}
                 </fieldset>
               ) : null}
+              {selectedChannels.includes('EMAIL') ? (
+                <label className="grid gap-1.5 text-sm font-medium">
+                  <span>Email subject</span>
+                  <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
+                </label>
+              ) : null}
               <label className="grid gap-1.5 text-sm font-medium">
                 <span>Message</span>
                 <Textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={4096} rows={6} placeholder="Write your message..." />
@@ -821,20 +866,25 @@ function CampaignDetailPage({
   isLoading,
   isError,
   onBack,
+  onRetry,
+  isRetrying,
 }: {
   campaignId: string
   detail?: BroadcastHistoryDetail
   isLoading: boolean
   isError: boolean
   onBack: () => void
+  onRetry: () => void
+  isRetrying: boolean
 }) {
+  const [historyDelivery, setHistoryDelivery] = useState<BroadcastDelivery | null>(null)
   const locationsQuery = useQuery({
     queryKey: ['customer-broadcast', detail?.customerId, 'campaign-locations'],
     queryFn: () => getAllLocationsForCustomerRequest(detail!.customerId),
     enabled: Boolean(detail?.customerId),
   })
   const locationNames = new Map((locationsQuery.data ?? []).map((location) => [location.id, location.name]))
-  const sentCount = (detail?.counts.SENT ?? 0) + (detail?.counts.DELIVERED ?? 0) + (detail?.counts.READ ?? 0)
+  const sentCount = (detail?.counts.ACCEPTED ?? 0) + (detail?.counts.SENT ?? 0) + (detail?.counts.DELIVERED ?? 0) + (detail?.counts.READ ?? 0)
   const sideSections: DetailPanelSection[] = detail ? [{
     title: 'Campaign',
     fields: [
@@ -887,8 +937,12 @@ function CampaignDetailPage({
       aside={<DetailSidePanel sections={sideSections} />}
     >
       <Card id="module-message" className="border border-border p-0 ring-0">
-        <CardHeader className="border-b p-5"><CardTitle>Message</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b p-5">
+          <CardTitle>Message</CardTitle>
+          {(detail.counts.FAILED ?? 0) > 0 ? <Button variant="outline" onClick={onRetry} disabled={isRetrying}>{isRetrying ? 'Retrying…' : 'Retry failed deliveries'}</Button> : null}
+        </CardHeader>
         <CardContent className="space-y-4 p-5">
+          {detail.filters?.emailSubject ? <div className="rounded-md border p-3 text-sm"><span className="font-medium">Email subject: </span>{detail.filters.emailSubject}</div> : null}
           {detail.message ? <p className="whitespace-pre-wrap text-sm">{detail.message}</p> : detail.filters?.whatsappTemplate ? <p className="text-sm text-muted-foreground">WhatsApp template campaign.</p> : <p className="text-sm text-muted-foreground">This campaign contains images only.</p>}
           {detail.filters?.whatsappTemplate ? (
             <div className="rounded-md border p-3 text-sm">
@@ -918,7 +972,7 @@ function CampaignDetailPage({
         <CardContent className="p-5">
           <DataTable
             tableData={detail.deliveries}
-            columns={campaignDeliveryColumns}
+            columns={getCampaignDeliveryColumns(setHistoryDelivery)}
             disabledSelection
             searchPlaceholder="Search recipients, channel or destination"
             searchColumns={['recipientName', 'destination', 'channel', 'userId', 'userChannelId', 'messageId']}
@@ -927,6 +981,36 @@ function CampaignDetailPage({
           />
         </CardContent>
       </Card>
+      <Drawer open={Boolean(historyDelivery)} onOpenChange={(open) => { if (!open) setHistoryDelivery(null) }} direction="right">
+        <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-xl">
+          <DrawerHeader className="border-b px-6 pb-4">
+            <DrawerTitle>Delivery history</DrawerTitle>
+            <DrawerDescription>
+              {historyDelivery ? `${historyDelivery.recipientName} · ${channelLabel(historyDelivery.channel)}` : 'Provider delivery events'}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
+            {historyDelivery?.error ? <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{historyDelivery.error}</p> : null}
+            {historyDelivery?.events.length ? [...historyDelivery.events]
+              .sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime())
+              .map((event, index) => {
+                const details = event.details && typeof event.details === 'object' ? event.details as Record<string, unknown> : null
+                const error = typeof details?.error === 'string' ? details.error : null
+                return (
+                  <div key={`${event.status}-${event.occurredAt}-${index}`} className="flex gap-3 rounded-lg border p-4">
+                    <Badge variant={event.status === 'FAILED' ? 'destructive' : 'outline'}>{statusLabel(event.status)}</Badge>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm text-muted-foreground">{new Date(event.occurredAt).toLocaleString()}</p>
+                      {event.providerMessageId ? <p className="break-all text-xs text-muted-foreground">Provider message: {event.providerMessageId}</p> : null}
+                      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                    </div>
+                  </div>
+                )
+              })
+              : <p className="text-sm text-muted-foreground">No provider events recorded.</p>}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </DetailPageLayout>
   )
 }
@@ -940,7 +1024,8 @@ function CampaignStatusBadge({ status }: { status: BroadcastHistoryItem['status'
   return <Badge variant={variant}>{({ SENDING: 'Sending', SENT: 'Sent', PARTIAL: 'Partial', FAILED: 'Failed' } as const)[status]}</Badge>
 }
 
-const campaignDeliveryColumns = [
+function getCampaignDeliveryColumns(onOpenHistory: (delivery: BroadcastDelivery) => void) {
+  return [
   { accessorKey: 'status', header: 'Status', cell: ({ row }: { row: { original: BroadcastHistoryDetail['deliveries'][number] } }) => <Badge variant={row.original.status === 'FAILED' ? 'destructive' : 'outline'}>{statusLabel(row.original.status)}</Badge> },
   { accessorKey: 'recipientName', header: 'Recipient', cell: ({ row }: { row: { original: BroadcastHistoryDetail['deliveries'][number] } }) => <Link to={`/users/${row.original.userId}`} className="font-medium underline-offset-2 hover:underline">{row.original.recipientName}</Link> },
   { accessorKey: 'channel', header: 'Channel' },
@@ -958,11 +1043,15 @@ const campaignDeliveryColumns = [
   },
   {
     id: 'deliveryEvents',
-    header: 'Delivery history',
-    cell: ({ row }: { row: { original: BroadcastHistoryDetail['deliveries'][number] } }) => <span className="block max-w-64 text-xs text-muted-foreground">{row.original.events.map((event) => `${statusLabel(event.status)} · ${new Date(event.occurredAt).toLocaleString()}`).join(' | ') || 'No provider events'}</span>,
+    header: '',
+    cell: ({ row }: { row: { original: BroadcastDelivery } }) => (
+      <Button type="button" variant="ghost" size="icon-sm" aria-label="View delivery history" title="View delivery history" onClick={() => onOpenHistory(row.original)}>
+        <HugeiconsIcon icon={TransactionHistoryIcon} strokeWidth={2} />
+      </Button>
+    ),
   },
-  { accessorKey: 'error', header: 'Error', cell: ({ row }: { row: { original: BroadcastHistoryDetail['deliveries'][number] } }) => row.original.error ? <span className="text-destructive">{row.original.error}</span> : '—' },
-]
+  ]
+}
 
 function activityLabel(activity: BroadcastActivity) {
   return ({ ALL: 'Everyone who contacted this customer', CLASS_BOOKING: 'Booked a class', CLASS_PURCHASE: 'Purchased a class pack or membership', CLASS_BOOKING_OR_PURCHASE: 'Booked or purchased a class pack', PRODUCT_PURCHASE: 'Purchased a product', BOTH: 'Booked a class and purchased a product' } as const)[activity]
@@ -973,12 +1062,12 @@ function channelLabel(channel: BroadcastChannel) {
 }
 
 function StatusCounts({ counts }: { counts: Record<string, number> }) {
-  const labels = ['SENT', 'DELIVERED', 'READ', 'FAILED', 'PENDING', 'SUPPRESSED'].filter((status) => counts[status])
+  const labels = ['ACCEPTED', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'PENDING', 'SUPPRESSED'].filter((status) => counts[status])
   return <span className="flex flex-wrap gap-1.5">{labels.map((status) => <Badge key={status} variant={status === 'FAILED' ? 'destructive' : 'outline'}>{counts[status]} {statusLabel(status)}</Badge>)}</span>
 }
 
 function statusLabel(status: string) {
-  return ({ PENDING: 'Pending', SENT: 'Accepted', DELIVERED: 'Delivered', READ: 'Read', FAILED: 'Failed', SUPPRESSED: 'Opted out' } as Record<string, string>)[status] ?? status
+  return ({ PENDING: 'Pending', ACCEPTED: 'Accepted', SENT: 'Sent', DELIVERED: 'Delivered', READ: 'Read', FAILED: 'Failed', SUPPRESSED: 'Opted out' } as Record<string, string>)[status] ?? status
 }
 
 function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRecipient; checked: boolean; onToggle: () => void }) {

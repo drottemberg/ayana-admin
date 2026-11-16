@@ -272,6 +272,7 @@ export default function CustomerPage() {
   const canManageCustomer = CustomerService.canManage(permissions)
   const coachPermissions = session?.permissions.coaches
   const canViewCoaches = Boolean(coachPermissions?.view)
+  const canViewAiSupportIssues = Boolean(session?.permissions.aiSupportIssues?.view)
   const openCoachProfileForUser = async (user: User) => {
     try {
       const profile = await getCoachProfileRequest(customerId, String(user.id))
@@ -401,9 +402,9 @@ export default function CustomerPage() {
       ...(canManageCustomer ? [{ key: 'client-contracts', label: 'Client contracts' }, { key: 'orders', label: 'Orders' }] : []),
       { key: 'products', label: 'Products' },
       { key: 'devices', label: 'Devices' },
-      { key: 'issues', label: 'AI support issues' },
+      ...(canViewAiSupportIssues ? [{ key: 'issues', label: 'AI support issues' }] : []),
     ],
-    [canManageCustomer, canShowUsers, canViewCoaches],
+    [canManageCustomer, canShowUsers, canViewAiSupportIssues, canViewCoaches],
   )
 
   if (isLoadingCustomer) {
@@ -740,7 +741,7 @@ export default function CustomerPage() {
                 refetchOnMount={false}
               />
             )}
-            <RelatedEntityModule
+            {canViewAiSupportIssues ? <RelatedEntityModule
               id={`${MODULE_ANCHOR_PREFIX}-issues`}
               title="AI support issues"
               icon={EntityIcon.aiSupportIssues}
@@ -750,14 +751,14 @@ export default function CustomerPage() {
               tableKey="customers.detail.modules.ai-support-issues"
               columns={aiSupportIssueColumns}
               pageSize={5}
-              getRowCommands={(issue) => [{
+              getRowCommands={(issue) => session?.permissions.aiSupportIssues?.edit ? [{
                 label: 'View details',
                 onClick: () => navigate(`/agent-support-issues?${new URLSearchParams({ issueId: issue.id, 'f.customerId': customer.id })}`),
-              }]}
+              }] : []}
               loadingMessage="Loading AI support issues..."
               emptyMessage="No AI support issues found for this customer."
               refetchOnMount="always"
-            />
+            /> : null}
           </>
         ) : null}
       </DetailPageLayout>

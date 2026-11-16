@@ -29,6 +29,13 @@ import { validatePhone } from '@/lib/phone'
 import type { Customer } from '@/types/customer'
 import type { Location } from '@/types/location'
 import { TimezoneUtils } from '@/utils'
+import { OrganizationBrandingFields } from '@/features/organizations/OrganizationBrandingFields'
+import { saveOrganizationBrandingDraft, type BrandingDraft, type BrandingKind } from '@/features/organizations/organization-branding-api'
+import {
+  getLocationClientAppLinksRequest,
+  updateLocationClientAppLinksRequest,
+  type ClientAppLinks,
+} from '@/features/customers/customer-settings-api'
 
 const optionalPhone = z
   .string()
@@ -54,6 +61,8 @@ const locationFormSchema = z.object({
   countryId: z.string().trim().min(1, 'Country is required.'),
   description: z.string().optional(),
   googleReviewUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || z.string().url().safeParse(value).success, 'Enter a valid Google review URL.'),
+  websiteUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS URL.'),
+  instagramUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS URL.'),
   defaultCoachId: z.string().optional(),
   contactName: z.string().optional(),
   contactPhone: optionalPhone,
@@ -103,6 +112,10 @@ export function CreateLocationForm({
   const isEditMode = Boolean(location?.id)
   const initialCustomerId = location?.parentId ?? customerId
   const queryClient = useQueryClient()
+  const [brandingDraft, setBrandingDraft] = useState<BrandingDraft>({})
+  const [appLinks, setAppLinks] = useState<ClientAppLinks>({ bookingAppUrlTemplate: null, orderAppUrlTemplate: null })
+  const [appLinksLoaded, setAppLinksLoaded] = useState(!location?.id)
+  const [appLinksDirty, setAppLinksDirty] = useState(false)
   const userSelectedCustomer = useRef(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer>()
   const initialCustomerQuery = useQuery({
@@ -116,7 +129,14 @@ export function CreateLocationForm({
     enabled: Boolean(isEditMode && location?.id),
   })
   const createMutation = useMutation({
-    mutationFn: createLocationRequest,
+    mutationFn: async (payload: CreateLocationPayload) => {
+      const saved = await createLocationRequest(payload)
+      await saveOrganizationBrandingDraft(saved.id, brandingDraft)
+      if (appLinks.bookingAppUrlTemplate || appLinks.orderAppUrlTemplate) {
+        await updateLocationClientAppLinksRequest(payload.customerId, saved.id, appLinks)
+      }
+      return saved
+    },
     onSuccess: async (_saved, payload) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: locationsQueryKeys.all }),
@@ -127,10 +147,16 @@ export function CreateLocationForm({
     },
   })
   const updateMutation = useMutation({
-    mutationFn: (payload: UpdateLocationPayload) => {
+    mutationFn: async (payload: UpdateLocationPayload) => {
       if (!location) throw new Error('Location is required.')
 
-      return updateLocationRequest(location.id, payload)
+      const saved = await updateLocationRequest(location.id, payload)
+      await saveOrganizationBrandingDraft(location.id, brandingDraft)
+      if (appLinksLoaded) {
+        const ownerCustomerId = location.parentId ?? customerId
+        if (ownerCustomerId) await updateLocationClientAppLinksRequest(ownerCustomerId, location.id, appLinks)
+      }
+      return saved
     },
     onSuccess: async () => {
       const parentId = location?.parentId
@@ -177,9 +203,12 @@ export function CreateLocationForm({
       contactName: location?.contactName ?? '',
       contactPhone: location?.contactPhone ?? '',
       contactEmail: location?.contactEmail ?? '',
+      websiteUrl: location?.websiteUrl ?? '',
+      instagramUrl: location?.instagramUrl ?? '',
     },
   })
   const countryId = useWatch({ control, name: 'countryId' })
+  const activeCustomerId = useWatch({ control, name: 'customerId' })
   const storefrontSlug = useWatch({ control, name: 'slug' })
   const stateItems = countryId
     ? State.getStatesOfCountry(countryId.toUpperCase())
@@ -204,8 +233,43 @@ export function CreateLocationForm({
   }, [initialCustomerQuery.data, location, setValue])
 
   useEffect(() => {
-    onDirtyChange?.(isDirty)
-  }, [isDirty, onDirtyChange])
+    setBrandingDraft({})
+  }, [location?.id])
+
+  useEffect(() => {
+    let active = true
+    if (!location?.id) {
+      setAppLinksLoaded(true)
+      return () => { active = false }
+    }
+    setAppLinksDirty(false)
+    setAppLinks({ bookingAppUrlTemplate: null, orderAppUrlTemplate: null })
+    setAppLinksLoaded(!activeCustomerId)
+    if (!activeCustomerId) return () => { active = false }
+    void getLocationClientAppLinksRequest(activeCustomerId, location.id).then((links) => {
+      if (!active) return
+      setAppLinks({
+        bookingAppUrlTemplate: links.bookingAppUrlTemplate,
+        orderAppUrlTemplate: links.orderAppUrlTemplate,
+      })
+      setAppLinksLoaded(true)
+      setAppLinksDirty(false)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [location?.id, activeCustomerId])
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty || Object.keys(brandingDraft).length > 0 || appLinksDirty)
+  }, [isDirty, brandingDraft, appLinksDirty, onDirtyChange])
+
+  const updateBrandingDraft = (kind: BrandingKind, value: File | null | undefined) => {
+    setBrandingDraft((current) => {
+      const next = { ...current }
+      if (value === undefined) delete next[kind]
+      else next[kind] = value
+      return next
+    })
+  }
 
   const getCustomerOption = useCallback((customer: Customer) => ({ value: customer.id, label: customer.name }), [])
 
@@ -234,6 +298,8 @@ export function CreateLocationForm({
       contactName: values.contactName?.trim() || undefined,
       contactPhone: values.contactPhone?.trim() || undefined,
       contactEmail: values.contactEmail?.trim() || undefined,
+      websiteUrl: values.websiteUrl?.trim() || null,
+      instagramUrl: values.instagramUrl?.trim() || null,
       address: {
         street: values.street.trim(),
         suite: values.suite?.trim() || undefined,
@@ -424,6 +490,41 @@ export function CreateLocationForm({
             {...register('contactEmail')}
           />
           <TextInput label="Description" error={errors.description?.message} {...register('description')} />
+          <section className="space-y-3 rounded-lg border p-4">
+            <div>
+              <h3 className="text-sm font-semibold">Online presence</h3>
+              <p className="text-xs text-muted-foreground">Optional location-specific links. Leave blank to use the Customer links in emails.</p>
+            </div>
+            <TextInput label="Website URL" type="url" placeholder="https://example.com" error={errors.websiteUrl?.message} {...register('websiteUrl')} />
+            <TextInput label="Instagram URL" type="url" placeholder="https://instagram.com/example" error={errors.instagramUrl?.message} {...register('instagramUrl')} />
+          </section>
+          <OrganizationBrandingFields
+            organizationId={location?.id}
+            logoAttachmentId={location?.logoAttachmentId}
+            logoIconAttachmentId={location?.logoIconAttachmentId}
+            draft={brandingDraft}
+            onDraftChange={updateBrandingDraft}
+          />
+          <section className="space-y-3 rounded-lg border p-4">
+            <div>
+              <h3 className="text-sm font-semibold">Client app links</h3>
+              <p className="text-xs text-muted-foreground">Leave a location URL blank to use the customer default.</p>
+            </div>
+            <TextInput
+              label="Planning app URL template"
+              placeholder="https://example.com/planning?location={location-slug}"
+              value={appLinks.bookingAppUrlTemplate ?? ''}
+              onChange={(event) => { setAppLinksDirty(true); setAppLinks((current) => ({ ...current, bookingAppUrlTemplate: event.target.value || null })) }}
+              disabled={!appLinksLoaded}
+            />
+            <TextInput
+              label="Order app URL template"
+              placeholder="https://example.com/store?location={location-slug}"
+              value={appLinks.orderAppUrlTemplate ?? ''}
+              onChange={(event) => { setAppLinksDirty(true); setAppLinks((current) => ({ ...current, orderAppUrlTemplate: event.target.value || null })) }}
+              disabled={!appLinksLoaded}
+            />
+          </section>
           <div>
             <TextInput
               label="Google review link"

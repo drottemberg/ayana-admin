@@ -48,6 +48,8 @@ export type OrganizationDto = OrganizationShortDto & {
   deletedAt?: string | null
   addressId?: string | null
   attachmentId?: string | null
+  logoAttachmentId?: string | null
+  logoIconAttachmentId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
   address?: AddressDto | null
@@ -145,6 +147,8 @@ export class OrganizationEntity {
       timezone: this.timezone,
       users: this.users,
       stores: this.stores,
+      logoAttachmentId: this.dto.logoAttachmentId,
+      logoIconAttachmentId: this.dto.logoIconAttachmentId,
     }
   }
 

@@ -71,8 +71,10 @@ export type BroadcastSendResult = {
   total: number
   channelsTotal: number
   channelsSent: number
+  channelsAccepted: number
   emailsTotal: number
   emailsSent: number
+  emailsAccepted: number
   warnings: Array<{
     recipientId: string
     userName: string
@@ -107,6 +109,7 @@ export type BroadcastHistoryItem = Record<string, unknown> & {
     locationIds: string[]
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
+    emailSubject?: string
     whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
     buttons?: BroadcastReplyButton[]
   } | null
@@ -122,7 +125,7 @@ export type BroadcastDelivery = Record<string, unknown> & {
     recipientName: string
     destination: string
     channel: 'WHATSAPP' | 'TELEGRAM' | 'EMAIL'
-    status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'SUPPRESSED'
+    status: 'PENDING' | 'ACCEPTED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'SUPPRESSED'
     error: string | null
     sentAt: string | null
     deliveredAt: string | null
@@ -136,6 +139,7 @@ export type BroadcastHistoryDetail = BroadcastHistoryItem & {
     locationIds: string[]
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
+    emailSubject?: string
     whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
     buttons?: BroadcastReplyButton[]
   } | null
@@ -152,6 +156,10 @@ export async function getBroadcastCampaignsRequest(state: DataTableState<Broadca
 
 export async function getBroadcastCampaignDetailRequest(broadcastId: string): Promise<BroadcastHistoryDetail> {
   return apiClient.get<BroadcastHistoryDetail>(`/messaging/broadcast/campaigns/${broadcastId}`)
+}
+
+export async function retryBroadcastCampaignRequest(broadcastId: string): Promise<{ campaignId: string; retried: number; sent: number; failed: number; suppressed: number; skipped: number }> {
+  return apiClient.post(`/messaging/broadcast/campaigns/${broadcastId}/retry`, {})
 }
 
 export async function getBroadcastCustomerOptions(search: string, page = 1) {
@@ -219,6 +227,7 @@ export async function sendCustomerBroadcastRequest(input: {
   recipientIds: string[]
   filters: BroadcastAudienceFilters
   channels: BroadcastChannel[]
+  emailSubject?: string
   message: string
   files: File[]
   buttons?: BroadcastReplyButton[]
@@ -230,6 +239,7 @@ export async function sendCustomerBroadcastRequest(input: {
   body.append('locationIds', JSON.stringify(input.filters.locationIds))
   body.append('activity', input.filters.activity)
   body.append('channels', JSON.stringify(input.channels))
+  if (input.emailSubject?.trim()) body.append('emailSubject', input.emailSubject.trim())
   body.append('message', input.message)
   if (input.buttons?.length) body.append('buttons', JSON.stringify(input.buttons))
   if (input.whatsappTemplate) {

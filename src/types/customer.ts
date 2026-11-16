@@ -20,6 +20,10 @@ export type Customer = Pick<
   | 'contactName'
   | 'contactPhone'
   | 'contactEmail'
+  | 'logoAttachmentId'
+  | 'logoIconAttachmentId'
+  | 'websiteUrl'
+  | 'instagramUrl'
   | 'createdAt'
 > & {
   type: typeof OrganizationType.CUSTOMER
@@ -27,7 +31,7 @@ export type Customer = Pick<
 
 export type CreateCustomerPayload = Pick<
   Customer,
-  'name' | 'slug' | 'email' | 'phone' | 'timezone' | 'currency' | 'description' | 'contactName' | 'contactEmail' | 'contactPhone'
+  'name' | 'slug' | 'email' | 'phone' | 'timezone' | 'currency' | 'description' | 'contactName' | 'contactEmail' | 'contactPhone' | 'websiteUrl' | 'instagramUrl'
 >
 
 export type { CreateStorePayload, Store } from '@/types/store'

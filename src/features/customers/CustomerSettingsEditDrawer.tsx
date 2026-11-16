@@ -8,16 +8,20 @@ import {
   getCustomerLocationPoliciesRequest,
   getCustomerMessagingConfigRequest,
   getCustomerPromptProfileRequest,
+  getCustomerClientAppLinksRequest,
+  getLocationClientAppLinksRequest,
   updateCustomerLocationPolicyRequest,
   updateCustomerMessagingConfigRequest,
   updateCustomerPromptProfileRequest,
+  updateCustomerClientAppLinksRequest,
+  updateLocationClientAppLinksRequest,
   type CustomerLocationPolicyRow,
   type CustomerSettingKind,
 } from '@/features/customers/customer-settings-api'
 import { customerSettingsQueryKeys } from '@/features/customers/customer-settings-api'
 import { queryClient } from '@/lib/query-client'
 
-type Target = { kind: CustomerSettingKind; location?: CustomerLocationPolicyRow }
+type Target = { kind: CustomerSettingKind; location?: Partial<CustomerLocationPolicyRow> & { id: string; name: string; bookingAppUrlTemplate?: string | null; orderAppUrlTemplate?: string | null } }
 
 const messagingFields = [
   { key: 'webChatApiKey', label: 'Public web chat API key' },
@@ -54,6 +58,11 @@ const policyFields = [
   { key: 'openingDate', label: 'Opening date', type: 'date' },
   { key: 'openingHours', label: 'Studio opening hours (JSON)', multiline: true },
   { key: 'onlineOrderHours', label: 'Online order hours (JSON)', multiline: true },
+] as const
+
+const appLinkFields = [
+  { key: 'bookingAppUrlTemplate', label: 'Planning app URL template', placeholder: 'https://example.com/planning?location={location-slug}' },
+  { key: 'orderAppUrlTemplate', label: 'Store app URL template', placeholder: 'https://example.com/store?location={location-slug}' },
 ] as const
 
 function policyValues(policy?: Record<string, unknown> | null) {
@@ -157,6 +166,15 @@ export function CustomerSettingsEditDrawer({
             setValues(next)
             setInitialValues(next)
           }
+        } else if (target.kind === 'app-links') {
+          const result = target.location
+            ? await getLocationClientAppLinksRequest(customerId, target.location.id)
+            : (await getCustomerClientAppLinksRequest(customerId)).customer
+          if (current) {
+            const next = Object.fromEntries(appLinkFields.map((field) => [field.key, result[field.key] ?? '']))
+            setValues(next)
+            setInitialValues(next)
+          }
         } else {
           const locations = await getCustomerLocationPoliciesRequest(customerId)
           const location = locations.find((item) => item.id === target.location?.id)
@@ -209,6 +227,10 @@ export function CustomerSettingsEditDrawer({
       } else if (target.kind === 'prompt-profile') {
         const payload = Object.fromEntries(profileFields.map((field) => [field.key, values[field.key]?.trim() || null]))
         await updateCustomerPromptProfileRequest(customerId, payload)
+      } else if (target.kind === 'app-links') {
+        const payload = Object.fromEntries(appLinkFields.map((field) => [field.key, values[field.key]?.trim() || null])) as { bookingAppUrlTemplate: string | null; orderAppUrlTemplate: string | null }
+        if (target.location) await updateLocationClientAppLinksRequest(customerId, target.location.id, payload)
+        else await updateCustomerClientAppLinksRequest(customerId, payload)
       } else if (target.location) {
         await updateCustomerLocationPolicyRequest(customerId, target.location.id, toPolicyPayload(values))
       }
@@ -226,12 +248,16 @@ export function CustomerSettingsEditDrawer({
     ? 'Edit messaging configuration'
     : target?.kind === 'prompt-profile'
       ? 'Edit customer prompt profile'
-      : `Edit location policy${target?.location?.name ? ` · ${target.location.name}` : ''}`
+      : target?.kind === 'app-links'
+        ? `Client app links${target.location?.name ? ` · ${target.location.name}` : ''}`
+        : `Edit location policy${target?.location?.name ? ` · ${target.location.name}` : ''}`
   const fields = target?.kind === 'messaging-config'
     ? messagingFields
     : target?.kind === 'prompt-profile'
       ? profileFields
-      : policyFields
+      : target?.kind === 'app-links'
+        ? appLinkFields
+        : policyFields
 
   return (
     <AppDrawer open={open} onOpenChange={onOpenChange} title={title} description={`Settings for ${customerName}.`} contentClassName="sm:max-w-2xl">
@@ -253,6 +279,7 @@ export function CustomerSettingsEditDrawer({
           ) : null}
           {!isLoading && target?.kind === 'prompt-profile' ? <h3 className="font-medium">Assistant behavior and content</h3> : null}
           {!isLoading && target?.kind === 'location-policy' ? <p className="text-sm text-muted-foreground">Leave schedule values empty when no specific hours are set. Hours must be JSON by weekday, for example: {'{"mon":{"open":"09:00","close":"18:00"}}'}.</p> : null}
+          {!isLoading && target?.kind === 'app-links' ? <p className="text-sm text-muted-foreground">Leave a location field empty to inherit the customer URL. Customer templates are used for every location unless overridden. Supported placeholders: {'{customer-slug}'} and {'{location-slug}'}.</p> : null}
           {!isLoading ? fields.map((field) => {
             const value = values[field.key] ?? ''
             const secret = 'secret' in field && field.secret
@@ -262,7 +289,7 @@ export function CustomerSettingsEditDrawer({
                 <span>{field.label}</span>
                 {'multiline' in field && field.multiline
                   ? <Textarea value={value} onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} rows={field.key === 'openingHours' || field.key === 'onlineOrderHours' ? 7 : field.key === 'webChatAllowedDomains' ? 4 : 3} placeholder={placeholder} />
-                  : <Input type={'type' in field ? field.type : 'text'} value={value} onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} placeholder={placeholder} />}
+                  : <Input type={'type' in field ? field.type : 'text'} value={value} onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} placeholder={placeholder ?? ('placeholder' in field ? field.placeholder : undefined)} />}
                 {secret && hasExistingSecret[field.key] ? <span className="text-xs font-normal text-muted-foreground">Leave blank to keep the saved value.</span> : null}
               </label>
             )

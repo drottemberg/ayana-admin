@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 
-import { DetailPageLayout, RelatedEntityModule, type DetailPageModule } from '@/components/app/detail-page-layout'
+import { DetailPageLayout, DetailSidePanel, RelatedEntityModule, type DetailPageModule } from '@/components/app/detail-page-layout'
 import { PageHeader } from '@/components/ui/page-header'
 import type { DataTableState } from '@/components/data-table'
 import { EntityIcon } from '@/components/app/entity-icons'
@@ -20,6 +21,8 @@ import {
   customerPromptProfileColumns,
 } from '@/features/customers/customer-settings-columns'
 import { CustomerSettingsEditDrawer } from '@/features/customers/CustomerSettingsEditDrawer'
+import { CustomerService } from '@/features/customers/customer-service'
+import { getOrganizationBrandingPreviewRequest, type BrandingKind } from '@/features/organizations/organization-branding-api'
 
 const modules: DetailPageModule[] = [
   { key: 'messaging-config', label: 'Messaging configuration' },
@@ -31,7 +34,8 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<CustomerSettingKind | null>(null)
   const customer = session?.currentOrganization
   const customerId = customer?.id ?? ''
-  const canManageSettings = getAppMode() === 'customer' && Boolean(session?.permissions.organization?.editSelf)
+  const isCustomerOwner = Boolean(customerId && session?.user.customerMemberships.find((membership) => membership.customerId === customerId)?.role === 'OWNER')
+  const canManageSettings = getAppMode() === 'customer' && isCustomerOwner
   const editTarget = useMemo(() => editing ? { kind: editing } : null, [editing])
 
   if (isLoading) {
@@ -42,9 +46,25 @@ export default function SettingsPage() {
   return (
     <>
       <DetailPageLayout
-        header={{ title: 'Settings', subtitle: customer?.name }}
+        header={{
+          title: 'Settings',
+          subtitle: customer?.name,
+          primaryAction: canManageSettings ? {
+            icon: PencilEdit02Icon,
+            iconOnly: true,
+            'aria-label': 'Edit customer branding',
+            onClick: () => customer && CustomerService.showEditDrawer(customer.toCustomer()),
+          } : undefined,
+        }}
         modules={modules}
-        aside={null}
+        aside={<DetailSidePanel sections={[{
+          title: 'Customer details',
+          fields: [
+            { label: 'Name', value: customer?.name ?? '—' },
+            { label: 'Logo', value: <BrandingPreview organizationId={customerId} kind="logo" configured={Boolean(customer?.dto.logoAttachmentId)} /> },
+            { label: 'Logo icon', value: <BrandingPreview organizationId={customerId} kind="logo-icon" configured={Boolean(customer?.dto.logoIconAttachmentId)} /> },
+          ],
+        }]} />}
       >
         <RelatedEntityModule
           id="module-messaging-config"
@@ -85,5 +105,45 @@ export default function SettingsPage() {
         target={editTarget}
       />
     </>
+  )
+}
+
+function BrandingPreview({ organizationId, kind, configured }: { organizationId: string; kind: BrandingKind; configured: boolean }) {
+  const [url, setUrl] = useState<string>()
+  const [loading, setLoading] = useState(configured)
+
+  useEffect(() => {
+    if (!configured) {
+      setUrl(undefined)
+      setLoading(false)
+      return
+    }
+    let active = true
+    let objectUrl: string | undefined
+    setLoading(true)
+    void getOrganizationBrandingPreviewRequest(organizationId, kind)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob)
+        if (active) {
+          setUrl(objectUrl)
+          setLoading(false)
+        } else URL.revokeObjectURL(objectUrl)
+      })
+      .catch(() => { if (active) { setUrl(undefined); setLoading(false) } })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [configured, kind, organizationId])
+
+  if (!configured) return <span className="text-muted-foreground">Not set</span>
+  if (!url) return <span className="text-muted-foreground">{loading ? 'Loading…' : 'Preview unavailable'}</span>
+
+  return (
+    <img
+      src={url}
+      alt={kind === 'logo' ? 'Customer logo' : 'Customer logo icon'}
+      className={kind === 'logo' ? 'ml-auto block h-10 max-w-28 rounded border bg-white object-contain p-1' : 'ml-auto block size-10 rounded border bg-white object-contain p-1'}
+    />
   )
 }

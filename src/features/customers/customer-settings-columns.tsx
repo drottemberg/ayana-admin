@@ -6,7 +6,13 @@ import type {
   CustomerLocationPolicyRow,
   CustomerMessagingConfigRow,
   CustomerPromptProfileRow,
+  ClientAppLinksRow,
 } from '@/features/customers/customer-settings-api'
+
+export const clientAppLinksColumns: ColumnDef<ClientAppLinksRow>[] = [
+  { accessorKey: 'bookingAppUrlTemplate', header: 'Planning app URL', cell: ({ row }) => row.original.bookingAppUrlTemplate || 'Inherited / standalone default' },
+  { accessorKey: 'orderAppUrlTemplate', header: 'Store app URL', cell: ({ row }) => row.original.orderAppUrlTemplate || 'Inherited / standalone default' },
+]
 
 export const customerMessagingConfigColumns: ColumnDef<CustomerMessagingConfigRow>[] = [
   { accessorKey: 'webChat', header: 'Web chat' },

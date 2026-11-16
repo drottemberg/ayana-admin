@@ -40,6 +40,13 @@ export type CustomerPromptProfileRow = CustomerPromptProfile & {
   summary: string
 }
 
+export type ClientAppLinks = {
+  bookingAppUrlTemplate: string | null
+  orderAppUrlTemplate: string | null
+}
+
+export type ClientAppLinksRow = ClientAppLinks & { id: string; name: string }
+
 export type CustomerLocationPolicyRow = {
   id: string
   name: string
@@ -51,7 +58,7 @@ export type CustomerLocationPolicyRow = {
   isConfigured: boolean
 }
 
-export type CustomerSettingKind = 'messaging-config' | 'prompt-profile' | 'location-policy'
+export type CustomerSettingKind = 'messaging-config' | 'prompt-profile' | 'location-policy' | 'app-links'
 
 const customerSettingPath = (customerId: string) => `/customers/${encodeURIComponent(customerId)}`
 
@@ -89,6 +96,33 @@ export async function updateCustomerLocationPolicyRequest(
     `${customerSettingPath(customerId)}/locations/${encodeURIComponent(locationId)}/policy`,
     payload,
   )
+}
+
+export async function getCustomerClientAppLinksRequest(customerId: string) {
+  return apiClient.get<{ customer: ClientAppLinks; locations?: ClientAppLinksRow[] }>(`${customerSettingPath(customerId)}/app-links`)
+}
+
+export async function getLocationClientAppLinksRequest(customerId: string, locationId: string) {
+  return apiClient.get<ClientAppLinksRow>(`${customerSettingPath(customerId)}/locations/${encodeURIComponent(locationId)}/app-links`)
+}
+
+export async function updateCustomerClientAppLinksRequest(customerId: string, payload: ClientAppLinks) {
+  return apiClient.patch(`${customerSettingPath(customerId)}/app-links`, payload)
+}
+
+export async function updateLocationClientAppLinksRequest(customerId: string, locationId: string, payload: ClientAppLinks) {
+  return apiClient.patch(`${customerSettingPath(customerId)}/locations/${encodeURIComponent(locationId)}/app-links`, payload)
+}
+
+export async function loadCustomerClientAppLinksRow(customerId: string, _state: DataTableState<ClientAppLinksRow>): Promise<DataTableAsyncResult<ClientAppLinksRow>> {
+  const result = await getCustomerClientAppLinksRequest(customerId)
+  const row = { ...result.customer, id: customerId, name: 'Customer defaults' }
+  return { items: [row], count: 1, pageCount: 1 }
+}
+
+export async function loadLocationClientAppLinksRow(customerId: string, locationId: string, _state: DataTableState<ClientAppLinksRow>): Promise<DataTableAsyncResult<ClientAppLinksRow>> {
+  const item = await getLocationClientAppLinksRequest(customerId, locationId)
+  return { items: [{ ...item, name: item.name || 'Location' }], count: 1, pageCount: 1 }
 }
 
 export async function loadCustomerMessagingConfigRow(

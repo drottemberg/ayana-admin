@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -17,6 +17,13 @@ import { customersQueryKeys } from '@/features/customers/query-keys'
 import { normalizePhone, validatePhone } from '@/lib/phone'
 import { TimezoneUtils } from '@/utils'
 import countries from 'world-countries'
+import { OrganizationBrandingFields } from '@/features/organizations/OrganizationBrandingFields'
+import { saveOrganizationBrandingDraft, type BrandingDraft, type BrandingKind } from '@/features/organizations/organization-branding-api'
+import {
+  getCustomerClientAppLinksRequest,
+  updateCustomerClientAppLinksRequest,
+  type ClientAppLinks,
+} from '@/features/customers/customer-settings-api'
 
 const customerFormSchema = z.object({
   name: z.string().trim().min(1, 'Customer name is required.'),
@@ -55,6 +62,8 @@ const customerFormSchema = z.object({
     .refine((value) => (value ? !validatePhone(value) : true), {
       message: 'Enter a valid phone number.',
     }),
+  websiteUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS URL.'),
+  instagramUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS URL.'),
 })
 
 type CustomerFormValues = z.infer<typeof customerFormSchema>
@@ -91,18 +100,32 @@ type CreateCustomerFormProps = {
 export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange }: CreateCustomerFormProps) {
   const isEditMode = !!customer?.id
   const queryClient = useQueryClient()
+  const [brandingDraft, setBrandingDraft] = useState<BrandingDraft>({})
+  const [appLinks, setAppLinks] = useState<ClientAppLinks>({ bookingAppUrlTemplate: null, orderAppUrlTemplate: null })
+  const [appLinksLoaded, setAppLinksLoaded] = useState(!customer?.id)
+  const [appLinksDirty, setAppLinksDirty] = useState(false)
   const createCustomerMutation = useMutation({
-    mutationFn: createCustomerRequest,
+    mutationFn: async (payload: CreateCustomerPayload) => {
+      const saved = await createCustomerRequest(payload)
+      await saveOrganizationBrandingDraft(saved.id, brandingDraft)
+      if (appLinks.bookingAppUrlTemplate || appLinks.orderAppUrlTemplate) {
+        await updateCustomerClientAppLinksRequest(saved.id, appLinks)
+      }
+      return saved
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: customersQueryKeys.all })
       await onSaved()
     },
   })
   const updateCustomerMutation = useMutation({
-    mutationFn: (payload: CreateCustomerPayload) => {
+    mutationFn: async (payload: CreateCustomerPayload) => {
       if (!customer) throw new Error('Customer is required.')
 
-      return updateCustomerRequest(customer.id, payload)
+      const saved = await updateCustomerRequest(customer.id, payload)
+      await saveOrganizationBrandingDraft(customer.id, brandingDraft)
+      if (appLinksLoaded) await updateCustomerClientAppLinksRequest(customer.id, appLinks)
+      return saved
     },
     onSuccess: async () => {
       await Promise.all([
@@ -134,12 +157,39 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
       contactName: customer?.contactName ?? '',
       contactEmail: customer?.contactEmail ?? '',
       contactPhone: customer?.contactPhone ?? '',
+      websiteUrl: customer?.websiteUrl ?? '',
+      instagramUrl: customer?.instagramUrl ?? '',
     },
   })
 
   useEffect(() => {
-    onDirtyChange?.(isDirty)
-  }, [isDirty, onDirtyChange])
+    setBrandingDraft({})
+    setAppLinks({ bookingAppUrlTemplate: null, orderAppUrlTemplate: null })
+    setAppLinksLoaded(!customer?.id)
+    setAppLinksDirty(false)
+    if (!customer?.id) return
+    let active = true
+    void getCustomerClientAppLinksRequest(customer.id).then(({ customer: links }) => {
+      if (!active) return
+      setAppLinks(links)
+      setAppLinksLoaded(true)
+      setAppLinksDirty(false)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [customer?.id])
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty || Object.keys(brandingDraft).length > 0 || appLinksDirty)
+  }, [isDirty, brandingDraft, appLinksDirty, onDirtyChange])
+
+  const updateBrandingDraft = (kind: BrandingKind, value: File | null | undefined) => {
+    setBrandingDraft((current) => {
+      const next = { ...current }
+      if (value === undefined) delete next[kind]
+      else next[kind] = value
+      return next
+    })
+  }
 
   const submitForm = handleSubmit(async (values) => {
     const payload: CreateCustomerPayload = {
@@ -153,6 +203,8 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
       contactName: values.contactName?.trim() || undefined,
       contactEmail: values.contactEmail?.trim() || undefined,
       contactPhone: values.contactPhone ? normalizePhone(values.contactPhone) : undefined,
+      websiteUrl: values.websiteUrl?.trim() || null,
+      instagramUrl: values.instagramUrl?.trim() || null,
     }
 
     if (isEditMode) {
@@ -246,6 +298,41 @@ export function CreateCustomerForm({ customer, onCancel, onSaved, onDirtyChange 
           <Textarea id="customer-description" rows={3} {...register('description')} />
           {errors.description?.message ? <FieldError>{errors.description.message}</FieldError> : null}
         </Field>
+        <section className="space-y-3 rounded-lg border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Online presence</h3>
+            <p className="text-xs text-muted-foreground">These links are used in customer emails when a location does not provide its own.</p>
+          </div>
+          <TextInput label="Website URL" type="url" placeholder="https://example.com" error={errors.websiteUrl?.message} {...register('websiteUrl')} />
+          <TextInput label="Instagram URL" type="url" placeholder="https://instagram.com/example" error={errors.instagramUrl?.message} {...register('instagramUrl')} />
+        </section>
+        <OrganizationBrandingFields
+          organizationId={customer?.id}
+          logoAttachmentId={customer?.logoAttachmentId}
+          logoIconAttachmentId={customer?.logoIconAttachmentId}
+          draft={brandingDraft}
+          onDraftChange={updateBrandingDraft}
+        />
+        <section className="space-y-3 rounded-lg border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Client app links</h3>
+            <p className="text-xs text-muted-foreground">Optional URL templates used for booking and ordering links.</p>
+          </div>
+          <TextInput
+            label="Planning app URL template"
+            placeholder="https://example.com/planning?location={location-slug}"
+            value={appLinks.bookingAppUrlTemplate ?? ''}
+            onChange={(event) => { setAppLinksDirty(true); setAppLinks((current) => ({ ...current, bookingAppUrlTemplate: event.target.value || null })) }}
+            disabled={!appLinksLoaded}
+          />
+          <TextInput
+            label="Order app URL template"
+            placeholder="https://example.com/store?location={location-slug}"
+            value={appLinks.orderAppUrlTemplate ?? ''}
+            onChange={(event) => { setAppLinksDirty(true); setAppLinks((current) => ({ ...current, orderAppUrlTemplate: event.target.value || null })) }}
+            disabled={!appLinksLoaded}
+          />
+        </section>
         <TextInput
           label="Contact name"
           placeholder="Contact name"

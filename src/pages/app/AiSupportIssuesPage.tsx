@@ -4,7 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { DataTableAsync, type DataTableState } from '@/components/data-table'
+import { DataTableAsync, type DataTableFilter, type DataTableState } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
@@ -32,6 +32,19 @@ export default function AiSupportIssuesPage() {
   const [saving, setSaving] = useState(false)
   const queryClient = useQueryClient()
   const { session } = useConnect()
+  const canViewIssues = Boolean(session?.permissions.aiSupportIssues?.view)
+  const canEditIssues = Boolean(session?.permissions.aiSupportIssues?.edit)
+  const customerFilter: DataTableFilter<AiSupportIssue> = {
+    id: 'customerId',
+    label: 'Customer',
+    column: 'customerId',
+    selectionMode: 'single',
+    queryFn: async (search) => {
+      const customers = await getCustomersListRequest(undefined, search)
+      return { items: customers.map((customer) => ({ id: customer.id, label: customer.name })), total: customers.length }
+    },
+    getValue: (row) => row.customerId,
+  }
 
   const openIssue = (issueId: string) => {
     setSelectedIssueId(issueId)
@@ -59,11 +72,12 @@ export default function AiSupportIssuesPage() {
   const issueQuery = useQuery({
     queryKey: selectedIssueId ? aiSupportIssueQueryKeys.detail(selectedIssueId) : [...aiSupportIssueQueryKeys.all, 'no-selection'],
     queryFn: () => getAiSupportIssueRequest(selectedIssueId!),
-    enabled: Boolean(selectedIssueId),
+    enabled: Boolean(selectedIssueId && canViewIssues),
   })
   const issue = issueQuery.data
 
   const quickSetIssueStatus = async (issueId: string, nextStatus: 'RESOLVED' | 'DISMISSED') => {
+    if (!canEditIssues) return
     try {
       await updateAiSupportIssueRequest(issueId, { status: nextStatus })
       await queryClient.invalidateQueries({ queryKey: aiSupportIssueQueryKeys.all })
@@ -145,8 +159,12 @@ export default function AiSupportIssuesPage() {
     },
   ], [])
 
+  if (!canViewIssues) {
+    return <section className="p-6"><p className="text-sm text-muted-foreground">You do not have permission to view AI support issues.</p></section>
+  }
+
   const saveIssue = async (patch: Parameters<typeof updateAiSupportIssueRequest>[1]) => {
-    if (!selectedIssueId) return
+    if (!canEditIssues || !selectedIssueId) return
     const previousStatus = issue?.status ?? status
     setSaving(true)
     try {
@@ -195,25 +213,17 @@ export default function AiSupportIssuesPage() {
             { id: 'status', label: 'Status', column: 'status', options: statuses, getValue: (row) => row.status },
             { id: 'type', label: 'Type', column: 'type', options: types, getValue: (row) => row.type },
             { id: 'appContext', label: 'Context', column: 'appContext', options: ['ADMIN', 'CUSTOMER', 'MEMBER'], getValue: (row) => row.appContext },
-            {
-              id: 'customerId',
-              label: 'Customer',
-              column: 'customerId',
-              selectionMode: 'single',
-              queryFn: async (search: string) => {
-                const customers = await getCustomersListRequest(undefined, search)
-                return { items: customers.map((customer) => ({ id: customer.id, label: customer.name })), total: customers.length }
-              },
-              getValue: (row) => row.customerId,
-            },
+            ...(!customerIdFilter ? [customerFilter] : []),
           ]}
           getRowCommands={(row) => [
+            ...(canEditIssues ? [
             ...(row.status !== 'RESOLVED'
               ? [{ label: 'Resolve', onClick: () => void quickSetIssueStatus(row.id, 'RESOLVED') }]
               : []),
             ...(row.status !== 'DISMISSED'
               ? [{ label: 'Dismiss', onClick: () => void quickSetIssueStatus(row.id, 'DISMISSED') }]
               : []),
+            ] : []),
             { label: 'View details', onClick: () => openIssue(row.id) },
           ]}
           loadingMessage="Loading support issues..."

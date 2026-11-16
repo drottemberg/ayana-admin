@@ -287,7 +287,7 @@ export default function UserPage() {
   const currentCustomerId = session?.currentOrganization?.id
   const currentCustomerName = session?.currentOrganization?.name
   const isAdminContext = getAppMode() === 'admin'
-  const canViewAiSupportIssues = Boolean(isAdminContext && ['SUPPORT', 'ADMIN', 'SUPER_ADMIN'].includes(session?.user.staffRole ?? ''))
+  const canViewAiSupportIssues = Boolean(isAdminContext && session?.permissions.aiSupportIssues?.view)
   const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
   const invalidateBookingViews = async () => Promise.all([
     queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
