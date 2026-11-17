@@ -51,6 +51,17 @@ export type User = {
   /** Virtual server-side list filters; not stored on the user record. */
   contractLocationId?: string
   purchaseLocationId?: string
+  attendedSessions?: string
+  remainingSessions?: string
+  contractId?: string[]
+  activitySummary?: {
+    attendedCount: number
+    lastAttendedAt: string | null
+    remainingCredits: number
+    unlimited: boolean
+    contractNames: string[]
+    contractPricingOptionIds: string[]
+  } | null
   customer?: {
     id: string
     name: string

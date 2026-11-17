@@ -225,7 +225,11 @@ export default function MessagesPage() {
   })
   const sendTestEmailMutation = useMutation({
     mutationFn: () => sendCustomerBroadcastTestEmailRequest({ customerId, to: testEmail, subject: emailSubject, message, files }),
-    onSuccess: ({ to }) => toast.success(`Test email queued for ${to}.`),
+    onSuccess: ({ to, unsubscribeLinkIncluded }) => toast.success(
+      unsubscribeLinkIncluded
+        ? `Test email queued for ${to}, with the unsubscribe link.`
+        : `Test email queued for ${to}. No unsubscribe link: this address is not a user of this customer.`,
+    ),
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not send the test email.'),
   })
   const retryCampaignMutation = useMutation({

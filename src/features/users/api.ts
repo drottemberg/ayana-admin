@@ -51,6 +51,7 @@ type UserRecord = {
   memberships?: UserMembershipRecord[] | null
   createdAt?: string | null
   updatedAt?: string | null
+  activitySummary?: User['activitySummary']
   members?: Record<string, MemberRecord>
 }
 
@@ -151,6 +152,7 @@ function toUser(user: UserRecord): User {
     memberOrganizations: memberOrganizations.length > 0 ? memberOrganizations : undefined,
     createdAt: user.createdAt ?? '',
     updatedAt: user.updatedAt ?? '',
+    activitySummary: user.activitySummary ?? null,
   }
 }
 
@@ -206,6 +208,38 @@ export async function getUserFilterOptionsRequest(search: string, page = 1) {
       id: user.id,
       label: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user.phone || user.id,
     })),
+    total: result.total,
+  }
+}
+
+export async function getUserContractFilterOptionsRequest(search: string, page = 1, customerId?: string) {
+  const result = await apiClient.post<ApiListResult<{
+    pricingOptionId: string | null
+    pricingOptionName: string | null
+    status: string
+    validUntil?: string | null
+    freezeUntil?: string | null
+  }>>('/client-contracts/list', {
+    search: search.trim() || undefined,
+    page,
+    limit: 50,
+    orderBy: 'createdAt',
+    order: SortOrder.desc,
+    filters: {
+      status: ['ACTIVE'],
+      ...(customerId ? { customerId: [customerId] } : {}),
+    },
+  })
+  const now = Date.now()
+  const byId = new Map<string, string>()
+  for (const contract of result.items) {
+    if (!contract.pricingOptionId || !contract.pricingOptionName) continue
+    if (contract.validUntil && new Date(contract.validUntil).getTime() <= now) continue
+    if (contract.freezeUntil && new Date(contract.freezeUntil).getTime() > now) continue
+    byId.set(contract.pricingOptionId, contract.pricingOptionName)
+  }
+  return {
+    items: [...byId].map(([id, label]) => ({ id, label })),
     total: result.total,
   }
 }

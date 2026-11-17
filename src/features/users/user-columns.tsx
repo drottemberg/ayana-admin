@@ -11,6 +11,60 @@ import type { User } from '@/types/user'
 import { formatDateTime } from '@/utils/date-utils'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 import { formatPhoneNumber } from '@/lib/phone'
+import type { DataTableFilter } from '@/components/data-table'
+import { getUserContractFilterOptionsRequest } from '@/features/users/api'
+
+function userActivityColumn(): ColumnDef<User> {
+  return {
+    id: 'activitySummary',
+    header: 'Activity',
+    cell: ({ row }) => {
+      const activity = row.original.activitySummary
+      const attendedCount = activity?.attendedCount ?? 0
+      const contractName = activity?.contractNames?.length
+        ? activity.contractNames.join(', ')
+        : 'Credits'
+      const creditLabel = activity?.unlimited
+        ? `${contractName} · ∞`
+        : `${contractName} · ${activity?.remainingCredits ?? 0} credits`
+      const attendedDate = activity?.lastAttendedAt
+        ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(activity.lastAttendedAt))
+        : '—'
+
+      return <div className="flex min-w-44 flex-col items-start gap-1" title={`${attendedCount} attended sessions · ${creditLabel} · Last attended ${attendedDate}`}>
+        <Badge variant="secondary" className="h-5 rounded-full border-0 bg-muted px-2 text-[11px] font-medium">Attended · {attendedCount}</Badge>
+        <Badge variant="secondary" className="h-5 max-w-full rounded-full border-0 bg-[#eef3e9] px-2 text-[11px] font-medium text-[#4e6545]">
+          <span className="truncate">{creditLabel}</span>
+        </Badge>
+        <Badge variant="outline" className="h-5 rounded-full px-2 text-[11px] font-medium text-muted-foreground">Last attended · {attendedDate}</Badge>
+      </div>
+    },
+  }
+}
+
+export function getUserActivityFilters(customerId?: string): DataTableFilter<User>[] {
+  const options = (values: Array<[string, string]>) => async () => ({
+    items: values.map(([id, label]) => ({ id, label })),
+    total: values.length,
+  })
+  return [
+    {
+      id: 'attendedSessions', label: 'Attended sessions', column: 'attendedSessions', selectionMode: 'single',
+      queryFn: options([['0', '0'], ['1-4', '1–4'], ['5-9', '5–9'], ['10-24', '10–24'], ['25+', '25+']]),
+      getValue: (user) => String(user.activitySummary?.attendedCount ?? 0),
+    },
+    {
+      id: 'remainingSessions', label: 'Sessions remaining', column: 'remainingSessions', selectionMode: 'single',
+      queryFn: options([['0', '0 credits'], ['1-4', '1–4 credits'], ['5-9', '5–9 credits'], ['10-24', '10–24 credits'], ['25+', '25+ credits'], ['UNLIMITED', 'Unlimited']]),
+      getValue: (user) => user.activitySummary?.unlimited ? 'UNLIMITED' : String(user.activitySummary?.remainingCredits ?? 0),
+    },
+    {
+      id: 'contractId', label: 'Contract', column: 'contractId', selectionMode: 'single',
+      queryFn: (search, page) => getUserContractFilterOptionsRequest(search, page, customerId),
+      getValue: (user) => user.activitySummary?.contractPricingOptionIds ?? [],
+    },
+  ]
+}
 
 export type UserTableUsage = 'users' | 'staff' | 'customer-details' | 'store-details'
 
@@ -194,10 +248,10 @@ export function getUserListColumns(options: UserListColumnOptions = {}) {
   const canEdit = options.canEditPermissions
 
   if (usage === 'users') {
-    if (portal === Portal.ADMIN) return [...userColumns, ...adminUsersColumns]
-    if (portal === Portal.CUSTOMER) return userColumns
+    if (portal === Portal.ADMIN) return [...userColumns, userActivityColumn(), ...adminUsersColumns]
+    if (portal === Portal.CUSTOMER) return [...userColumns, userActivityColumn()]
 
-    return userColumns
+    return [...userColumns, userActivityColumn()]
   }
 
   if (usage === 'staff') {
@@ -210,7 +264,7 @@ export function getUserListColumns(options: UserListColumnOptions = {}) {
   }
 
   if (usage === 'customer-details') {
-    return [...userColumns, customerRoleColumn(options.customerId), customerScopeColumn(options.customerId, canEdit)]
+    return [...userColumns, userActivityColumn(), customerRoleColumn(options.customerId), customerScopeColumn(options.customerId, canEdit)]
   }
 
   if (usage === 'store-details') {

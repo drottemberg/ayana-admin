@@ -9,7 +9,7 @@ import { getAppMode } from '@/features/app/app-mode'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getUsersRequest } from '@/features/users/api'
 import { getLocationFilterOptionsRequest } from '@/features/locations/api'
-import { getUserListColumns } from '@/features/users/user-columns'
+import { getUserActivityFilters, getUserListColumns } from '@/features/users/user-columns'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
 import { Drawer, DrawerId } from '@/providers/drawer'
@@ -105,6 +105,7 @@ export function UsersTable({
       searchPlaceholder="Search by ID, name, email, phone"
       searchColumns={['id', 'firstName', 'lastName', 'email', 'phone']}
       filters={[
+        ...(userDirectory === 'users' ? getUserActivityFilters(portal === Portal.CUSTOMER ? currentOrganizationId : undefined) : []),
         ...(isCustomerContext || userDirectory === 'staff' ? [] : [{
           id: 'customerId',
           label: 'Customer',

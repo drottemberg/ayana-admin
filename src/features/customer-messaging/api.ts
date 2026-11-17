@@ -298,7 +298,7 @@ export async function sendCustomerBroadcastTestEmailRequest(input: {
   subject: string
   message: string
   files: File[]
-}): Promise<{ queued: boolean; to: string }> {
+}): Promise<{ queued: boolean; to: string; unsubscribeLinkIncluded: boolean }> {
   const body = new FormData()
   body.append('to', input.to.trim())
   body.append('subject', input.subject.trim())
