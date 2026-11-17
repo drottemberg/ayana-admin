@@ -97,6 +97,7 @@ export type BroadcastSendResult = {
 
 export type BroadcastHistoryItem = Record<string, unknown> & {
   id: string
+  name: string
   customerId: string
   customerName: string | null
   status: 'DRAFT' | 'SENDING' | 'SENT' | 'PARTIAL' | 'FAILED'
@@ -181,6 +182,7 @@ export async function getCustomerBroadcastHistoryRequest(customerId: string): Pr
 export type CustomerBroadcastDraft = {
   id: string
   customerId: string
+  name: string
   message: string
   filters: Record<string, unknown>
   media: Array<{ name: string; mimeType: string; size: number }>
@@ -251,6 +253,7 @@ export async function createWhatsappTemplateFromLibraryRequest(input: {
 
 export async function sendCustomerBroadcastRequest(input: {
   customerId: string
+  name: string
   idempotencyKey: string
   draftId?: string
   recipientIds: string[]
@@ -263,6 +266,7 @@ export async function sendCustomerBroadcastRequest(input: {
   whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean }
 }): Promise<BroadcastSendResult> {
   const body = new FormData()
+  body.append('name', input.name.trim())
   body.append('idempotencyKey', input.idempotencyKey)
   if (input.draftId) body.append('draftId', input.draftId)
   body.append('recipientIds', JSON.stringify(input.recipientIds))

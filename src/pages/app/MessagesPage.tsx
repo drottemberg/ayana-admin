@@ -73,6 +73,7 @@ export default function MessagesPage() {
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
   const [emailSubject, setEmailSubject] = useState('')
+  const [campaignName, setCampaignName] = useState('')
   const [testEmail, setTestEmail] = useState('')
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
   const [draftId, setDraftId] = useState('')
@@ -165,6 +166,7 @@ export default function MessagesPage() {
   const sendMutation = useMutation({
     mutationFn: () => sendCustomerBroadcastRequest({
       customerId,
+      name: campaignName,
       idempotencyKey: campaignRequestKey,
       draftId: draftId || undefined,
       recipientIds: selectedRecipientIds,
@@ -202,6 +204,7 @@ export default function MessagesPage() {
         toast.success(`Accepted by the notification queue: ${result.channelsAccepted} chat messages and ${result.emailsAccepted} emails.`)
       }
       setMessage('')
+      setCampaignName('')
       setEmailSubject('')
       setTestEmail('')
       setReplyButtons([])
@@ -306,6 +309,7 @@ export default function MessagesPage() {
           if (!active) return
           restoredDraftKey.current = customerId
           setDraftId(draft.id)
+          setCampaignName(draft.name ?? '')
           setLocationIds(data.locationIds ?? [])
           setActivity(data.activity ?? 'ALL')
           setSelectedRecipientIds(data.selectedRecipientIds ?? [])
@@ -336,6 +340,7 @@ export default function MessagesPage() {
     setDraftId('')
     setDraftSavedAt(null)
     setMessage('')
+    setCampaignName('')
     setEmailSubject('')
     setTestEmail('')
     setFiles([])
@@ -365,7 +370,9 @@ export default function MessagesPage() {
 
   const saveDraft = async () => {
     if (!customerId) return toast.error('Select a customer before saving a draft.')
+    if (!campaignName.trim()) return toast.error('Enter a campaign name before saving the draft.')
     const draft = {
+      name: campaignName.trim(),
       locationIds,
       activity,
       selectedRecipientIds,
@@ -484,6 +491,7 @@ export default function MessagesPage() {
 
   const handleSend = () => {
     if (sendMutation.isPending) return
+    if (!campaignName.trim()) return toast.error('Enter a campaign name.')
     if (!selectedRecipientIds.length) return toast.error('Select at least one recipient.')
     if (!selectedChannels.length) return toast.error('Select at least one channel.')
     if (selectedChannels.includes('EMAIL') && !emailSubject.trim()) return toast.error('Enter an email subject.')
@@ -567,8 +575,8 @@ export default function MessagesPage() {
             tableKey="customer-broadcast.campaigns"
             columns={campaignColumns}
             disabledSelection
-            searchPlaceholder={isCustomerContext ? 'Search by campaign or ID' : 'Search by campaign, customer or ID'}
-            searchColumns={isCustomerContext ? ['id', 'message'] : ['id', 'message', 'customerName']}
+            searchPlaceholder={isCustomerContext ? 'Search by campaign name or ID' : 'Search by campaign name, customer or ID'}
+            searchColumns={isCustomerContext ? ['id', 'name'] : ['id', 'name', 'customerName']}
             filters={[{
               id: 'status',
               label: 'Status',
@@ -599,6 +607,13 @@ export default function MessagesPage() {
           />
         ) : (
           <>
+        <section className="rounded-xl border border-border bg-card p-5">
+          <label className="grid max-w-2xl gap-1.5 text-sm font-medium">
+            <span>Campaign name</span>
+            <Input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} maxLength={100} placeholder="e.g. November class schedule" required />
+            <span className="text-xs font-normal text-muted-foreground">Internal label shown in the campaign list; it is not sent to recipients.</span>
+          </label>
+        </section>
         <section className="space-y-4 rounded-xl border border-border bg-card p-5">
           <div>
             <h2 className="text-base font-semibold">Audience</h2>
@@ -1026,6 +1041,7 @@ function CampaignDetailPage({
   const sideSections: DetailPanelSection[] = detail ? [{
     title: 'Campaign',
     fields: [
+      { label: 'Name', value: detail.name },
       { label: 'Status', value: <CampaignStatusBadge status={detail.status} /> },
       { label: 'ID', value: detail.id },
       { label: 'Customer', value: detail.customerName ? <Link to={`/customers/${detail.customerId}`} className="underline-offset-2 hover:underline">{detail.customerName}</Link> : detail.customerId },
@@ -1068,7 +1084,7 @@ function CampaignDetailPage({
   return (
     <DetailPageLayout
       header={{
-        title: 'Message campaign',
+        title: detail.name,
         subtitle: detail.id,
         leading: <BackIconButton onClick={onBack} />,
       }}

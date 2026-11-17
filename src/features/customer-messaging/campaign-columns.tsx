@@ -12,12 +12,12 @@ export function getCampaignColumns(onOpen: (campaign: BroadcastHistoryItem) => v
       cell: ({ row }) => <CampaignStatus status={row.original.status} />,
     },
     {
-      accessorKey: 'message',
+      accessorKey: 'name',
       header: 'Campaign',
       cell: ({ row }) => (
         <div className="grid min-w-40 gap-0.5">
           <button type="button" className="w-fit max-w-full truncate text-left font-medium underline-offset-2 hover:underline" onClick={() => onOpen(row.original)}>
-            {row.original.message || 'Image campaign'}
+            {row.original.name}
           </button>
           <span className="text-xs text-muted-foreground">{row.original.id}</span>
         </div>
