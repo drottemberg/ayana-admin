@@ -241,6 +241,9 @@ function getUserDetailSections(
         { label: 'First name', value: user?.firstName ?? NO_VALUE_STR },
         { label: 'Last name', value: user?.lastName ?? NO_VALUE_STR },
         { label: 'Email', value: user?.email ?? NO_VALUE_STR },
+        { label: 'Email verified', value: user?.email ? (user.emailVerifiedAt ? 'Yes' : 'No') : 'No email' },
+        { label: 'Email invalid', value: user?.email ? (user.invalidEmail ? 'Yes' : 'No') : 'No email' },
+        ...(user?.invalidAt ? [{ label: 'Email invalid since', value: formatDateTime(user.invalidAt, NO_VALUE_STR) }] : []),
         { label: 'Phone number', value: formatPhoneNumber(user?.phone) || NO_VALUE_STR },
         {
           label: 'Created at',

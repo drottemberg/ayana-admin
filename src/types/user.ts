@@ -40,6 +40,9 @@ export type User = {
   firstName: string
   lastName: string
   email: string
+  emailVerifiedAt?: string | null
+  invalidEmail?: boolean
+  invalidAt?: string | null
   phone?: string
   preferences?: Record<string, unknown> | null
   position?: string | null
@@ -84,6 +87,8 @@ export type UpdateUserDetailsPayload = {
   lastName: string
   email?: string | null
   phone?: string | null
+  emailVerified?: boolean
+  invalidEmail?: boolean
   isActive?: boolean
 }
 

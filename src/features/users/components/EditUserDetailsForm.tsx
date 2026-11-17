@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -24,6 +24,8 @@ const detailsFormSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.'),
   lastName: z.string().trim().min(1, 'Last name is required.'),
   email: z.string().trim().email('Enter a valid email address.').or(z.literal('')),
+  emailVerified: z.boolean(),
+  invalidEmail: z.boolean(),
   phone: z
     .string()
     .optional()
@@ -92,12 +94,15 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email ?? '',
+      emailVerified: Boolean(user.emailVerifiedAt),
+      invalidEmail: Boolean(user.invalidEmail),
       phone: user.phone ?? '',
     },
   })
+  const emailValue = useWatch({ control, name: 'email' })
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { firstName: string; lastName: string; email?: string | null; phone?: string | null }) =>
+    mutationFn: (payload: { firstName: string; lastName: string; email?: string | null; phone?: string | null; emailVerified: boolean; invalidEmail: boolean }) =>
       updateUserDetailsRequest(String(user.id), payload),
     onSuccess: async (updatedUser) => {
       await Promise.all([
@@ -118,6 +123,8 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
       lastName: values.lastName.trim(),
       email: values.email.trim() || null,
       phone: values.phone ? normalizePhone(values.phone) : null,
+      emailVerified: values.emailVerified && !values.invalidEmail && Boolean(values.email.trim()),
+      invalidEmail: values.invalidEmail && !values.emailVerified,
     })
   })
 
@@ -138,6 +145,16 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
             error={errors.email?.message}
             {...register('email')}
           />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...register('emailVerified')} disabled={!emailValue?.trim()} />
+            Email verified
+            <span className="text-muted-foreground">(manual override)</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...register('invalidEmail')} disabled={!emailValue?.trim()} />
+            Email invalid
+            <span className="text-muted-foreground">(blocks bot conversations until verified)</span>
+          </label>
           <Controller
             control={control}
             name="phone"

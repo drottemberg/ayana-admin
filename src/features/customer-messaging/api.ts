@@ -51,6 +51,7 @@ export type BroadcastRecipient = {
   userId: string
   userName: string
   email: string | null
+  emailInvalid: boolean
   phone: string | null
   channel: 'WHATSAPP' | 'TELEGRAM'
   channelId: string

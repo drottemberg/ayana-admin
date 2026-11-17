@@ -422,7 +422,7 @@ export default function MessagesPage() {
   }, [customerSearch, customers])
 
   const loadCampaigns = useCallback((state: DataTableState<BroadcastHistoryItem>) => getBroadcastCampaignsRequest(state), [])
-  const campaignColumns = useMemo(() => getCampaignColumns((campaign) => {
+  const openCampaign = useCallback((campaign: BroadcastHistoryItem) => {
     if (campaign.status === 'DRAFT') {
       setCustomerId(campaign.customerId)
       setMode('CREATE')
@@ -430,7 +430,8 @@ export default function MessagesPage() {
     }
     setSelectedBroadcastId(campaign.id)
     setMode('DETAIL')
-  }), [])
+  }, [])
+  const campaignColumns = useMemo(() => getCampaignColumns(openCampaign), [openCampaign])
   const backToCampaignList = () => {
     setMode('LIST')
     setSelectedBroadcastId('')
@@ -444,9 +445,9 @@ export default function MessagesPage() {
     : []
   const selectedWhatsappOutsideWindow = selectedWhatsappRecipients.filter((recipient) => !recipient.whatsappWindowOpen).length
   const selectedEmailCount = selectedChannels.includes('EMAIL')
-    ? new Set(selectedRecipients.filter((recipient) => recipient.email).map((recipient) => recipient.userId)).size
+    ? new Set(selectedRecipients.filter((recipient) => recipient.email && !recipient.emailInvalid).map((recipient) => recipient.userId)).size
     : 0
-  const availableEmailCount = new Set(recipients.filter((recipient) => recipient.email).map((recipient) => recipient.userId)).size
+  const availableEmailCount = new Set(recipients.filter((recipient) => recipient.email && !recipient.emailInvalid).map((recipient) => recipient.userId)).size
   const allSelected = filteredRecipients.length > 0 && filteredRecipients.every((recipient) => selectedRecipientIds.includes(recipient.id))
   const toggleAll = () => setSelectedRecipientIds((current) => allSelected
     ? current.filter((id) => !filteredRecipients.some((recipient) => recipient.id === id))
@@ -574,6 +575,7 @@ export default function MessagesPage() {
             refetchOnMount="always"
             tableKey="customer-broadcast.campaigns"
             columns={campaignColumns}
+            onRowClick={openCampaign}
             disabledSelection
             searchPlaceholder={isCustomerContext ? 'Search by campaign name or ID' : 'Search by campaign name, customer or ID'}
             searchColumns={isCustomerContext ? ['id', 'name'] : ['id', 'name', 'customerName']}
@@ -687,9 +689,9 @@ export default function MessagesPage() {
                 <div>
                   <h2 className="font-semibold">Recipients</h2>
                   <p className="text-sm text-muted-foreground">
-                    {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.length} chat channels · ${availableEmailCount} with email`}
+                    {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.length} chat channels · ${availableEmailCount} email addresses`}
                   </p>
-                  <p className="text-xs text-muted-foreground">Only users opted in to campaigns for this customer are listed.</p>
+                  <p className="text-xs text-muted-foreground">Users who opted out of this customer’s campaigns are excluded. Addresses marked invalid after a hard bounce are excluded from email.</p>
                   {selectedWhatsappRecipients.length ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       WhatsApp: {selectedWhatsappRecipients.length - selectedWhatsappOutsideWindow} direct message(s) · {selectedWhatsappOutsideWindow} approved-template fallback(s) needed.
@@ -741,7 +743,7 @@ export default function MessagesPage() {
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">Email is sent once per selected person who has an email address.</p>
+                <p className="text-xs text-muted-foreground">Email is sent once per selected person unless the address is marked invalid after a hard bounce.</p>
               </fieldset>
               {selectedChannels.includes('WHATSAPP') ? (
                 <fieldset className="grid gap-3 rounded-lg border border-border p-3">
@@ -1233,6 +1235,7 @@ function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRe
         <span className="block truncate text-sm font-medium">{recipient.userName}</span>
         <span className="block truncate text-xs text-muted-foreground">{recipient.channelLabel}</span>
         {recipient.email ? <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span> : null}
+        {recipient.email && recipient.emailInvalid ? <span className="block text-xs text-amber-700">Email invalid after hard bounce · excluded from email</span> : null}
         {recipient.phone ? <span className="block truncate text-xs text-muted-foreground">{recipient.phone}</span> : null}
       </span>
       <span className="flex flex-col items-end gap-1">

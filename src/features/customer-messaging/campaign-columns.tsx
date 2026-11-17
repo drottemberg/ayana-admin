@@ -16,7 +16,7 @@ export function getCampaignColumns(onOpen: (campaign: BroadcastHistoryItem) => v
       header: 'Campaign',
       cell: ({ row }) => (
         <div className="grid min-w-40 gap-0.5">
-          <button type="button" className="w-fit max-w-full truncate text-left font-medium underline-offset-2 hover:underline" onClick={() => onOpen(row.original)}>
+          <button type="button" className="w-fit max-w-full cursor-pointer truncate text-left font-medium text-primary underline underline-offset-2 hover:opacity-80" aria-label={`Open campaign ${row.original.name}`} onClick={(event) => { event.stopPropagation(); onOpen(row.original) }}>
             {row.original.name}
           </button>
           <span className="text-xs text-muted-foreground">{row.original.id}</span>
