@@ -21,20 +21,22 @@ function userActivityColumn(): ColumnDef<User> {
     cell: ({ row }) => {
       const activity = row.original.activitySummary
       const attendedCount = activity?.attendedCount ?? 0
-      const contractName = activity?.contractNames?.length
-        ? activity.contractNames.join(', ')
-        : 'Credits'
-      const creditLabel = activity?.unlimited
-        ? `${contractName} · ∞`
-        : `${contractName} · ${activity?.remainingCredits ?? 0} credits`
+      const remainingLabel = activity?.unlimited
+        ? '∞'
+        : new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(activity?.remainingCredits ?? 0)
+      const latestContractLabel = activity?.latestContractName
+        ? `${activity.latestContractName}${activity.latestContractPrice != null
+          ? ` · ${new Intl.NumberFormat(undefined, { style: 'currency', currency: activity.latestContractCurrency || 'EUR' }).format(activity.latestContractPrice)}`
+          : ''}`
+        : activity?.contractNames?.join(', ') || 'No active contract'
       const attendedDate = activity?.lastAttendedAt
         ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(activity.lastAttendedAt))
         : '—'
 
-      return <div className="flex min-w-44 flex-col items-start gap-1" title={`${attendedCount} attended sessions · ${creditLabel} · Last attended ${attendedDate}`}>
-        <Badge variant="secondary" className="h-5 rounded-full border-0 bg-muted px-2 text-[11px] font-medium">Attended · {attendedCount}</Badge>
+      return <div className="flex min-w-44 flex-col items-start gap-1" title={`${attendedCount} attended sessions · ${remainingLabel} sessions remaining · ${latestContractLabel} · Last attended ${attendedDate}`}>
+        <Badge variant="secondary" className="h-5 rounded-full border-0 bg-muted px-2 text-[11px] font-medium">Attended · {attendedCount} sessions</Badge>
         <Badge variant="secondary" className="h-5 max-w-full rounded-full border-0 bg-[#eef3e9] px-2 text-[11px] font-medium text-[#4e6545]">
-          <span className="truncate">{creditLabel}</span>
+          <span className="truncate">{latestContractLabel} · {remainingLabel} sessions remaining</span>
         </Badge>
         <Badge variant="outline" className="h-5 rounded-full px-2 text-[11px] font-medium text-muted-foreground">Last attended · {attendedDate}</Badge>
       </div>

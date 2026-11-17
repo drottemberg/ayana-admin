@@ -61,6 +61,9 @@ export type User = {
     unlimited: boolean
     contractNames: string[]
     contractPricingOptionIds: string[]
+    latestContractName: string | null
+    latestContractPrice: number | null
+    latestContractCurrency: string | null
   } | null
   customer?: {
     id: string

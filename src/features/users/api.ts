@@ -212,35 +212,56 @@ export async function getUserFilterOptionsRequest(search: string, page = 1) {
   }
 }
 
-export async function getUserContractFilterOptionsRequest(search: string, page = 1, customerId?: string) {
-  const result = await apiClient.post<ApiListResult<{
+export async function getUserContractFilterOptionsRequest(search: string, _page = 1, customerId?: string) {
+  type ContractFilterRecord = {
     pricingOptionId: string | null
     pricingOptionName: string | null
     status: string
     validUntil?: string | null
     freezeUntil?: string | null
-  }>>('/client-contracts/list', {
+  }
+
+  const limit = 50
+  const filters = {
+    status: ['ACTIVE'],
+    ...(customerId ? { customerId: [customerId] } : {}),
+  }
+  const firstPage = await apiClient.post<ApiListResult<ContractFilterRecord>>('/client-contracts/list', {
     search: search.trim() || undefined,
-    page,
-    limit: 50,
+    page: 1,
+    limit,
     orderBy: 'createdAt',
     order: SortOrder.desc,
-    filters: {
-      status: ['ACTIVE'],
-      ...(customerId ? { customerId: [customerId] } : {}),
-    },
+    filters,
   })
+  const contracts = [...firstPage.items]
+  const pageCount = Math.ceil(firstPage.total / limit)
+  for (let page = 2; page <= pageCount; page += 1) {
+    const result = await apiClient.post<ApiListResult<ContractFilterRecord>>('/client-contracts/list', {
+      search: search.trim() || undefined,
+      page,
+      limit,
+      orderBy: 'createdAt',
+      order: SortOrder.desc,
+      filters,
+    })
+    contracts.push(...result.items)
+  }
+
   const now = Date.now()
   const byId = new Map<string, string>()
-  for (const contract of result.items) {
+  for (const contract of contracts) {
     if (!contract.pricingOptionId || !contract.pricingOptionName) continue
     if (contract.validUntil && new Date(contract.validUntil).getTime() <= now) continue
     if (contract.freezeUntil && new Date(contract.freezeUntil).getTime() > now) continue
     byId.set(contract.pricingOptionId, contract.pricingOptionName)
   }
+  const items = [...byId].map(([id, label]) => ({ id, label }))
   return {
-    items: [...byId].map(([id, label]) => ({ id, label })),
-    total: result.total,
+    items,
+    // The filter dropdown pages by returned option count. Contract rows can share the same
+    // pricing option, so returning the raw contract total makes it request pages forever.
+    total: items.length,
   }
 }
 
