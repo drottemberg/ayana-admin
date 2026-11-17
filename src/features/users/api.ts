@@ -265,6 +265,26 @@ export async function getUserContractFilterOptionsRequest(search: string, _page 
   }
 }
 
+export async function getUserActivityFilterOptionsRequest(
+  kind: 'attended' | 'remaining',
+  search: string,
+  page = 1,
+  customerId?: string,
+) {
+  const result = await apiClient.post<{ attended: string[]; remaining: string[] }>(
+    '/users/activity-filter-options',
+    { customerId },
+  )
+  const values = kind === 'attended' ? result.attended : result.remaining
+  const filtered = values.filter((value) => value.toLowerCase().includes(search.trim().toLowerCase()))
+  const pageSize = 50
+  const items = filtered.slice((page - 1) * pageSize, page * pageSize).map((value) => ({
+    id: value,
+    label: value === 'UNLIMITED' ? 'Unlimited' : value,
+  }))
+  return { items, total: filtered.length }
+}
+
 export async function getUsersRequest(
   tableState: DataTableState<User>,
   hiddenFilters?: Record<string, unknown>,

@@ -12,7 +12,7 @@ import { formatDateTime } from '@/utils/date-utils'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 import { formatPhoneNumber } from '@/lib/phone'
 import type { DataTableFilter } from '@/components/data-table'
-import { getUserContractFilterOptionsRequest } from '@/features/users/api'
+import { getUserActivityFilterOptionsRequest, getUserContractFilterOptionsRequest } from '@/features/users/api'
 
 function userActivityColumn(): ColumnDef<User> {
   return {
@@ -24,19 +24,15 @@ function userActivityColumn(): ColumnDef<User> {
       const remainingLabel = activity?.unlimited
         ? '∞'
         : new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(activity?.remainingCredits ?? 0)
-      const latestContractLabel = activity?.latestContractName
-        ? `${activity.latestContractName}${activity.latestContractPrice != null
-          ? ` · ${new Intl.NumberFormat(undefined, { style: 'currency', currency: activity.latestContractCurrency || 'EUR' }).format(activity.latestContractPrice)}`
-          : ''}`
-        : activity?.contractNames?.join(', ') || 'No active contract'
+      const latestContractLabel = activity?.latestContractName || activity?.contractNames?.join(', ') || 'No active contract'
       const attendedDate = activity?.lastAttendedAt
         ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(activity.lastAttendedAt))
         : '—'
 
-      return <div className="flex min-w-44 flex-col items-start gap-1" title={`${attendedCount} attended sessions · ${remainingLabel} sessions remaining · ${latestContractLabel} · Last attended ${attendedDate}`}>
+      return <div className="flex min-w-44 flex-col items-start gap-1" title={`${attendedCount} attended · ${latestContractLabel} · ${remainingLabel} credits · Last attended ${attendedDate}`}>
         <Badge variant="secondary" className="h-5 rounded-full border-0 bg-muted px-2 text-[11px] font-medium">Attended · {attendedCount} sessions</Badge>
         <Badge variant="secondary" className="h-5 max-w-full rounded-full border-0 bg-[#eef3e9] px-2 text-[11px] font-medium text-[#4e6545]">
-          <span className="truncate">{latestContractLabel} · {remainingLabel} sessions remaining</span>
+          <span className="truncate">{latestContractLabel} · {remainingLabel} credits</span>
         </Badge>
         <Badge variant="outline" className="h-5 rounded-full px-2 text-[11px] font-medium text-muted-foreground">Last attended · {attendedDate}</Badge>
       </div>
@@ -45,19 +41,15 @@ function userActivityColumn(): ColumnDef<User> {
 }
 
 export function getUserActivityFilters(customerId?: string): DataTableFilter<User>[] {
-  const options = (values: Array<[string, string]>) => async () => ({
-    items: values.map(([id, label]) => ({ id, label })),
-    total: values.length,
-  })
   return [
     {
       id: 'attendedSessions', label: 'Attended sessions', column: 'attendedSessions', selectionMode: 'single',
-      queryFn: options([['0', '0'], ['1-4', '1–4'], ['5-9', '5–9'], ['10-24', '10–24'], ['25+', '25+']]),
+      queryFn: (search, page) => getUserActivityFilterOptionsRequest('attended', search, page, customerId),
       getValue: (user) => String(user.activitySummary?.attendedCount ?? 0),
     },
     {
       id: 'remainingSessions', label: 'Sessions remaining', column: 'remainingSessions', selectionMode: 'single',
-      queryFn: options([['0', '0 credits'], ['1-4', '1–4 credits'], ['5-9', '5–9 credits'], ['10-24', '10–24 credits'], ['25+', '25+ credits'], ['UNLIMITED', 'Unlimited']]),
+      queryFn: (search, page) => getUserActivityFilterOptionsRequest('remaining', search, page, customerId),
       getValue: (user) => user.activitySummary?.unlimited ? 'UNLIMITED' : String(user.activitySummary?.remainingCredits ?? 0),
     },
     {
