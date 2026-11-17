@@ -76,7 +76,7 @@ const aiSupportIssueColumns: ColumnDef<AiSupportIssue>[] = [
   {
     accessorKey: 'summary',
     header: 'Summary',
-    cell: ({ row }) => <Link className="block max-w-72 whitespace-normal break-words underline-offset-2 hover:underline" to={`/ai-support-issues?issueId=${encodeURIComponent(row.original.id)}`}>{row.original.summary}</Link>,
+    cell: ({ row }) => <Link className="block max-w-72 whitespace-normal break-words underline-offset-2 hover:underline" to={`/agent-support-issues?issueId=${encodeURIComponent(row.original.id)}`}>{row.original.summary}</Link>,
   },
 ]
 
@@ -287,7 +287,7 @@ export default function UserPage() {
   const currentCustomerId = session?.currentOrganization?.id
   const currentCustomerName = session?.currentOrganization?.name
   const isAdminContext = getAppMode() === 'admin'
-  const canViewAiSupportIssues = Boolean(isAdminContext && session?.permissions.aiSupportIssues?.view)
+  const canViewAiSupportIssues = Boolean(session?.permissions.aiSupportIssues?.view)
   const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
   const invalidateBookingViews = async () => Promise.all([
     queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
