@@ -51,6 +51,9 @@ type DatePickerProps = {
   defaultValue?: string
   required?: boolean
   disabled?: boolean
+  clearable?: boolean
+  min?: string
+  max?: string
   'aria-invalid'?: boolean | 'true' | 'false'
   onValueChange?: (value: string) => void
   onChange?: (event: DatePickerChangeEvent) => void
@@ -87,6 +90,9 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
       defaultValue = '',
       required,
       disabled,
+      clearable = false,
+      min,
+      max,
       onValueChange,
       onChange,
       onBlur,
@@ -97,6 +103,7 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
     const fieldId = React.useId()
     const inputRef = React.useRef<HTMLInputElement | null>(null)
     const contentRef = React.useRef<HTMLDivElement | null>(null)
+    const autoContainer = contentRef.current?.closest('[data-slot="dialog-content"], [data-slot="drawer-content"]') as HTMLElement | null
     const inputId = id ?? (typeof props.name === 'string' && props.name.length > 0 ? props.name : fieldId)
     const name = props.name
     const isInvalid = Boolean(error) || props['aria-invalid'] === true || props['aria-invalid'] === 'true'
@@ -104,17 +111,13 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
     const [internalValue, setInternalValue] = React.useState(defaultValue)
     const currentValue = isControlled ? value : internalValue
     const date = parseDateValue(currentValue)
+    const minDate = parseDateValue(min)
+    const maxDate = parseDateValue(max)
+    const disabledDates = [
+      ...(minDate ? [{ before: minDate }] : []),
+      ...(maxDate ? [{ after: maxDate }] : []),
+    ]
     const [open, setOpen] = React.useState(false)
-    const [autoContainer, setAutoContainer] = React.useState<HTMLElement | null>(null)
-
-    React.useLayoutEffect(() => {
-      if (container) return
-
-      const node = contentRef.current
-      setAutoContainer(
-        node?.closest('[data-slot="dialog-content"], [data-slot="drawer-content"]') as HTMLElement | null,
-      )
-    }, [container])
 
     React.useImperativeHandle(ref, () => inputRef.current as HTMLInputElement)
 
@@ -152,7 +155,7 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
           </div>
         )}
 
-        <input ref={inputRef} id={inputId} name={name} value={currentValue} readOnly required={required} hidden />
+        <input ref={inputRef} id={inputId} name={name} value={currentValue} min={min} max={max} readOnly required={required} hidden />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger
             render={
@@ -174,7 +177,14 @@ const DatePicker = React.forwardRef<HTMLInputElement, DatePickerProps>(
             }
           />
           <PopoverContent className="w-auto p-0" align="start" container={container ?? autoContainer}>
-            <Calendar mode="single" selected={date} onSelect={handleChange} defaultMonth={date} />
+            <Calendar mode="single" selected={date} onSelect={handleChange} defaultMonth={date} disabled={disabledDates} />
+            {clearable && date ? (
+              <div className="border-t p-2">
+                <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => { handleChange(undefined); setOpen(false) }}>
+                  Clear date
+                </Button>
+              </div>
+            ) : null}
           </PopoverContent>
         </Popover>
 

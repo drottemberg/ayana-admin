@@ -111,6 +111,7 @@ export function GrantCreditsDrawer({
             <Input required type="number" min="0.01" max="1000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
           </label>
           <DatePicker
+            clearable
             label="Expiration date (optional)"
             hint="Leave empty if these credits should never expire."
             value={expirationDate}
@@ -332,6 +333,7 @@ export function GiftCreditsDrawer({
             </label>
             {operation === 'ADD' ? (
               <DatePicker
+                clearable
                 label="Expiration date (optional)"
                 hint="Leave empty if these credits should never expire."
                 value={expirationDate}

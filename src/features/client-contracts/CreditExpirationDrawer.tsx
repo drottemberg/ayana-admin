@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
@@ -94,20 +95,14 @@ export const CreditExpirationDrawer = NiceModal.create<CreditExpirationDrawerPro
     >
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <label className="grid gap-1.5 text-sm font-medium">
-            <span>Expiration date</span>
-            <Input
-              type="date"
-              min={todayLocal()}
-              value={expirationDate}
-              onChange={(event) => setExpirationDate(event.target.value)}
-            />
-            <span className="text-xs font-normal text-muted-foreground">
+          <div className="grid gap-1.5">
+            <DatePicker clearable label="Expiration date" min={todayLocal()} value={expirationDate} onValueChange={setExpirationDate} />
+            <span className="text-xs text-muted-foreground">
               {props.kind === 'movement' && props.movement.type === 'CREDIT_EXPIRY'
                 ? 'To restore expired credits, set a new future expiration date or leave empty.'
                 : 'Leave empty for no expiration.'}
             </span>
-          </label>
+          </div>
           {props.kind === 'movement' ? <>
             <label className="grid gap-1.5 text-sm font-medium">
               <span>Amount</span>

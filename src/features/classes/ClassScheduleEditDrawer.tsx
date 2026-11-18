@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { getLocationCoachesRequest, updateClassScheduleRequest } from '@/features/classes/api'
@@ -164,12 +165,12 @@ export function ClassScheduleEditDrawer({
         <Field label="Coach name (optional)"><Input value={coachName} onChange={(event) => setCoachName(event.target.value)} placeholder="Enter a name if the coach isn't in the system" /></Field>
         <p className="-mt-3 text-xs text-muted-foreground">A linked coach’s profile name takes priority.</p>
         {coachId ? <>
-          <Field label="Coach assigned from"><Input required type="date" value={coachValidFrom || validFrom} onChange={(event) => setCoachValidFrom(event.target.value)} /></Field>
-          <Field label="Coach assigned until (optional)"><Input type="date" value={coachValidUntil} onChange={(event) => setCoachValidUntil(event.target.value)} /></Field>
+          <DatePicker required label="Coach assigned from" value={coachValidFrom || validFrom} onValueChange={setCoachValidFrom} />
+          <DatePicker clearable label="Coach assigned until (optional)" value={coachValidUntil} onValueChange={setCoachValidUntil} />
           <p className="-mt-3 text-xs text-muted-foreground">The schedule can continue after this instructor assignment ends.</p>
         </> : null}
-        <Field label="Valid from"><Input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
-        <Field label="Valid until"><Input type="date" value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></Field>
+        <DatePicker label="Valid from" value={validFrom} onValueChange={setValidFrom} />
+        <DatePicker clearable label="Valid until" value={validUntil} onValueChange={setValidUntil} />
         <label className="flex items-start gap-2 text-sm">
           <Checkbox checked={autoGenerateSessions} onCheckedChange={(checked) => setAutoGenerateSessions(Boolean(checked))} className="mt-0.5" />
           <span><span className="font-medium">Generate sessions automatically</span><span className="mt-0.5 block text-muted-foreground">When disabled, no bookable sessions are created automatically. You can generate them manually from the schedule actions.</span></span>
