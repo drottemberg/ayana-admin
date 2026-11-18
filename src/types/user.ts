@@ -62,6 +62,7 @@ export type User = {
     contractNames: string[]
     contractPricingOptionIds: string[]
     latestContractName: string | null
+    latestContractPricingOptionId?: string | null
     latestContractPrice: number | null
     latestContractCurrency: string | null
   } | null

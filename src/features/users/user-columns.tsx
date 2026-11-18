@@ -24,7 +24,7 @@ function userActivityColumn(): ColumnDef<User> {
       const remainingLabel = activity?.unlimited
         ? '∞'
         : new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(activity?.remainingCredits ?? 0)
-      const latestContractLabel = activity?.latestContractName || activity?.contractNames?.join(', ') || 'No active contract'
+      const latestContractLabel = activity?.latestContractName || 'No active contract'
       const attendedDate = activity?.lastAttendedAt
         ? new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(activity.lastAttendedAt))
         : '—'
@@ -55,7 +55,7 @@ export function getUserActivityFilters(customerId?: string): DataTableFilter<Use
     {
       id: 'contractId', label: 'Contract', column: 'contractId', selectionMode: 'single',
       queryFn: (search, page) => getUserContractFilterOptionsRequest(search, page, customerId),
-      getValue: (user) => user.activitySummary?.contractPricingOptionIds ?? [],
+      getValue: (user) => user.activitySummary?.latestContractPricingOptionId ?? '',
     },
   ]
 }

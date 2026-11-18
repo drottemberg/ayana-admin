@@ -70,7 +70,7 @@ type Schedule = {
 
 type MemberState = {
   token: string
-  identity: { firstName?: string | null; lastName?: string | null; phone?: string | null; email?: string | null; language?: string | null }
+  identity: { firstName?: string | null; lastName?: string | null; phone?: string | null; email?: string | null; emailVerified?: boolean; language?: string | null }
   creditBalance: number
   hasUnlimitedContract: boolean
   classCreditBalances?: Record<string, { credits: number; unlimited: boolean }>
@@ -79,13 +79,14 @@ type MemberState = {
 }
 
 type BookingResult = { bookingId: string; status: 'CONFIRMED' | 'WAITLISTED'; creditBalance: number; shortMessage: string; relatedProducts?: ClassProductOffer[] }
-type EgymBookingResult = { bookingId: string; status: 'CONFIRMED'; sessionToken?: string }
+type EgymBookingResult = { bookingId: string; status: 'CONFIRMED'; sessionToken?: string; code?: string }
 type EgymValidationResult = {
   valid: true
   sessionToken?: string
   member?: Omit<MemberState, 'token'>
   accountToken?: string
   refreshToken?: string
+  code?: string
   message?: string | string[]
 }
 type EgymMemberPayload = Partial<MemberState> & { message?: string | string[] }
@@ -107,6 +108,7 @@ type PricingOffer = {
   minimumCommitmentMonths?: number | null
   perks?: string[] | null
 }
+type TerminalOfferOrder = { orderId: string; cancellationToken: string; shortCode?: string }
 type CancellationQuote = {
   bookingStatus: 'CONFIRMED' | 'WAITLISTED'
   isLate: boolean
@@ -273,17 +275,33 @@ function BookingPortalRoute() {
   const [offersLoading, setOffersLoading] = useState(false)
   const [offersError, setOffersError] = useState('')
   const [offerCheckoutError, setOfferCheckoutError] = useState('')
+  const [offerFieldErrors, setOfferFieldErrors] = useState<Partial<Record<'firstName' | 'lastName' | 'phone' | 'email', string>>>({})
+  const [offerEmailBelongsToAnotherAccount, setOfferEmailBelongsToAnotherAccount] = useState(false)
   const [offerToPurchase, setOfferToPurchase] = useState<PricingOffer | null>(null)
   const [forcedOfferFlow, setForcedOfferFlow] = useState(false)
   const [purchasingOfferId, setPurchasingOfferId] = useState('')
+  const [terminalOfferOrder, setTerminalOfferOrder] = useState<TerminalOfferOrder | null>(null)
+  const [cancellingTerminalOffer, setCancellingTerminalOffer] = useState(false)
   const offerPurchaseInFlight = useRef(false)
   const [bookingUpsell, setBookingUpsell] = useState<{ className: string; products: ClassProductOffer[] } | null>(null)
   const [accessLoading, setAccessLoading] = useState<PublicAccessChannel | null>(null)
   const [accessError, setAccessError] = useState('')
   const [accessModal, setAccessModal] = useState<AccessModalState | null>(null)
   const [accessEmail, setAccessEmail] = useState('')
+  const [accessProfileRequired, setAccessProfileRequired] = useState(false)
+  const [accessFirstName, setAccessFirstName] = useState('')
+  const [accessLastName, setAccessLastName] = useState('')
+  const [accessPhone, setAccessPhone] = useState('')
+  const [accessFieldErrors, setAccessFieldErrors] = useState<Partial<Record<'firstName' | 'lastName' | 'phone', string>>>({})
   const [accessCode, setAccessCode] = useState('')
   const [emailAccessLoading, setEmailAccessLoading] = useState(false)
+  const [emailVerificationOpen, setEmailVerificationOpen] = useState(false)
+  const [emailVerificationEmail, setEmailVerificationEmail] = useState('')
+  const [emailVerificationCode, setEmailVerificationCode] = useState('')
+  const [emailVerificationId, setEmailVerificationId] = useState('')
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false)
+  const [emailVerificationError, setEmailVerificationError] = useState('')
+  const [emailVerificationLoading, setEmailVerificationLoading] = useState(false)
   const restoredSession = useRef(false)
   const restoredOffer = useRef(false)
   const restoredManageBooking = useRef(false)
@@ -291,8 +309,63 @@ function BookingPortalRoute() {
   const checkoutFirstName = member ? member.identity.firstName?.trim() || firstNameDraft.trim() : guestFirstName.trim()
   const checkoutLastName = member ? member.identity.lastName?.trim() || lastNameDraft.trim() : guestLastName.trim()
   const checkoutPhone = member ? member.identity.phone?.trim() || memberPhoneDraft.trim() : guestPhone.trim()
-  const canPurchaseOffer = Boolean(checkoutFirstName && checkoutLastName && checkoutPhone && !validatePhone(checkoutPhone))
-    && (Boolean(member) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim()))
+
+  const openMemberEmailVerification = (email = member?.identity.email ?? '') => {
+    setEmailVerificationEmail(email)
+    setEmailVerificationCode('')
+    setEmailVerificationId('')
+    setEmailVerificationSent(false)
+    setEmailVerificationError('')
+    setEmailVerificationOpen(true)
+  }
+
+  const requestMemberEmailVerification = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!member) return
+    setEmailVerificationLoading(true)
+    setEmailVerificationError('')
+    try {
+      const response = await fetch(`${API_URL}/auth/me/email-verification`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
+        body: JSON.stringify({ email: emailVerificationEmail.trim(), language }),
+      })
+      const payload = await response.json().catch(() => ({})) as { verificationId?: string; message?: string | string[] }
+      if (!response.ok || !payload.verificationId) throw new Error(responseMessage(payload, t('Could not send the verification code.')))
+      setEmailVerificationId(payload.verificationId)
+      setEmailVerificationCode('')
+      setEmailVerificationSent(true)
+    } catch (reason) {
+      setEmailVerificationError(reason instanceof Error ? reason.message : t('Could not send the verification code.'))
+    } finally {
+      setEmailVerificationLoading(false)
+    }
+  }
+
+  const verifyMemberEmail = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!member || !emailVerificationId) return
+    setEmailVerificationLoading(true)
+    setEmailVerificationError('')
+    try {
+      const response = await fetch(`${API_URL}/auth/me/verify-email`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
+        body: JSON.stringify({ verificationId: emailVerificationId, code: emailVerificationCode.trim() }),
+      })
+      const payload = await response.json().catch(() => ({})) as { success?: boolean; message?: string | string[] }
+      if (!response.ok || !payload.success) throw new Error(responseMessage(payload, t('Email verification failed.')))
+      const updatedMember = { ...member, identity: { ...member.identity, email: emailVerificationEmail.trim(), emailVerified: true } }
+      setMember(updatedMember)
+      localStorage.setItem(sessionKey(customerSlug, locationSlug), JSON.stringify(updatedMember))
+      setEmailVerificationOpen(false)
+      setNotice(t('Email confirmed. You can now confirm your booking.'))
+    } catch (reason) {
+      setEmailVerificationError(reason instanceof Error ? reason.message : t('Email verification failed.'))
+    } finally {
+      setEmailVerificationLoading(false)
+    }
+  }
 
   useEffect(() => {
     const draft = readGuestDraft(customerSlug, locationSlug)
@@ -517,9 +590,14 @@ function BookingPortalRoute() {
       setAccessLoading(null)
     }
   }
-  const openAccessModal = (state: Record<string, unknown>) => {
+  const openAccessModal = (state: Record<string, unknown>, email = '') => {
     setAccessError('')
-    setAccessEmail('')
+    setAccessEmail(email)
+    setAccessProfileRequired(false)
+    setAccessFirstName('')
+    setAccessLastName('')
+    setAccessPhone('')
+    setAccessFieldErrors({})
     setAccessCode('')
     setAccessModal({ view: 'choose', state, email: '' })
   }
@@ -536,6 +614,17 @@ function BookingPortalRoute() {
   const requestEmailAccessCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!accessModal) return
+    if (accessProfileRequired) {
+      const errors: Partial<Record<'firstName' | 'lastName' | 'phone', string>> = {}
+      if (!accessFirstName.trim()) errors.firstName = t("This field is required.")
+      if (!accessLastName.trim()) errors.lastName = t("This field is required.")
+      if (!accessPhone.trim()) errors.phone = t("This field is required.")
+      else if (validatePhone(accessPhone)) errors.phone = t("Enter a valid phone number.")
+      if (Object.keys(errors).length) {
+        setAccessFieldErrors(errors)
+        return
+      }
+    }
     setEmailAccessLoading(true)
     setAccessError('')
     try {
@@ -547,12 +636,26 @@ function BookingPortalRoute() {
           locationSlug,
           destination: 'BOOKING',
           email: accessEmail.trim(),
+          ...(accessProfileRequired ? { firstName: accessFirstName.trim(), lastName: accessLastName.trim(), phone: accessPhone.trim() } : {}),
           language,
           state: accessModal.state,
         }),
       })
-      const payload = await response.json().catch(() => ({})) as { verificationId?: string; message?: string | string[] }
-      if (!response.ok || !payload.verificationId) throw new Error(responseMessage(payload, t("Could not send the code.")))
+      const payload = await response.json().catch(() => ({})) as { verificationId?: string; requiresProfile?: boolean; field?: string; message?: string | string[] }
+      if (!response.ok) {
+        if (payload.field === 'phone') {
+          setAccessFieldErrors({ phone: responseMessage(payload, t("This phone number is already associated with another account.")) })
+          setAccessError('')
+          return
+        }
+        throw new Error(responseMessage(payload, t("Could not send the code.")))
+      }
+      if (payload.requiresProfile) {
+        setAccessProfileRequired(true)
+        setAccessError('')
+        return
+      }
+      if (!payload.verificationId) throw new Error(responseMessage(payload, t("Could not send the code.")))
       setAccessModal({ ...accessModal, view: 'code', email: accessEmail.trim(), verificationId: payload.verificationId })
     } catch (reason) {
       setAccessError(reason instanceof Error ? reason.message : (t("Could not send the code.")))
@@ -611,7 +714,7 @@ function BookingPortalRoute() {
   }, [schedule, searchParams])
 
   useEffect(() => {
-    if (!offers.length || restoredOffer.current) return
+    if (!member || !offers.length || restoredOffer.current) return
     const offerId = searchParams.get('resumeOffer')
     if (!offerId) return
     const offer = offers.find((item) => item.id === offerId)
@@ -622,7 +725,7 @@ function BookingPortalRoute() {
     const url = new URL(window.location.href)
     url.searchParams.delete('resumeOffer')
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-  }, [offers, searchParams])
+  }, [offers, member, searchParams])
 
   useEffect(() => {
     const shouldLoadOffers = activeSection === 'offers' || Boolean(selected && selectedAction === 'book')
@@ -738,6 +841,15 @@ function BookingPortalRoute() {
     setSelectedAction('book')
     setCancellationQuote(null)
     setSelected(session)
+    if (!member) openAccessModal({
+      section: 'planning',
+      date: session.localDate,
+      filter: sessionFilter,
+      className: classFilter,
+      time: timeFilter,
+      layout: sessionLayout,
+      resumeSession: session.id,
+    })
   }
 
   const openCancellation = async (session: ClassSession, bookingId: string) => {
@@ -777,22 +889,32 @@ function BookingPortalRoute() {
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
   }, [schedule, member, searchParams])
 
-  const purchaseOffer = async (pricingOptionId: string) => {
+  const purchaseOffer = async (pricingOptionId: string, paymentMethod: 'link' | 'terminal' = 'link') => {
+    if (!member) {
+      openAccessModal({ ...accessState(selected ? 'session' : 'page'), section: 'offers', resumeOffer: pricingOptionId }, guestEmail.trim())
+      return
+    }
     if (offerPurchaseInFlight.current) return
     const firstName = checkoutFirstName
     const lastName = checkoutLastName
     const phone = checkoutPhone
-    if (!firstName || !lastName || !phone || validatePhone(phone)) {
-      setOfferCheckoutError(t("Enter your first name, last name and a valid phone number to continue."))
+    const errors: Partial<Record<'firstName' | 'lastName' | 'phone' | 'email', string>> = {}
+    if (!firstName) errors.firstName = t("This field is required.")
+    if (!lastName) errors.lastName = t("This field is required.")
+    if (!phone) errors.phone = t("This field is required.")
+    else if (validatePhone(phone)) errors.phone = t("Enter a valid phone number.")
+    if (!member && !guestEmail.trim()) errors.email = t("This field is required.")
+    else if (!member && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) errors.email = t("Enter a valid email address.")
+    if (Object.keys(errors).length) {
+      setOfferFieldErrors(errors)
+      setOfferCheckoutError('')
       return
     }
-    if (!member && (validatePhone(guestPhone) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim()))) {
-      setOfferCheckoutError(t("Check your phone number and email address."))
-      return
-    }
+    setOfferFieldErrors({})
     offerPurchaseInFlight.current = true
     setPurchasingOfferId(pricingOptionId)
     setOfferCheckoutError('')
+    setOfferEmailBelongsToAnotherAccount(false)
     try {
       const url = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/offers/checkout`
       const response = await fetch(url, {
@@ -801,7 +923,7 @@ function BookingPortalRoute() {
         body: JSON.stringify({
           pricingOptionId,
           ...(selected?.id ? { sessionId: selected.id, sessionFilter } : {}),
-          paymentMethod: 'link',
+          paymentMethod,
           language,
           firstName,
           lastName,
@@ -809,8 +931,14 @@ function BookingPortalRoute() {
           ...(!member ? { email: guestEmail.trim() } : {}),
         }),
       })
-      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; message?: string | string[] }
+      const payload = await response.json().catch(() => ({})) as { checkoutUrl?: string; awaitingPayment?: boolean; orderId?: string; cancellationToken?: string; shortCode?: string; message?: string | string[] }
       if (!response.ok) throw new Error(responseMessage(payload, t("Could not prepare checkout.")))
+      if (payload.awaitingPayment) {
+        if (!payload.orderId || !payload.cancellationToken) throw new Error(responseMessage(payload, t("Could not prepare checkout.")))
+        setTerminalOfferOrder({ orderId: payload.orderId, cancellationToken: payload.cancellationToken, shortCode: payload.shortCode })
+        setOfferToPurchase(null)
+        return
+      }
       if (!payload.checkoutUrl) throw new Error(responseMessage(payload, t("Could not prepare online checkout.")))
       if (member && (!member.identity.firstName?.trim() || !member.identity.lastName?.trim() || !member.identity.phone?.trim())) {
         const updated = { ...member, identity: {
@@ -824,15 +952,43 @@ function BookingPortalRoute() {
       }
       window.location.assign(payload.checkoutUrl)
     } catch (reason) {
-      setOfferCheckoutError(reason instanceof Error ? reason.message : (t("Could not prepare checkout.")))
+      const message = reason instanceof Error ? reason.message : t("Could not prepare checkout.")
+      setOfferCheckoutError(message)
+      const normalized = message.toLocaleLowerCase()
+      setOfferEmailBelongsToAnotherAccount(normalized.includes('already associated with another ayana account')
+        || normalized.includes('déjà associée à un autre compte ayana')
+        || normalized.includes('déjà associé à un autre compte ayana'))
     } finally {
       offerPurchaseInFlight.current = false
       setPurchasingOfferId('')
     }
   }
 
+  const cancelTerminalOffer = async () => {
+    if (!terminalOfferOrder || cancellingTerminalOffer) return
+    setCancellingTerminalOffer(true)
+    setOfferCheckoutError('')
+    try {
+      const url = `${API_URL}/public-booking/${encodeURIComponent(customerSlug)}/${encodeURIComponent(locationSlug)}/offers/${encodeURIComponent(terminalOfferOrder.orderId)}/cancel-terminal`
+      const response = await fetch(url, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cancellationToken: terminalOfferOrder.cancellationToken }),
+      })
+      const payload = await response.json().catch(() => ({})) as { message?: string | string[] }
+      if (!response.ok) throw new Error(responseMessage(payload, t("Could not cancel this purchase.")))
+      setTerminalOfferOrder(null)
+      setOfferCheckoutError('')
+    } catch (reason) {
+      setOfferCheckoutError(reason instanceof Error ? reason.message : t("Could not cancel this purchase."))
+    } finally { setCancellingTerminalOffer(false) }
+  }
+
   const createBooking = async () => {
     if (!selected || !member) return
+    if (!member.identity.email?.trim() || member.identity.emailVerified !== true) {
+      openMemberEmailVerification()
+      return
+    }
     if (!member.identity.firstName?.trim() && !firstNameDraft.trim()) {
       setBookingError(t("Enter your first name before booking this class."))
       return
@@ -845,8 +1001,14 @@ function BookingPortalRoute() {
         headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
         body: JSON.stringify({ sessionId: selected.id, ...(!member.identity.firstName?.trim() ? { firstName: firstNameDraft.trim() } : {}) }),
       })
-      const payload = await response.json().catch(() => ({})) as BookingResult & { message?: string | string[] }
-      if (!response.ok) throw new Error(responseMessage(payload, t("The booking could not be confirmed.")))
+      const payload = await response.json().catch(() => ({})) as BookingResult & { message?: string | string[]; code?: string }
+      if (!response.ok) {
+        if (payload.code === 'EMAIL_REQUIRED' || payload.code === 'EMAIL_VERIFICATION_REQUIRED') {
+          openMemberEmailVerification()
+          return
+        }
+        throw new Error(responseMessage(payload, t("The booking could not be confirmed.")))
+      }
       const nextMember = {
         ...member,
         identity: { ...member.identity, firstName: member.identity.firstName?.trim() || firstNameDraft.trim() },
@@ -933,7 +1095,13 @@ function BookingPortalRoute() {
       const headers = () => ({ 'content-type': 'application/json', ...(authorizationToken ? { authorization: `Bearer ${authorizationToken}` } : {}) })
       const validateResponse = await fetch(`${endpoint}/validate`, { method: 'POST', headers: headers(), body: JSON.stringify(payload) })
       const validatePayload = await validateResponse.json().catch(() => ({})) as EgymValidationResult
-      if (!validateResponse.ok) throw new Error(responseMessage(validatePayload, t("Could not verify the Wellpass code.")))
+      if (!validateResponse.ok) {
+        if (member && (validatePayload.code === 'EMAIL_REQUIRED' || validatePayload.code === 'EMAIL_VERIFICATION_REQUIRED')) {
+          openMemberEmailVerification(member.identity.email?.trim() || email)
+          return
+        }
+        throw new Error(responseMessage(validatePayload, t("Could not verify the Wellpass code.")))
+      }
 
       if (validatePayload.sessionToken && validatePayload.member) {
         authorizationToken = validatePayload.sessionToken
@@ -954,7 +1122,13 @@ function BookingPortalRoute() {
 
       const response = await fetch(`${endpoint}/confirm`, { method: 'POST', headers: headers(), body: JSON.stringify(payload) })
       const result = await response.json().catch(() => ({})) as EgymBookingResult & { message?: string | string[] }
-      if (!response.ok) throw new Error(responseMessage(result, t("The Wellpass booking could not be confirmed.")))
+      if (!response.ok) {
+        if (member && (result.code === 'EMAIL_REQUIRED' || result.code === 'EMAIL_VERIFICATION_REQUIRED')) {
+          openMemberEmailVerification(member.identity.email?.trim() || email)
+          return
+        }
+        throw new Error(responseMessage(result, t("The Wellpass booking could not be confirmed.")))
+      }
 
       const sessionToken = result.sessionToken || authorizationToken || member?.token
       if (sessionToken) {
@@ -1076,7 +1250,15 @@ function BookingPortalRoute() {
       {offer.description && <p>{offer.description}</p>}
       <small>{creditsLabel}{offer.validityDays ? ` · ${offer.validityDays} ${t("days validity")}` : ''} · {billingLabel}{offer.minimumCommitmentMonths ? ` · ${offer.minimumCommitmentMonths} ${t("months minimum commitment")}` : ''}</small>
       {!!offer.perks?.length && <small>{offer.perks.join(' · ')}</small>}
-      <button type="button" className="booking-offer-buy" onClick={() => { setOfferToPurchase(offer); setOfferCheckoutError('') }}>{t("Buy")}<span>→</span></button>
+      <button type="button" className="booking-offer-buy" onClick={() => {
+        setOfferCheckoutError('')
+        setOfferEmailBelongsToAnotherAccount(false)
+        if (!member) {
+          openAccessModal({ ...accessState(selected ? 'session' : 'page'), section: 'offers', resumeOffer: offer.id }, guestEmail.trim())
+          return
+        }
+        setOfferToPurchase(offer)
+      }}>{t("Buy")}<span>→</span></button>
     </article>
   }
 
@@ -1238,24 +1420,39 @@ function BookingPortalRoute() {
         <span>{offerToPurchase.billingInterval && offerToPurchase.billingInterval !== 'ONCE' ? (t("Membership · billed {{value0}}", { value0: offerToPurchase.billingInterval.toLowerCase() })) : (t("One-time payment"))}{offerToPurchase.minimumCommitmentMonths ? ` · ${offerToPurchase.minimumCommitmentMonths} ${t("months minimum commitment")}` : ''}</span>
       </div>
       {!member ? <>
-        <p className="booking-purchase-explanation">{t("Sign in to your Ayana account, or continue as a guest with your contact details.")}</p>
+        <p className="booking-purchase-explanation">{t("Sign in to buy this plan. Your selection will be kept while you sign in.")}</p>
         {renderAccessButtons(accessState('offer'), 'booking-purchase-whatsapp')}
         {accessError && <div className="booking-error" role="alert">{accessError}</div>}
-        <p className="booking-purchase-divider"><span>{t("or continue as a guest")}</span></p>
       </> : <div className="booking-purchase-account"><span>{t("Ayana account connected")}</span><strong>{[member.identity.firstName, member.identity.lastName].filter(Boolean).join(' ') || member.identity.email}</strong></div>}
-      {(!member || !member.identity.firstName?.trim()) && <label className="booking-first-name booking-purchase-field">{t("First name")}<input autoComplete="given-name" required maxLength={80} value={member ? firstNameDraft : guestFirstName} onChange={(event) => member ? setFirstNameDraft(event.target.value) : updateGuestDraft('firstName', event.target.value)} placeholder={t("First name")} /></label>}
-      {(!member || !member.identity.lastName?.trim()) && <label className="booking-first-name booking-purchase-field">{t("Last name")}<input autoComplete="family-name" required maxLength={80} value={member ? lastNameDraft : guestLastName} onChange={(event) => member ? setLastNameDraft(event.target.value) : updateGuestDraft('lastName', event.target.value)} placeholder={t("Last name")} /></label>}
-      {(!member || !member.identity.phone?.trim()) && <PhoneInput label={t("Phone number")} value={member ? memberPhoneDraft : guestPhone} placeholder={t("Phone number__numero-de-telephone")} required nativeCountrySelector onValueChange={(value) => member ? setMemberPhoneDraft(value) : updateGuestDraft('phone', value)} />}
-      {!member && <label className="booking-first-name booking-purchase-field">{t("Email")}<input type="email" autoComplete="email" required maxLength={254} value={guestEmail} onChange={(event) => updateGuestDraft('email', event.target.value)} placeholder={t("name@example.com")} /></label>}
+      {member && !member.identity.firstName?.trim() && <label className="booking-first-name booking-purchase-field">{t("First name")}<input aria-invalid={Boolean(offerFieldErrors.firstName)} autoComplete="given-name" required maxLength={80} value={firstNameDraft} onChange={(event) => { setFirstNameDraft(event.target.value); setOfferFieldErrors((current) => ({ ...current, firstName: undefined })) }} placeholder={t("First name")} />{offerFieldErrors.firstName && <span className="booking-field-error" role="alert">{offerFieldErrors.firstName}</span>}</label>}
+      {member && !member.identity.lastName?.trim() && <label className="booking-first-name booking-purchase-field">{t("Last name")}<input aria-invalid={Boolean(offerFieldErrors.lastName)} autoComplete="family-name" required maxLength={80} value={lastNameDraft} onChange={(event) => { setLastNameDraft(event.target.value); setOfferFieldErrors((current) => ({ ...current, lastName: undefined })) }} placeholder={t("Last name")} />{offerFieldErrors.lastName && <span className="booking-field-error" role="alert">{offerFieldErrors.lastName}</span>}</label>}
+      {member && !member.identity.phone?.trim() && <div className="booking-purchase-field"><PhoneInput label={t("Phone number")} value={memberPhoneDraft} placeholder={t("Phone number__numero-de-telephone")} required nativeCountrySelector onValueChange={(value) => { setMemberPhoneDraft(value); setOfferFieldErrors((current) => ({ ...current, phone: undefined })) }} />{offerFieldErrors.phone && <span className="booking-field-error" role="alert">{offerFieldErrors.phone}</span>}</div>}
       {offerCheckoutError && <div className="booking-error" role="alert">{offerCheckoutError}</div>}
+      {offerEmailBelongsToAnotherAccount && <button type="button" className="booking-existing-account-login" onClick={() => openAccessModal(accessState('offer'), guestEmail.trim())}>{t("Sign in to this account")}</button>}
       <div className="booking-purchase-actions">
-        <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId) || !canPurchaseOffer} onClick={() => void purchaseOffer(offerToPurchase.id)}>
+        <button type="button" className="booking-purchase-online" disabled={Boolean(purchasingOfferId)} onClick={() => void purchaseOffer(offerToPurchase.id)}>
           {purchasingOfferId === offerToPurchase.id ? (t("Preparing payment…")) : (t("Pay online by card"))}<span>→</span>
         </button>
+        {schedule?.location.paymentMethods?.terminal && <button type="button" className="booking-purchase-terminal" disabled={Boolean(purchasingOfferId)} onClick={() => void purchaseOffer(offerToPurchase.id, 'terminal')}>
+          {purchasingOfferId === offerToPurchase.id ? t("Preparing payment…") : t("Pay at the studio by card")}<span>→</span>
+        </button>}
       </div>
     </section></div>}
 
-    {selected && !offerToPurchase && !accessModal && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !submitting && setSelected(null)}><section className="booking-sheet booking-flow-panel" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title" onClick={(event) => event.stopPropagation()}>
+    {terminalOfferOrder && <div className="booking-terminal-payment-overlay" role="dialog" aria-modal="true" aria-labelledby="booking-terminal-payment-title">
+      <section className="booking-terminal-payment-card">
+        <span className="booking-terminal-payment-spinner" aria-hidden="true" />
+        <h2 id="booking-terminal-payment-title">{t("Pay at the studio terminal")}</h2>
+        <p>{t("Go to the front desk and pay for this plan by card on the payment terminal. Keep this screen open until payment.")}</p>
+        {terminalOfferOrder.shortCode && <strong className="booking-terminal-payment-code">{t("Order code: {{value0}}", { value0: terminalOfferOrder.shortCode })}</strong>}
+        {offerCheckoutError && <div className="booking-error" role="alert">{offerCheckoutError}</div>}
+        <button type="button" disabled={cancellingTerminalOffer} onClick={() => void cancelTerminalOffer()}>
+          {cancellingTerminalOffer ? t("Cancelling purchase…") : t("Cancel this purchase")}
+        </button>
+      </section>
+    </div>}
+
+    {selected && member && !offerToPurchase && !accessModal && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !submitting && setSelected(null)}><section className="booking-sheet booking-flow-panel" role="dialog" aria-modal="true" aria-labelledby="booking-confirm-title" onClick={(event) => event.stopPropagation()}>
       <div className="booking-flow-nav"><button type="button" disabled={submitting} onClick={() => setSelected(null)}><span aria-hidden="true">←</span>{t("Back to schedule")}</button><button type="button" aria-label={t("Close")} disabled={submitting} onClick={() => setSelected(null)}>×</button></div>
       <button type="button" className="booking-close" aria-label={t("Close")} disabled={submitting} onClick={() => setSelected(null)}>×</button>
       <p className="booking-eyebrow">{bookingUpsell ? (t("BOOKING CONFIRMED")) : selectedAction === 'cancel' ? (t("CANCELLATION POLICY")) : (t("BOOKING SUMMARY"))}</p>
@@ -1360,16 +1557,57 @@ function BookingPortalRoute() {
         {schedule?.location.telegramBotUsername && <button type="button" className="booking-access-method booking-access-telegram" disabled={Boolean(accessLoading)} onClick={() => void openAccessLink('TELEGRAM', accessModal.state)}>{accessLoading === 'TELEGRAM' ? (t("Preparing…")) : (t("Continue with Telegram"))}<span>↗</span></button>}
       </div> : accessModal.view === 'email' ? <form className="booking-access-form" onSubmit={(event) => void requestEmailAccessCode(event)}>
         <p>{t("Enter your email address. If you already have an account, you’ll be signed in. Otherwise, we’ll create your Ayana account after verification.")}</p>
-        <label className="booking-first-name">{t("Email")}<input type="email" autoComplete="email" autoFocus required maxLength={254} value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} placeholder={t("name@example.com")} /></label>
+        <label className="booking-first-name">{t("Email")}<input type="email" autoComplete="email" autoFocus required maxLength={254} value={accessEmail} onChange={(event) => {
+          setAccessEmail(event.target.value)
+          if (accessProfileRequired) {
+            setAccessProfileRequired(false)
+            setAccessFirstName('')
+            setAccessLastName('')
+            setAccessPhone('')
+            setAccessFieldErrors({})
+          }
+        }} placeholder={t("name@example.com")} /></label>
+        {accessProfileRequired && <>
+          <p>{t("Complete your details to create your Ayana account.")}</p>
+          <label className="booking-first-name">{t("First name")}<input aria-invalid={Boolean(accessFieldErrors.firstName)} autoComplete="given-name" maxLength={80} value={accessFirstName} onChange={(event) => { setAccessFirstName(event.target.value); setAccessFieldErrors((current) => ({ ...current, firstName: undefined })) }} placeholder={t("First name")} />{accessFieldErrors.firstName && <span className="booking-field-error" role="alert">{accessFieldErrors.firstName}</span>}</label>
+          <label className="booking-first-name">{t("Last name")}<input aria-invalid={Boolean(accessFieldErrors.lastName)} autoComplete="family-name" maxLength={80} value={accessLastName} onChange={(event) => { setAccessLastName(event.target.value); setAccessFieldErrors((current) => ({ ...current, lastName: undefined })) }} placeholder={t("Last name")} />{accessFieldErrors.lastName && <span className="booking-field-error" role="alert">{accessFieldErrors.lastName}</span>}</label>
+          <div className="booking-purchase-field"><PhoneInput label={t("Phone number")} value={accessPhone} placeholder={t("Phone number__numero-de-telephone")} nativeCountrySelector compactCountrySelector controlLayout="wide-number" onValueChange={(value) => { setAccessPhone(value); setAccessFieldErrors((current) => ({ ...current, phone: undefined })) }} />{accessFieldErrors.phone && <span className="booking-field-error" role="alert">{accessFieldErrors.phone}</span>}</div>
+        </>}
         <button type="submit" className="booking-confirm" disabled={emailAccessLoading}>{emailAccessLoading ? (t("Sending…")) : (t("Send me a code"))}</button>
         <button type="button" className="booking-cancel" disabled={emailAccessLoading} onClick={() => { setAccessError(''); setAccessModal({ ...accessModal, view: 'choose' }) }}>{t("Back to sign-in options")}</button>
       </form> : <form className="booking-access-form" onSubmit={(event) => void verifyEmailAccessCode(event)}>
         <p>{t("Enter the 6-digit code sent to {{value0}}.", { value0: accessModal.email })}</p>
         <label className="booking-first-name">{t("Verification code")}<input inputMode="numeric" autoComplete="one-time-code" autoFocus required minLength={6} maxLength={6} pattern="[0-9]{6}" value={accessCode} onChange={(event) => setAccessCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" /></label>
         <button type="submit" className="booking-confirm" disabled={emailAccessLoading || accessCode.length !== 6}>{emailAccessLoading ? (t("Verifying…")) : (t("Verify and open schedule"))}</button>
-        <button type="button" className="booking-cancel" disabled={emailAccessLoading} onClick={() => { setAccessError(''); setAccessCode(''); setAccessModal({ ...accessModal, view: 'email', verificationId: undefined }) }}>{t("Use a different email")}</button>
+        <button type="button" className="booking-cancel" disabled={emailAccessLoading} onClick={() => {
+          setAccessError('')
+          setAccessCode('')
+          setAccessEmail('')
+          setAccessProfileRequired(false)
+          setAccessFirstName('')
+          setAccessLastName('')
+          setAccessPhone('')
+          setAccessFieldErrors({})
+          setAccessModal({ ...accessModal, view: 'email', email: '', verificationId: undefined })
+        }}>{t("Use a different email")}</button>
       </form>}
       {accessError && <div className="booking-error" role="alert">{accessError}</div>}
+    </section></div>}
+    {emailVerificationOpen && <div className="booking-overlay booking-flow-overlay" role="presentation" onClick={() => !emailVerificationLoading && setEmailVerificationOpen(false)}><section className="booking-sheet booking-flow-panel booking-access-sheet" role="dialog" aria-modal="true" aria-labelledby="booking-email-verification-title" onClick={(event) => event.stopPropagation()}>
+      <div className="booking-flow-nav"><button type="button" disabled={emailVerificationLoading} onClick={() => setEmailVerificationOpen(false)}><span aria-hidden="true">←</span>{t('Back to schedule')}</button><button type="button" aria-label={t('Close')} disabled={emailVerificationLoading} onClick={() => setEmailVerificationOpen(false)}>×</button></div>
+      <button type="button" className="booking-close" aria-label={t('Close')} disabled={emailVerificationLoading} onClick={() => setEmailVerificationOpen(false)}>×</button>
+      <h2 id="booking-email-verification-title">{t('Verify your account email')}</h2>
+      {!emailVerificationSent ? <form className="booking-access-form" onSubmit={(event) => void requestMemberEmailVerification(event)}>
+        <p>{t('Enter the correct email address. We’ll send a 6-digit code to confirm it and update your account.')}</p>
+        <label className="booking-first-name">{t('Email')}<input type="email" autoComplete="email" autoFocus required maxLength={254} value={emailVerificationEmail} onChange={(event) => setEmailVerificationEmail(event.target.value)} placeholder={t('name@example.com')} /></label>
+        <button type="submit" className="booking-confirm" disabled={emailVerificationLoading}>{emailVerificationLoading ? t('Sending…') : t('Send verification code')}</button>
+      </form> : <form className="booking-access-form" onSubmit={(event) => void verifyMemberEmail(event)}>
+        <p>{t('Enter the 6-digit code sent to {{value0}}.', { value0: emailVerificationEmail })}</p>
+        <label className="booking-first-name">{t('Verification code')}<input inputMode="numeric" autoComplete="one-time-code" autoFocus required minLength={6} maxLength={6} pattern="[0-9]{6}" value={emailVerificationCode} onChange={(event) => setEmailVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" /></label>
+        <button type="submit" className="booking-confirm" disabled={emailVerificationLoading || emailVerificationCode.length !== 6}>{emailVerificationLoading ? t('Verifying…') : t('Verify email address')}</button>
+        <button type="button" className="booking-cancel" disabled={emailVerificationLoading} onClick={() => { setEmailVerificationSent(false); setEmailVerificationId(''); setEmailVerificationCode(''); setEmailVerificationError('') }}>{t('Use a different email')}</button>
+      </form>}
+      {emailVerificationError && <div className="booking-error" role="alert">{emailVerificationError}</div>}
     </section></div>}
   </main>
 }
