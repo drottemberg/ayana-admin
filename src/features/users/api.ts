@@ -223,7 +223,7 @@ export async function getUserContractFilterOptionsRequest(search: string, _page 
 
   const limit = 50
   const filters = {
-    status: ['ACTIVE'],
+    status: ['ACTIVE', 'PAUSED', 'EXPIRED', 'CANCELLED'],
     ...(customerId ? { customerId: [customerId] } : {}),
   }
   const firstPage = await apiClient.post<ApiListResult<ContractFilterRecord>>('/client-contracts/list', {
@@ -248,12 +248,9 @@ export async function getUserContractFilterOptionsRequest(search: string, _page 
     contracts.push(...result.items)
   }
 
-  const now = Date.now()
   const byId = new Map<string, string>()
   for (const contract of contracts) {
     if (!contract.pricingOptionId || !contract.pricingOptionName) continue
-    if (contract.validUntil && new Date(contract.validUntil).getTime() <= now) continue
-    if (contract.freezeUntil && new Date(contract.freezeUntil).getTime() > now) continue
     byId.set(contract.pricingOptionId, contract.pricingOptionName)
   }
   const items = [...byId].map(([id, label]) => ({ id, label }))
