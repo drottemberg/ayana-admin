@@ -45,6 +45,7 @@ export type DashboardOverview = {
   current: { from: string; to: string }
   comparison: { from: string; to: string; label: string }
   revenue: Array<{ currency: string; current: number; previous: number }>
+  partnerRevenue: Array<{ currency: string; current: number; previous: number }>
   bookings: { current: number; previous: number }
   occupancy: {
     current: { booked: number; capacity: number; rate: number | null }

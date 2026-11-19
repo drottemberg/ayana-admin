@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PageHeader } from '@/components/ui/page-header'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DetailCard } from '@/components/app/DetailCard'
 import { DetailPageLayout, RelatedEntityModule } from '@/components/app/detail-page-layout'
 import { EntityIcon } from '@/components/app/entity-icons'
@@ -83,12 +84,26 @@ function MetricCard({ title, value, comparison, range }: { title: string; value:
   </Card>
 }
 
-function DashboardMetrics({ data }: { data: DashboardOverview }) {
-  const revenueValue = data.revenue.length
-    ? <div className="space-y-0.5">{data.revenue.map((item) => <div key={item.currency}>{formatCurrency(item.current, item.currency)}</div>)}</div>
+type RevenueTab = 'all' | 'direct' | 'partners'
+
+function DashboardMetrics({ data, revenueTab }: { data: DashboardOverview; revenueTab: RevenueTab }) {
+  const revenueBySource = useMemo(() => {
+    const direct = data.revenue
+    const partners = data.partnerRevenue ?? []
+    if (revenueTab === 'direct') return direct
+    if (revenueTab === 'partners') return partners
+    const currencies = [...new Set([...direct.map((item) => item.currency), ...partners.map((item) => item.currency)])].sort()
+    return currencies.map((currency) => ({
+      currency,
+      current: (direct.find((item) => item.currency === currency)?.current ?? 0) + (partners.find((item) => item.currency === currency)?.current ?? 0),
+      previous: (direct.find((item) => item.currency === currency)?.previous ?? 0) + (partners.find((item) => item.currency === currency)?.previous ?? 0),
+    }))
+  }, [data.partnerRevenue, data.revenue, revenueTab])
+  const revenueValue = revenueBySource.length
+    ? <div className="space-y-0.5">{revenueBySource.map((item) => <div key={item.currency}>{formatCurrency(item.current, item.currency)}</div>)}</div>
     : '—'
-  const revenueComparison = data.revenue.length
-    ? <div className="space-y-0.5">{data.revenue.map((item) => <div key={item.currency}>{formatChange(item.current, item.previous)} <span className="font-normal text-muted-foreground">vs {data.comparison.label}</span></div>)}</div>
+  const revenueComparison = revenueBySource.length
+    ? <div className="space-y-0.5">{revenueBySource.map((item) => <div key={item.currency}>{formatChange(item.current, item.previous)} <span className="font-normal text-muted-foreground">vs {data.comparison.label}</span></div>)}</div>
     : <span className="font-normal text-muted-foreground">No revenue in this period</span>
 
   const currentOccupancy = data.occupancy.current.rate
@@ -112,6 +127,7 @@ export function BusinessOverviewDashboard() {
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [revenueTab, setRevenueTab] = useState<RevenueTab>('all')
   const mode = getAppMode()
   const customerContextId = session?.currentOrganization?.id ?? 'none'
   const filterStorageKey = session?.user.id
@@ -186,9 +202,17 @@ export function BusinessOverviewDashboard() {
         </Select>
       </div>
 
+      <Tabs value={revenueTab} onValueChange={(value) => setRevenueTab(value as RevenueTab)}>
+        <TabsList aria-label="Revenue source">
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="direct">Direct</TabsTrigger>
+          <TabsTrigger value="partners">Partners</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {query.isPending ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{periodOptions.slice(0, 4).map((option) => <Skeleton key={option.value} className="h-32 rounded-xl" />)}</div> : null}
       {query.isError ? <Card className="border-destructive/30 p-5" size="sm"><p className="text-sm text-destructive">{query.error instanceof Error ? query.error.message : 'Could not load business overview.'}</p></Card> : null}
-      {query.data ? <DashboardMetrics data={query.data} /> : null}
+      {query.data ? <DashboardMetrics data={query.data} revenueTab={revenueTab} /> : null}
     </section>
 
   if (isCustomerManagerOrAbove) {
