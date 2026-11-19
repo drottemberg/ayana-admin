@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { SelectInput } from '@/components/ui/select-input'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { getClassTypesRequest } from '@/features/classes/api'
@@ -14,6 +15,7 @@ import {
   previewIntegrationSyncRequest,
   saveIntegrationClassesRequest,
   saveIntegrationVenuesRequest,
+  savePartnerRevenueSettingsRequest,
   startIntegrationSyncRequest,
   type CustomerIntegration,
   type ExternalClass,
@@ -69,6 +71,7 @@ export function ClassPassSetupDrawer({
   const [preview, setPreview] = useState<SyncPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [vatRatePercent, setVatRatePercent] = useState('')
 
   const title = useMemo(() => stage === 1 ? 'Map locations to ClassPass venues' : stage === 2 ? 'Map ClassPass classes' : 'Review ClassPass sync', [stage])
 
@@ -85,6 +88,7 @@ export function ClassPassSetupDrawer({
     ]).then(async ([currentSetup, allLocations, classPassVenues]) => {
       if (!active) return
       setSetup(currentSetup)
+      setVatRatePercent(currentSetup.partnerVatRatePercent == null ? '' : String(currentSetup.partnerVatRatePercent))
       setLocations(allLocations)
       setVenues(classPassVenues)
       setVenueRows(currentSetup.venueMappings.map((mapping) => ({ locationId: mapping.locationId, externalVenueId: mapping.externalVenueId })))
@@ -120,6 +124,10 @@ export function ClassPassSetupDrawer({
 
   const saveVenues = async () => {
     if (!integration) return
+    if (!vatRatePercent.trim() || !Number.isFinite(Number(vatRatePercent)) || Number(vatRatePercent) < 0 || Number(vatRatePercent) > 100) {
+      toast.error('Enter a VAT rate between 0 and 100%.')
+      return
+    }
     const validRows = venueRows.filter((row) => row.locationId && row.externalVenueId)
     if (!validRows.length) {
       toast.error('Map at least one location to a ClassPass venue.')
@@ -127,6 +135,7 @@ export function ClassPassSetupDrawer({
     }
     setSaving(true)
     try {
+      await savePartnerRevenueSettingsRequest(customerId, integration.id, { partnerVatRatePercent: Number(vatRatePercent) })
       const saved = await saveIntegrationVenuesRequest(customerId, integration.id, validRows)
       setSetup(saved)
       const selectionState: Record<string, string> = {}
@@ -209,6 +218,7 @@ export function ClassPassSetupDrawer({
             {stage === 1 && !loading ? (
               <>
                 <p className="text-sm text-muted-foreground">Choose which ClassPass venue belongs to each Ayana location. You can connect more than one location.</p>
+                <label className="grid max-w-sm gap-1.5 text-sm font-medium">VAT rate (%)<Input type="number" min="0" max="100" step="0.01" value={vatRatePercent} onChange={(event) => setVatRatePercent(event.target.value)} placeholder="e.g. 20" /></label>
                 {venueRows.map((row, index) => {
                   const usedLocations = new Set(venueRows.filter((_, rowIndex) => rowIndex !== index).map((item) => item.locationId))
                   const usedVenues = new Set(venueRows.filter((_, rowIndex) => rowIndex !== index).map((item) => item.externalVenueId))

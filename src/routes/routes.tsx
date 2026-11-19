@@ -29,6 +29,7 @@ const ProductCategoriesPage = lazy(() => import('@/pages/app/ProductCategoriesPa
 const ProductPage = lazy(() => import('@/pages/app/ProductPage'))
 const DataReportsPage = lazy(() => import('@/pages/app/DataReportsPage'))
 const SalesReportPage = lazy(() => import('@/pages/app/SalesReportPage'))
+const PartnerSettlementsPage = lazy(() => import('@/pages/app/PartnerSettlementsPage'))
 const IssuesPage = lazy(() => import('@/pages/app/IssuesPage'))
 const AiSupportIssuesPage = lazy(() => import('@/pages/app/AiSupportIssuesPage'))
 const CustomersPage = lazy(() => import('@/pages/app/CustomersPage'))
@@ -116,6 +117,7 @@ export const router = createBrowserRouter([
           { path: 'agent-support-issues', element: <AiSupportIssuesPage /> },
           { path: 'data', element: <DataReportsPage /> },
           { path: 'reports/sales', element: <SalesReportPage /> },
+          { path: 'partner-transfers', element: <PartnerSettlementsPage /> },
           { path: 'customers', element: <CustomersPage /> },
           { path: 'customers/:customerId', element: <CustomerPage /> },
           { path: 'coaches/:customerId/:userId', element: <CoachPage /> },

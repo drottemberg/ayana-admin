@@ -37,6 +37,8 @@ export type IntegrationSetup = {
   isEnabled: boolean
   setupCompletedAt: string | null
   lastSyncedAt: string | null
+  partnerRevenuePerBookingTtc: number | null
+  partnerVatRatePercent: number | null
   venueMappings: Array<{
     id: string
     integrationId: string
@@ -105,6 +107,46 @@ export function saveIntegrationClassesRequest(customerId: string, integrationId:
 }
 export function saveEgymLocationMappingsRequest(customerId: string, integrationId: string, locations: Array<{ locationId: string; clubId: string; referencePrice: number; allowedClassTypeIds: string[] }>) {
   return apiClient.post<IntegrationSetup>(route(customerId, integrationId, '/egym/setup/locations'), { locations })
+}
+export function savePartnerRevenueSettingsRequest(customerId: string, integrationId: string, settings: { partnerRevenuePerBookingTtc?: number; partnerVatRatePercent: number }) {
+  return apiClient.post<IntegrationSetup>(route(customerId, integrationId, '/setup/revenue-settings'), settings)
+}
+export type PartnerRevenueRow = {
+  id: string
+  sessionId: string
+  sessionStartTime: string
+  amountTtc: number
+  amountHt: number
+  vatAmount: number
+  currency: string
+  amountSource: 'EGYM_CONFIGURED_RATE' | 'CLASSPASS_SYNC'
+  status: 'PENDING' | 'PARTIALLY_PAID' | 'PAID'
+  paidAmount: number
+  settlementAllocations: Array<{ settlementId: string; amount: number }>
+}
+export type PartnerSettlementRow = {
+  id: string
+  receivedAt: string
+  amount: number
+  currency: string
+  externalReference: string | null
+  note: string | null
+  allocatedAmount: number
+}
+export function getPartnerRevenuesRequest(customerId: string, integrationId: string) {
+  return apiClient.get<PartnerRevenueRow[]>(route(customerId, integrationId, '/partner-revenues'))
+}
+export function syncPartnerRevenuesRequest(customerId: string, integrationId: string) {
+  return apiClient.post<{ checked: number; created: number }>(route(customerId, integrationId, '/partner-revenues/sync'), {})
+}
+export function getPartnerSettlementsRequest(customerId: string, integrationId: string) {
+  return apiClient.get<PartnerSettlementRow[]>(route(customerId, integrationId, '/partner-settlements'))
+}
+export function createPartnerSettlementRequest(customerId: string, integrationId: string, input: { receivedAt: string; amount: number; currency: string; externalReference?: string; note?: string }) {
+  return apiClient.post<PartnerSettlementRow>(route(customerId, integrationId, '/partner-settlements'), input)
+}
+export function allocatePartnerSettlementRequest(customerId: string, integrationId: string, settlementId: string, allocations: Array<{ partnerRevenueId: string; amount: number }>) {
+  return apiClient.post<PartnerSettlementRow[]>(route(customerId, integrationId, `/partner-settlements/${encodeURIComponent(settlementId)}/allocations`), { allocations })
 }
 export function previewIntegrationSyncRequest(customerId: string, integrationId: string, fullHistory = false) {
   return apiClient.post<SyncPreview>(route(customerId, integrationId, '/setup/sync/preview'), { fullHistory })

@@ -105,6 +105,12 @@ const data = {
       feature: Feature.REPORTS,
     },
     {
+      title: 'Partner transfers',
+      url: '/partner-transfers',
+      icon: <Icon icon={EntityIcon.orders} />,
+      feature: Feature.REPORTS,
+    },
+    {
       title: 'Messages',
       url: '/messages',
       icon: <Icon icon={EntityIcon.users} />,

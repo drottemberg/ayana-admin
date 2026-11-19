@@ -114,6 +114,7 @@ function StorefrontRoute() {
   const [optionError, setOptionError] = useState('')
   const [cart, setCart] = useState<CartLine[]>(readCart)
   const [orderNote, setOrderNote] = useState('')
+  const [orderNoteOpen, setOrderNoteOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'terminal'>('online')
@@ -151,7 +152,7 @@ function StorefrontRoute() {
     setAccessLoading(channel)
     setAccessError('')
     const modalState = accessModal?.state ?? {}
-    const resumeCheckout = extraState.resumeCheckout === true || modalState.resumeCheckout === true || checkoutOpen
+    const resumeCheckout = extraState.resumeCheckout === true || modalState.resumeCheckout === true || checkoutOpen || cartOpen
     if (resumeCheckout) {
       try { localStorage.setItem(checkoutResumeKey(customerSlug, locationSlug), String(Date.now())) } catch { /* the return URL also carries resumeCheckout */ }
     }
@@ -175,7 +176,8 @@ function StorefrontRoute() {
     }
   }
   const openAccessModal = (state: Record<string, unknown>) => {
-    const resumeCheckout = checkoutOpen || state.resumeCheckout === true
+    const resumeCheckout = checkoutOpen || cartOpen || state.resumeCheckout === true
+    setCartOpen(false)
     setCheckoutOpen(false)
     setAccessError('')
     setAccessEmail(state.returnToSuccess === true ? successContact.email : '')
@@ -709,21 +711,6 @@ function StorefrontRoute() {
     .map((line) => line.key === key ? { ...line, quantity: line.quantity + delta } : line)
     .filter((line) => line.quantity > 0))
 
-  const startCheckout = () => {
-    if (catalog?.acceptsProductOrders === false) {
-      setCheckoutError(tr('La commande de produits est momentanément indisponible dans ce studio.', 'Product ordering is temporarily unavailable at this location.'))
-      return
-    }
-    setCheckoutError('')
-    setPaymentMethod('online')
-    const savedIdentity = readIdentity(customerSlug, locationSlug)
-    const guestDraft = readGuestDraft(customerSlug, locationSlug)
-    setIdentity(savedIdentity)
-    setCheckoutFirstName(savedIdentity.firstName ?? guestDraft.firstName)
-    setCheckoutOpen(true)
-    setCartOpen(false)
-  }
-
   const submitCheckout = async (event: React.FormEvent<HTMLFormElement>, selectedMethod: 'online' | 'terminal' = 'online') => {
     event.preventDefault()
     if (catalog?.acceptsProductOrders === false) {
@@ -766,6 +753,7 @@ function StorefrontRoute() {
         setCart([])
         setOrderNote('')
         localStorage.removeItem(guestDraftKey(customerSlug, locationSlug))
+        setCartOpen(false)
         setCheckoutOpen(false)
         setTerminalOrder({ shortCode: payload.shortCode })
         setSubmitting(false)
@@ -923,12 +911,29 @@ function StorefrontRoute() {
         {isPrefillSelection && <button type="button" className="store-text-button prefill-skip" onClick={skipPrefillChoice}>{tr('Ignorer cet article', 'Skip this item')}</button>}
       </section></div>}
 
-      {cartOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false) }}><section className="store-sheet" role="dialog" aria-modal="true" aria-label={tr('Ton panier', 'Your cart')}>
-        <button className="sheet-close" onClick={() => setCartOpen(false)} aria-label={tr('Fermer', 'Close')}>×</button><p className="store-eyebrow">{tr('Ta sélection', 'Your selection')}</p><h2>{tr('Ton panier', 'Your cart')}</h2>
-        {!cart.length ? <div className="store-empty"><p>{tr('Ton panier est vide.', 'Your cart is empty.')}</p><button className="store-text-button" onClick={() => setCartOpen(false)}>{tr('Continuer mes achats', 'Continue shopping')}</button></div> : <>
-          <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><div className="cart-line-info"><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><button className="cart-line-edit" type="button" onClick={() => editCartLine(line)}>{tr('Modifier les options', 'Edit options')}</button><b>{money(line.unitPrice * line.quantity, currency, language)}</b></div><div className="quantity-picker"><button onClick={() => updateQuantity(line.key, -1)} aria-label={tr('Retirer un article', 'Remove one item')}>−</button><span>{line.quantity}</span><button onClick={() => updateQuantity(line.key, 1)} aria-label={tr('Ajouter un article', 'Add one item')}>＋</button></div></article>)}</div>
-          <label className="cart-order-note">{tr('Note pour la commande (facultatif)', 'Order note (optional)')}<textarea maxLength={1000} rows={2} value={orderNote} onChange={(event) => setOrderNote(event.target.value)} placeholder={tr('Une précision pour le Feelness Bar…', 'Anything the Feelness Bar should know…')} /></label>
-          <div className="cart-total"><span>{tr('Total', 'Subtotal')}</span><b>{money(total, currency, language)}</b></div><p className="cart-note">{tr(`À retirer au Feelness Bar de ${catalog.location.name}.`, `Pick up at the Feelness Bar in ${catalog.location.name}.`)}</p><button className="store-primary" onClick={startCheckout}>{tr('Passer la commande', 'Continue to checkout')} <span>→</span></button>
+      {(cartOpen || checkoutOpen) && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) { setCartOpen(false); setCheckoutOpen(false) } }}><section className="store-sheet store-order-sheet" role="dialog" aria-modal="true" aria-label={tr('Ton panier', 'Your cart')}>
+        <button className="sheet-close" onClick={() => { if (!submitting) { setCartOpen(false); setCheckoutOpen(false) } }} aria-label={tr('Fermer', 'Close')} disabled={submitting}>×</button><div className="store-grab" /><h2>{tr(`Ton panier (${totalCount})`, `Your cart (${totalCount})`)}</h2>
+        {!cart.length ? <div className="store-empty"><p>{tr('Ton panier est vide.', 'Your cart is empty.')}</p><button className="store-text-button" onClick={() => { setCartOpen(false); setCheckoutOpen(false) }}>{tr('Continuer mes achats', 'Continue shopping')}</button></div> : <>
+          <div className="cart-lines">{cart.map((line) => <article className="cart-line" key={line.key}><span className="cart-item-icon" aria-hidden="true">{productEmoji(line.name, line.name)}</span><div className="cart-line-info"><strong>{line.name}</strong><small>{line.variantLabel}{line.modifierNames.length ? ` · ${line.modifierNames.join(', ')}` : ''}</small><b>{money(line.unitPrice * line.quantity, currency, language)}</b><button className="cart-line-edit" type="button" onClick={() => editCartLine(line)}>{tr('Modifier', 'Edit')}</button></div><div className="quantity-picker"><button type="button" onClick={() => updateQuantity(line.key, -1)} aria-label={tr('Retirer un article', 'Remove one item')}>−</button><span>{line.quantity}</span><button type="button" onClick={() => updateQuantity(line.key, 1)} aria-label={tr('Ajouter un article', 'Add one item')}>＋</button></div></article>)}</div>
+          <button className="cart-note-toggle" type="button" aria-expanded={orderNoteOpen || Boolean(orderNote)} onClick={() => setOrderNoteOpen((current) => !current)}>{tr('＋ Ajouter une note pour le barista', '＋ Add a note for the barista')}</button>
+          {(orderNoteOpen || Boolean(orderNote)) && <label className="cart-order-note"><span className="sr-only">{tr('Note pour la commande (facultatif)', 'Order note (optional)')}</span><textarea maxLength={1000} rows={2} value={orderNote} onChange={(event) => setOrderNote(event.target.value)} placeholder={tr('Une précision pour préparer ta commande…', 'Anything we should know when preparing your order…')} /></label>}
+          <form className="store-unified-checkout" onSubmit={handleCheckoutSubmit}>
+          <div className="store-step-title">{tr('1 · Qui commande ?', '1 · Who’s ordering?')}</div>
+          {!identity.token ? <>
+            <div className="store-member-card"><div><strong>{tr('Déjà client ou abonné ?', 'Already a customer or member?')}</strong><small>{tr('Connecte-toi : -10 % pour les abonnés, appliqué tout seul.', 'Sign in: subscribers get 10% off automatically.')}</small></div><button type="button" onClick={() => openAccessModal({ resumeCheckout: true })}>{tr('Se connecter', 'Sign in')}</button></div>
+            <label className="store-order-name">{tr('Ou commande sans compte : ton prénom', 'Or order as a guest: your first name')}<input autoComplete="given-name" maxLength={80} aria-invalid={Boolean(checkoutError && !checkoutFirstName.trim())} aria-describedby={checkoutError && !checkoutFirstName.trim() ? 'store-order-name-error' : undefined} value={checkoutFirstName} onChange={(event) => { updateGuestDraft(event.target.value); if (event.target.value.trim()) setCheckoutError('') }} placeholder={tr('Pour t’appeler au comptoir', 'Name for your order')} />{checkoutError && !checkoutFirstName.trim() && <span id="store-order-name-error" className="store-name-error" role="alert">{checkoutError}</span>}</label>
+          </> : <div className="store-member-card is-connected"><div><strong>{tr('Compte Ayana connecté', 'Ayana account connected')}</strong><small>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</small></div><span aria-hidden="true">✓</span></div>}
+          {checkoutError && (identity.firstName?.trim() || checkoutFirstName.trim()) && <p className="store-form-error" role="alert">{checkoutError}</p>}
+          <div className="store-step-title">{tr('2 · Quand veux-tu payer ?', '2 · When would you like to pay?')}</div>
+            {!identity.firstName?.trim() && identity.token && <label className="store-order-name">{tr('Ton prénom', 'Your first name')}<input autoComplete="given-name" maxLength={80} aria-invalid={Boolean(checkoutError && !checkoutFirstName.trim())} aria-describedby={checkoutError && !checkoutFirstName.trim() ? 'store-order-name-error' : undefined} value={checkoutFirstName} onChange={(event) => { setCheckoutFirstName(event.target.value); if (event.target.value.trim()) setCheckoutError('') }} />{checkoutError && !checkoutFirstName.trim() && <span id="store-order-name-error" className="store-name-error" role="alert">{checkoutError}</span>}</label>}
+            <div className="store-payment-cards">
+              <button type="button" className={`store-payment-card ${paymentMethod === 'online' ? 'is-active' : ''}`} aria-pressed={paymentMethod === 'online'} onClick={() => setPaymentMethod('online')}><span className="store-radio" /><span className="store-payment-copy"><strong>{tr('Maintenant, en ligne', 'Pay now, online')}</strong><small>{tr('Carte, Apple Pay ou Google Pay. Ta boisson part en préparation tout de suite.', 'Card, Apple Pay or Google Pay. Your drink goes straight into preparation.')}</small></span><span className="store-fast-tag">{tr('Le plus rapide', 'Fastest')}</span></button>
+              {terminalAvailable && <button type="button" className={`store-payment-card ${paymentMethod === 'terminal' ? 'is-active' : ''}`} aria-pressed={paymentMethod === 'terminal'} onClick={() => setPaymentMethod('terminal')}><span className="store-radio" /><span className="store-payment-copy"><strong>{tr('Au comptoir', 'At the counter')}</strong><small>{tr('Tu règles par carte en récupérant ta commande.', 'Pay by card when you collect your order.')}</small></span></button>}
+            </div>
+            <div className="cart-total unified-cart-total"><span>{tr('Total', 'Total')}</span><b>{money(total, currency, language)}</b></div>
+            <button type="submit" data-payment-method={paymentMethod} className="store-primary unified-pay-button" disabled={submitting}>{submitting ? (paymentMethod === 'terminal' ? tr('Enregistrement de la commande…', 'Saving your order…') : tr('Préparation du paiement…', 'Preparing payment…')) : paymentMethod === 'terminal' ? tr('Commander et payer au comptoir', 'Place order and pay at the counter') : tr(`Payer ${money(total, currency, language)} et commander`, `Pay ${money(total, currency, language)} and place order`)}</button>
+          </form>
+          <p className="unified-secure-note">{paymentMethod === 'online' ? tr('Paiement sécurisé par Stripe, qui te demandera ton e-mail pour le reçu.', 'Secure payment by Stripe. Stripe will ask for your email receipt.') : tr('Tu régleras par carte au comptoir au moment du retrait.', 'Pay by card at the counter when you collect your order.')}</p>
         </>}
       </section></div>}
 
@@ -942,54 +947,12 @@ function StorefrontRoute() {
         <button className="store-primary" onClick={() => setTerminalOrder(null)}>{tr('Compris', 'Got it')}</button>
       </section></div>}
 
-      {checkoutOpen && <div className="store-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setCheckoutOpen(false) }}><section className="store-sheet checkout-sheet" role="dialog" aria-modal="true" aria-label={identity.token ? tr('Paiement', 'Payment') : tr('Connexion', 'Sign in')}>
-        <button className="sheet-close" onClick={() => setCheckoutOpen(false)} aria-label={tr('Fermer', 'Close')} disabled={submitting}>×</button>
-        <p className="store-eyebrow">{tr('Ta commande', 'Your order')}</p>
-        {checkoutError && <p className="store-form-error">{checkoutError}</p>}
-        {!identity.token ? <>
-          <h2>{tr('Commander en invité', 'Guest checkout')}</h2>
-          <p className="sheet-description">{tr('Règle ta commande en quelques instants. Stripe demandera l’e-mail du reçu pour un paiement en ligne.', 'Place your order in a few moments. Stripe will ask for an email receipt for online payment.')}</p>
-          <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
-          <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
-            <label>{tr('Prénom', 'First name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => updateGuestDraft(event.target.value)} /></label>
-          <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
-          </form>
-          <div className="checkout-login-suggestion"><span>{tr('Déjà membre Ayana ?', 'Already an Ayana member?')}</span>{renderAccessButtons('checkout-login-link', { resumeCheckout: true })}</div>
-          {accessError && <p className="store-form-error" role="alert">{accessError}</p>}
-        </> : <>
-          <h2>{tr('Paiement de la commande', 'Order payment')}</h2>
-          <div className="saved-identity"><span>{tr('Compte Ayana connecté', 'Ayana account connected')}</span><strong>{[identity.firstName, identity.lastName].filter(Boolean).join(' ') || identity.email}</strong></div>
-          <div className="checkout-total"><span>{tr('À payer', 'Due now')}</span><b>{money(total, currency, language)}</b></div>
-          {!terminalAvailable && <p className="secure-note">{tr('Stripe te demandera l’e-mail pour le reçu. Le paiement est sécurisé et la commande sera confirmée après validation.', 'Stripe will collect the email for your receipt. Payment is secure, and your order will be confirmed once payment is complete.')}</p>}
-          <form className="store-checkout-form" onSubmit={handleCheckoutSubmit}>
-            {!identity.firstName?.trim() && <label>{tr('Ton prénom', 'Your first name')}<input autoComplete="given-name" required maxLength={80} value={checkoutFirstName} onChange={(event) => setCheckoutFirstName(event.target.value)} /></label>}
-            <PaymentActions language={language} terminalAvailable={terminalAvailable} submitting={submitting} paymentMethod={paymentMethod} />
-          </form>
-        </>}
-      </section></div>}
-
       {renderAccessModal()}
     </main>
   )
 }
 
 export function StorefrontPage() { return <StorefrontRoute /> }
-
-function PaymentActions({ language, terminalAvailable, submitting, paymentMethod }: { language: StorefrontLanguage; terminalAvailable: boolean; submitting: boolean; paymentMethod: 'online' | 'terminal' }) {
-  const isFrench = language === 'fr'
-  if (terminalAvailable) return <div className="payment-method-actions">
-    <button type="submit" data-payment-method="online" className="store-primary payment-online" disabled={submitting}>
-      <span>{submitting && paymentMethod === 'online' ? (isFrench ? 'Préparation du paiement…' : 'Preparing payment…') : (isFrench ? 'Payer en ligne par carte' : 'Pay online by card')}</span><span aria-hidden="true">→</span>
-    </button>
-    <button type="submit" data-payment-method="terminal" className="payment-choice-terminal" disabled={submitting}>
-      <strong>{submitting && paymentMethod === 'terminal' ? (isFrench ? 'Enregistrement de la commande…' : 'Saving your order…') : (isFrench ? 'Payer sur place par carte' : 'Pay by card at the shop')}</strong>
-      <span aria-hidden="true">→</span>
-    </button>
-  </div>
-  return <button type="submit" data-payment-method="online" className="store-primary" disabled={submitting}>
-    {submitting ? (paymentMethod === 'terminal' ? (isFrench ? 'Envoi au terminal…' : 'Sending to terminal…') : (isFrench ? 'Préparation du paiement…' : 'Preparing payment…')) : (isFrench ? 'Payer en toute sécurité' : 'Pay securely')} <span>→</span>
-  </button>
-}
 
 function LanguageSelector({ language, onChange }: { language: StorefrontLanguage; onChange: (language: StorefrontLanguage) => void }) {
   return <div className="store-language" role="group" aria-label={language === 'fr' ? 'Langue' : 'Language'}>

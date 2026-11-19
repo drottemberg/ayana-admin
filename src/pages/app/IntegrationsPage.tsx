@@ -12,6 +12,7 @@ import {
   deleteIntegrationRequest,
   loadIntegrationRows,
   setIntegrationEnabledRequest,
+  syncPartnerRevenuesRequest,
   type CustomerIntegration,
 } from '@/features/integrations/api'
 import { getIntegrationColumns } from '@/features/integrations/integration-columns'
@@ -32,7 +33,16 @@ export default function IntegrationsPage() {
   const [setupOpen, setSetupOpen] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [fullHistoryMode, setFullHistoryMode] = useState(false)
+  const [syncingRevenueId, setSyncingRevenueId] = useState('')
   const openSetup = useCallback((row: CustomerIntegration, preview = false, fullHistory = false) => { setSetupIntegration(row); setPreviewMode(preview); setFullHistoryMode(fullHistory); setSetupOpen(true) }, [])
+  const syncRevenue = useCallback(async (row: CustomerIntegration) => {
+    setSyncingRevenueId(row.id)
+    try {
+      const result = await syncPartnerRevenuesRequest(customerId, row.id)
+      toast.success(`Revenue sync complete: ${result.created} new row(s) created from ${result.checked} partner records.`)
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not sync partner revenue.') }
+    finally { setSyncingRevenueId('') }
+  }, [customerId])
   const columns = useMemo(() => getIntegrationColumns(canEdit ? (row) => openSetup(row) : undefined), [canEdit, openSetup])
   const loadData = useCallback((state: DataTableState<CustomerIntegration>) => loadIntegrationRows(customerId, state), [customerId])
   const refresh = async () => { await queryClient.invalidateQueries({ queryKey: ['integrations', customerId] }) }
@@ -61,6 +71,7 @@ export default function IntegrationsPage() {
       ...(row.provider === 'CLASSPASS' && row.setupComplete && row.isEnabled ? [{ label: 'Resync all history', onClick: () => openSetup(row, true, true) }] : []),
       ...(row.provider === 'EGYM2' && row.setupStarted ? [{ label: row.setupComplete ? 'Preview and sync' : 'Continue setup', onClick: () => openSetup(row, row.setupComplete) }] : []),
       ...(row.provider === 'EGYM2' && row.setupComplete && row.isEnabled ? [{ label: 'Resync all history', onClick: () => openSetup(row, true, true) }] : []),
+      ...(['CLASSPASS', 'EGYM', 'EGYM2'].includes(row.provider) && row.setupComplete ? [{ label: syncingRevenueId === row.id ? 'Syncing revenue…' : 'Sync revenue', disabled: syncingRevenueId === row.id, onClick: () => void syncRevenue(row) }] : []),
       { label: row.isEnabled ? 'Disable' : 'Enable', onClick: () => void toggle(row) },
     ] : []),
     ...(canDelete ? [{ label: 'Delete', variant: 'destructive' as const, onClick: () => void remove(row) }] : []),

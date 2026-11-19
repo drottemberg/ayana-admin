@@ -10,6 +10,7 @@ import {
   getEgym2GymsRequest,
   getIntegrationSetupRequest,
   previewIntegrationSyncRequest,
+  savePartnerRevenueSettingsRequest,
   saveEgym2VenueMappingsRequest,
   startIntegrationSyncRequest,
   type CustomerIntegration,
@@ -38,6 +39,8 @@ export function Egym2SetupDrawer({
   const [preview, setPreview] = useState<SyncPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [payoutTtc, setPayoutTtc] = useState('')
+  const [vatRatePercent, setVatRatePercent] = useState('')
 
   useEffect(() => {
     if (!open || !integration) return
@@ -51,6 +54,8 @@ export function Egym2SetupDrawer({
     ]).then(async ([currentSetup, allLocations, availableGyms]) => {
       if (!active) return
       setSetup(currentSetup)
+      setPayoutTtc(currentSetup.partnerRevenuePerBookingTtc == null ? '' : String(currentSetup.partnerRevenuePerBookingTtc))
+      setVatRatePercent(currentSetup.partnerVatRatePercent == null ? '' : String(currentSetup.partnerVatRatePercent))
       setLocations(allLocations)
       setGyms(availableGyms)
       setRows(currentSetup.venueMappings.map((mapping) => ({
@@ -72,10 +77,18 @@ export function Egym2SetupDrawer({
   const addRow = () => setRows((current) => [...current, { locationId: '', externalVenueId: '', network: 'FR_BE' }])
   const saveAndPreview = async () => {
     if (!integration) return
+    if (!(Number(payoutTtc) > 0) || !vatRatePercent.trim() || !Number.isFinite(Number(vatRatePercent)) || Number(vatRatePercent) < 0 || Number(vatRatePercent) > 100) {
+      toast.error('Enter the Wellpass TTC amount per confirmed reservation and a VAT rate between 0 and 100%.')
+      return
+    }
     const valid = rows.filter((row) => row.locationId && row.externalVenueId)
     if (!valid.length) { toast.error('Map at least one Ayana location to an EGYM gym.'); return }
     setSaving(true)
     try {
+      await savePartnerRevenueSettingsRequest(customerId, integration.id, {
+        partnerRevenuePerBookingTtc: Number(payoutTtc),
+        partnerVatRatePercent: Number(vatRatePercent),
+      })
       const saved = await saveEgym2VenueMappingsRequest(customerId, integration.id, valid)
       setSetup(saved)
       const result = await previewIntegrationSyncRequest(customerId, integration.id, fullHistory)
@@ -100,6 +113,10 @@ export function Egym2SetupDrawer({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
         {loading ? <p className="text-sm text-muted-foreground">Loading EGYM gyms and current mappings…</p> : null}
         {!preview ? <>
+          <section className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
+            <label className="grid gap-1.5 text-sm font-medium">Wellpass revenue per confirmed reservation (TTC)<Input type="number" min="0.01" step="0.01" value={payoutTtc} onChange={(event) => setPayoutTtc(event.target.value)} placeholder="e.g. 8.00" /></label>
+            <label className="grid gap-1.5 text-sm font-medium">VAT rate (%)<Input type="number" min="0" max="100" step="0.01" value={vatRatePercent} onChange={(event) => setVatRatePercent(event.target.value)} placeholder="e.g. 20" /></label>
+          </section>
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">Location and gym mappings</h3>
             <p className="text-sm text-muted-foreground">Choose the EGYM gym for each Ayana location. The API network is required for bookings.</p>

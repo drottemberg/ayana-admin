@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TablePagination } from '@/components/table-pagination'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { getCustomerFilterOptionsRequest, getCustomerRequest } from '@/features/customers/api'
@@ -18,6 +19,7 @@ import { getSalesReportLocationsRequest, getSalesReportRequest, type SalesReport
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
 
 type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'MONTH_TO_DATE' | 'LAST_MONTH' | 'YEAR_TO_DATE' | 'LAST_YEAR' | 'CUSTOM'
+type RevenueTab = 'all' | 'direct' | 'partners'
 type SalesReportSavedFilters = { period: PeriodPreset; customerId?: string; customerName?: string; locationId?: string; locationName?: string; dateFrom?: string; dateTo?: string }
 
 const SALES_REPORT_FILTERS_KEY = 'sales-report.filters'
@@ -90,6 +92,7 @@ function downloadCsv(report: SalesReport, entries = report.entries) {
   const rows: unknown[][] = [
     ['Section', 'Date', 'Type', 'Order', 'Client', 'Location', 'VAT rate', 'Net sales', 'VAT', 'Gross', 'Currency'],
     ...report.vatBreakdown.map((item) => ['VAT', `${report.from} – ${report.to}`, 'NET SALES', '', '', '', percent(item.vatRate), item.net, item.vat, item.gross, item.currency]),
+    ...(report.partnerRevenue ?? []).map((item) => ['Partner revenue', `${report.from} – ${report.to}`, `Generated (${item.count} sessions)`, '', '', '', '', item.net, item.vat, item.gross, item.currency]),
     ...entries.map((item) => [
       'Transaction', new Date(item.date).toISOString(), item.type === 'STRIPE_FEE' ? 'PAYMENT PROCESSING FEE' : item.type,
       item.orderCode ?? item.orderId ?? '', item.customerName ?? '', item.locationName,
@@ -127,6 +130,7 @@ export default function SalesReportPage() {
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState(false)
   const [filtersInitialized, setFiltersInitialized] = useState(false)
+  const [revenueTab, setRevenueTab] = useState<RevenueTab>('all')
 
   useEffect(() => {
     if (filtersInitialized) return
@@ -207,6 +211,50 @@ export default function SalesReportPage() {
     enabled: filtersInitialized && Boolean(from && to && from <= to),
   })
   const report = reportQuery.data
+  const partnerSummary = useMemo(() => {
+    const direct = new Map((report?.totals ?? []).map((item) => [item.currency, item.gross] as const))
+    const partner = new Map((report?.partnerRevenue ?? []).map((item) => [item.currency, item] as const))
+    return [...new Set([...direct.keys(), ...partner.keys()])].sort().map((code) => {
+      const integration = partner.get(code)
+      const directGross = direct.get(code) ?? 0
+      return {
+        currency: code,
+        directGross,
+        integration,
+        globalEstimated: directGross + (integration?.gross ?? 0),
+      }
+    })
+  }, [report])
+  const revenueTotals = useMemo(() => {
+    if (revenueTab === 'partners') {
+      return partnerSummary.map((row) => ({
+        currency: row.currency,
+        gross: row.integration?.gross ?? 0,
+        net: row.integration?.net ?? 0,
+        vat: row.integration?.vat ?? 0,
+        unallocatedGross: 0,
+        stripeFees: 0,
+        netAfterStripeFees: row.integration?.net ?? 0,
+      }))
+    }
+    const directTotals = report?.totals ?? []
+    const currencies = revenueTab === 'all'
+      ? [...new Set([...directTotals.map((item) => item.currency), ...partnerSummary.map((item) => item.currency)])]
+      : directTotals.map((item) => item.currency)
+    return currencies.sort().map((code) => {
+      const direct = directTotals.find((item) => item.currency === code)
+      const partner = revenueTab === 'all' ? partnerSummary.find((item) => item.currency === code)?.integration : undefined
+      return {
+        currency: code,
+        gross: (direct?.gross ?? 0) + (partner?.gross ?? 0),
+        net: (direct?.net ?? 0) + (partner?.net ?? 0),
+        vat: (direct?.vat ?? 0) + (partner?.vat ?? 0),
+        unallocatedGross: direct?.unallocatedGross ?? 0,
+        stripeFees: direct?.stripeFees ?? 0,
+        netAfterStripeFees: (direct?.netAfterStripeFees ?? 0) + (partner?.net ?? 0),
+      }
+    })
+  }, [partnerSummary, report?.totals, revenueTab])
 
   const reportFilters = useMemo<DataTableFilter<SalesReportEntry & Record<string, unknown>>[]>(() => [
     ...(isAdmin ? [{
@@ -456,15 +504,45 @@ export default function SalesReportPage() {
         {report ? <>
           <p className="text-sm text-muted-foreground">{displayDateRange(report.from, report.to)} · Dates use each location’s timezone.</p>
 
-          {report.totals.length ? report.totals.map((total) => <div key={total.currency} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>Gross sales · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.gross, total.currency)}</div></Card>
-            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>Net sales · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.net, total.currency)}</div></Card>
-            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>VAT collected · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.vat, total.currency)}</div></Card>
-            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>VAT to allocate · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.unallocatedGross, total.currency)}</div></Card>
-            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>Payment processing fees · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.stripeFees, total.currency)}</div><p className="text-xs text-muted-foreground">Net after processing fees: {currency(total.netAfterStripeFees, total.currency)}</p></Card>
-          </div>) : <Card size="sm" className="rounded-lg bg-muted p-4"><CardDescription>No sales or refunds in this period.</CardDescription></Card>}
+          <Tabs value={revenueTab} onValueChange={(value) => setRevenueTab(value as RevenueTab)}>
+            <TabsList aria-label="Revenue source">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="direct">Direct</TabsTrigger>
+              <TabsTrigger value="partners">Partners</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-          <Card size="sm" className="gap-4 rounded-lg p-0">
+          {revenueTotals.length ? revenueTotals.map((total) => <div key={total.currency} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>{revenueTab === 'all' ? 'Gross · direct + partner estimate' : revenueTab === 'partners' ? 'Partner gross · TTC' : 'Gross sales'} · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.gross, total.currency)}</div></Card>
+            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>{revenueTab === 'all' ? 'Net · direct + partner estimate' : revenueTab === 'partners' ? 'Partner net · HT' : 'Net sales'} · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.net, total.currency)}</div></Card>
+            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>{revenueTab === 'partners' ? 'Partner VAT' : revenueTab === 'all' ? 'VAT · direct + partner estimate' : 'VAT collected'} · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.vat, total.currency)}</div></Card>
+            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>VAT to allocate · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(total.unallocatedGross, total.currency)}</div></Card>
+            <Card size="sm" className="gap-2 rounded-lg bg-muted p-4"><CardDescription>{revenueTab === 'partners' ? 'Partner unpaid' : 'Payment processing fees'} · {total.currency}</CardDescription><div className="text-xl font-semibold tabular-nums">{currency(revenueTab === 'partners' ? (partnerSummary.find((item) => item.currency === total.currency)?.integration?.outstanding ?? 0) : total.stripeFees, total.currency)}</div>{revenueTab !== 'partners' ? <p className="text-xs text-muted-foreground">Net after processing fees: {currency(total.netAfterStripeFees, total.currency)}</p> : <p className="text-xs text-muted-foreground">Partner paid: {currency(partnerSummary.find((item) => item.currency === total.currency)?.integration?.paid ?? 0, total.currency)}</p>}</Card>
+          </div>) : <Card size="sm" className="rounded-lg bg-muted p-4"><CardDescription>No revenue in this period.</CardDescription></Card>}
+
+          {(revenueTab === 'all' || revenueTab === 'partners') && report.partnerRevenue.length ? <Card size="sm" className="gap-0 rounded-lg p-0">
+            <CardHeader className="p-4 pb-2"><CardTitle className="text-lg">Partner revenue and global estimate</CardTitle><CardDescription>Partner revenue is assigned to the class date. EGYM uses the configured TTC rate; ClassPass uses the session amount from sync.</CardDescription></CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                <TableHeader><TableRow><TableHead>Currency</TableHead><TableHead className="text-right">Direct collected</TableHead><TableHead className="text-right">Wellpass estimate</TableHead><TableHead className="text-right">ClassPass reported</TableHead><TableHead className="text-right">Partner HT</TableHead><TableHead className="text-right">Partner VAT</TableHead><TableHead className="text-right">Partner TTC</TableHead><TableHead className="text-right">Partner unpaid</TableHead><TableHead className="text-right">Global estimate</TableHead></TableRow></TableHeader>
+                  <TableBody>{partnerSummary.map((row) => <TableRow key={row.currency}>
+                    <TableCell>{row.currency}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.directGross, row.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.integration?.egymConfigured ?? 0, row.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.integration?.classPassReported ?? 0, row.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.integration?.net ?? 0, row.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.integration?.vat ?? 0, row.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.integration?.gross ?? 0, row.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{currency(row.integration?.outstanding ?? 0, row.currency)}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">{currency(row.globalEstimated, row.currency)}</TableCell>
+                  </TableRow>)}</TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card> : null}
+
+          {revenueTab !== 'partners' ? <Card size="sm" className="gap-4 rounded-lg p-0">
             <CardHeader className="p-4 pb-0"><CardTitle className="text-lg">Sales by VAT rate</CardTitle><CardDescription>Based on VAT snapshots saved on order items. Refunds are prorated across the order’s VAT rates.</CardDescription></CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -481,14 +559,14 @@ export default function SalesReportPage() {
                 </TableBody>
               </Table>
             </CardContent>
-          </Card>
+          </Card> : null}
 
-          {report.unallocated.length ? <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Some transactions do not have VAT details attached to order items. They are shown as “VAT to allocate” and excluded from net sales and VAT totals.</p> : null}
+          {revenueTab !== 'partners' && report.unallocated.length ? <p className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">Some transactions do not have VAT details attached to order items. They are shown as “VAT to allocate” and excluded from net sales and VAT totals.</p> : null}
 
           <p className="text-xs text-muted-foreground">{report.note.replaceAll('Stripe fees', 'Payment processing fees')}</p>
         </> : null}
 
-        {filtersInitialized && from && to && from <= to ? <section className="space-y-3">
+        {revenueTab !== 'partners' && filtersInitialized && from && to && from <= to ? <section className="space-y-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
             <h2 className="text-lg font-semibold">Transactions</h2>

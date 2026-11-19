@@ -6,7 +6,7 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Modals } from '@/providers/modal'
 import { queryClient } from '@/lib/query-client'
-import { deleteIntegrationRequest, loadIntegrationRows, setIntegrationEnabledRequest, type CustomerIntegration } from './api'
+import { deleteIntegrationRequest, loadIntegrationRows, setIntegrationEnabledRequest, syncPartnerRevenuesRequest, type CustomerIntegration } from './api'
 import { getIntegrationColumns } from './integration-columns'
 import { IntegrationEditDrawer } from './IntegrationEditDrawer'
 import { ClassPassSetupDrawer } from './ClassPassSetupDrawer'
@@ -20,10 +20,19 @@ export function CustomerIntegrationsModule({ customerId, canCreate, canEdit, can
   const [setupOpen, setSetupOpen] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [fullHistoryMode, setFullHistoryMode] = useState(false)
+  const [syncingRevenueId, setSyncingRevenueId] = useState('')
   const openSetup = useCallback((row: CustomerIntegration, preview = false, fullHistory = false) => { setSetupIntegration(row); setPreviewMode(preview); setFullHistoryMode(fullHistory); setSetupOpen(true) }, [])
   const openCreate = () => { setIntegration(null); setDrawerOpen(true) }
   const openEdit = (row: CustomerIntegration) => { setIntegration(row); setDrawerOpen(true) }
   const refresh = async () => { await queryClient.invalidateQueries({ queryKey: ['integrations', customerId] }) }
+  const syncRevenue = useCallback(async (row: CustomerIntegration) => {
+    setSyncingRevenueId(row.id)
+    try {
+      const result = await syncPartnerRevenuesRequest(customerId, row.id)
+      toast.success(`Revenue sync complete: ${result.created} new row(s) created from ${result.checked} partner records.`)
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not sync partner revenue.') }
+    finally { setSyncingRevenueId('') }
+  }, [customerId])
   const toggle = async (row: CustomerIntegration) => {
     try {
       await setIntegrationEnabledRequest(customerId, row.id, !row.isEnabled)
@@ -48,6 +57,7 @@ export function CustomerIntegrationsModule({ customerId, canCreate, canEdit, can
       ...(row.provider === 'CLASSPASS' && row.setupComplete && row.isEnabled ? [{ label: 'Resync all history', onClick: () => openSetup(row, true, true) }] : []),
       ...(row.provider === 'EGYM2' && row.setupStarted ? [{ label: row.setupComplete ? 'Preview and sync' : 'Continue setup', onClick: () => openSetup(row, row.setupComplete) }] : []),
       ...(row.provider === 'EGYM2' && row.setupComplete && row.isEnabled ? [{ label: 'Resync all history', onClick: () => openSetup(row, true, true) }] : []),
+      ...(['CLASSPASS', 'EGYM', 'EGYM2'].includes(row.provider) && row.setupComplete ? [{ label: syncingRevenueId === row.id ? 'Syncing revenue…' : 'Sync revenue', disabled: syncingRevenueId === row.id, onClick: () => void syncRevenue(row) }] : []),
       { label: row.isEnabled ? 'Disable' : 'Enable', onClick: () => void toggle(row) },
     ] : []),
     ...(canDelete ? [{ label: 'Delete', variant: 'destructive' as const, onClick: () => void remove(row) }] : []),

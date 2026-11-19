@@ -30,6 +30,7 @@ export type SalesReport = {
   to: string
   totals: SalesReportTotal[]
   vatBreakdown: SalesVatBucket[]
+  partnerRevenue: Array<{ currency: string; gross: number; net: number; vat: number; outstanding: number; paid: number; egymConfigured: number; classPassReported: number; count: number; totalEstimatedWithDirect: number }>
   entries: SalesReportEntry[]
   pagination: { page: number; limit: number; total: number; pageCount: number }
   unallocated: Array<{ currency: string; gross: number }>
