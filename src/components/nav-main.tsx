@@ -5,9 +5,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from '@/components/ui/sidebar'
 import { Link, useLocation } from 'react-router-dom'
+import { useSidebarNavigation } from '@/hooks/use-sidebar-navigation'
 
 export function NavMain({
   label,
@@ -22,8 +22,8 @@ export function NavMain({
     isActive?: boolean
   }[]
 }) {
-  const { setOpenMobile } = useSidebar()
   const { pathname } = useLocation()
+  const onSidebarNavigate = useSidebarNavigation()
 
   const isPathActive = (url: string) => {
     if (url === '/') {
@@ -45,7 +45,7 @@ export function NavMain({
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
-                render={<Link to={item.url} onClick={() => setOpenMobile(false)} />}
+                render={<Link to={item.url} onClick={(event) => onSidebarNavigate(item.url, event)} />}
                 tooltip={item.title}
                 isActive={isItemActive(item)}
               >

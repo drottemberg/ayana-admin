@@ -9,12 +9,13 @@ import { useLocation } from 'react-router-dom'
 export function RootLayout() {
   const { settings, setSidebarOpen } = useAppSettings()
   const location = useLocation()
+  const sidebarRefreshKey = (location.state as { sidebarRefreshKey?: string } | null)?.sidebarRefreshKey
 
   if (location.pathname === '/orders/kitchen') {
     return (
       <main className="min-h-svh w-full bg-background">
         <Suspense fallback={null}>
-          <Outlet />
+          <Outlet key={sidebarRefreshKey ?? location.key} />
         </Suspense>
       </main>
     )
@@ -27,7 +28,7 @@ export function RootLayout() {
         <SidebarInset>
           <main>
             <Suspense fallback={null}>
-              <Outlet />
+              <Outlet key={sidebarRefreshKey ?? location.key} />
             </Suspense>
           </main>
         </SidebarInset>

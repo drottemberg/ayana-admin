@@ -12,11 +12,11 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  useSidebar,
 } from '@/components/ui/sidebar'
 import { HugeiconsIcon } from '@hugeicons/react'
 import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
 import { Link, useLocation } from 'react-router-dom'
+import { useSidebarNavigation } from '@/hooks/use-sidebar-navigation'
 
 type NavSecondaryItem = {
   title: string
@@ -35,8 +35,8 @@ export function NavSecondary({
 }: {
   items: NavSecondaryItem[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
-  const { setOpenMobile } = useSidebar()
   const { pathname } = useLocation()
+  const onSidebarNavigate = useSidebarNavigation()
 
   const isPathActive = (url: string) => {
     if (url === '/') {
@@ -87,7 +87,7 @@ export function NavSecondary({
                         {item.items.map((subItem) => (
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
-                              render={<Link to={subItem.url} onClick={() => setOpenMobile(false)} />}
+                              render={<Link to={subItem.url} onClick={(event) => onSidebarNavigate(subItem.url, event)} />}
                               isActive={isItemActive(subItem)}
                               className="h-8 p-2 text-sm font-medium text-sidebar-foreground data-active:bg-[var(--color-accent)] data-active:font-semibold data-active:text-sidebar-accent-foreground [&>span:last-child]:text-sidebar-foreground/65"
                             >
@@ -105,7 +105,7 @@ export function NavSecondary({
             return (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton
-                  render={item.url ? <Link to={item.url} onClick={() => setOpenMobile(false)} /> : undefined}
+                  render={item.url ? <Link to={item.url} onClick={(event) => onSidebarNavigate(item.url!, event)} /> : undefined}
                   tooltip={item.title}
                   isActive={isActive}
                 >
