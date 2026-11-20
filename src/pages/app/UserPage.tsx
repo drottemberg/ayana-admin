@@ -343,6 +343,7 @@ export default function UserPage() {
     .join('|')
   const hasCustomerMembership = (user?.customerMemberships?.length ?? 0) > 0
   const modules = [
+    ...(canViewBookings ? [{ key: 'bookings', label: 'Bookings' }] : []),
     ...(isAdminContext ? [{ key: 'customers', label: 'Customers' }] : []),
     ...(hasCustomerMembership ? [{ key: 'locations', label: 'Locations' }] : []),
     ...(canViewCoachSchedules ? [{ key: 'schedules', label: 'Schedules' }] : []),
@@ -351,7 +352,6 @@ export default function UserPage() {
       ? [
           ...(canViewContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
           ...(canViewCreditWallets ? [{ key: 'credit-transactions', label: 'Credit transactions' }] : []),
-          ...(canViewBookings ? [{ key: 'bookings', label: 'Bookings' }] : []),
           ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
         ]
       : []),
@@ -383,6 +383,48 @@ export default function UserPage() {
       modules={modules}
       aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canViewCreditWallets)} isLoading={isLoading} />}
     >
+      {canViewBookings ? <RelatedEntityModule
+        id={`${MODULE_ANCHOR_PREFIX}-bookings`}
+        title="Bookings"
+        icon={EntityIcon.classes}
+        viewAllTo={makeViewAllTo('/bookings', userId)}
+        queryKey={bookingsQueryKeys.user(userId)}
+        loadData={(state: DataTableState<Booking>) => getBookingsRequest({
+          ...state,
+          sorting: [{ id: 'startsAt', desc: true }],
+        }, {
+          userId,
+          ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
+        })}
+        tableKey={`bookings.user.${userId}`}
+        columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
+        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} showSessionDateAside showContractDetails={canViewBookingContractDetails(session?.user, isAdminContext ? 'admin' : 'customer', currentCustomerId)} />}
+        getRowCommands={(booking) => getBookingRowActions({
+          status: booking.status,
+          canEdit: canEditBookings,
+          canCreate: canCreateBookings,
+          isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
+          source: booking.source,
+          onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
+          onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
+          onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
+          onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },
+          onRebook: () => {
+            const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
+            void rebookClientForSession({
+              customerId: booking.customer.id,
+              locationId: booking.location.id,
+              sessionId: booking.sessionId,
+              userId: booking.userId,
+              clientName,
+              invalidate: invalidateBookingViews,
+            })
+          },
+        })}
+        loadingMessage="Loading bookings..."
+        emptyMessage="No bookings found."
+        errorMessage="Failed to load bookings."
+      /> : null}
       {isAdminContext ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-customers`}
         title="Customers"
@@ -502,48 +544,7 @@ export default function UserPage() {
         emptyMessage="No credit transactions found."
         errorMessage="Failed to load credit transactions."
       /> : null}
-      {canViewBookings ? <RelatedEntityModule
-        id={`${MODULE_ANCHOR_PREFIX}-bookings`}
-        title="Bookings"
-        icon={EntityIcon.classes}
-        viewAllTo={makeViewAllTo('/bookings', userId)}
-        queryKey={bookingsQueryKeys.user(userId)}
-        loadData={(state: DataTableState<Booking>) => getBookingsRequest({
-          ...state,
-          sorting: [{ id: 'startsAt', desc: true }],
-        }, {
-          userId,
-          ...(!isAdminContext && currentCustomerId ? { customerId: currentCustomerId } : {}),
-        })}
-        tableKey={`bookings.user.${userId}`}
-        columns={getBookingColumns({ showUser: false, showCustomer: isAdminContext })}
-        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showUser={false} showCustomer={isAdminContext} showSessionDateAside showContractDetails={canViewBookingContractDetails(session?.user, isAdminContext ? 'admin' : 'customer', currentCustomerId)} />}
-        getRowCommands={(booking) => getBookingRowActions({
-          status: booking.status,
-          canEdit: canEditBookings,
-          canCreate: canCreateBookings,
-          isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
-          source: booking.source,
-          onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
-          onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
-          onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
-          onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },
-          onRebook: () => {
-            const clientName = [booking.user.firstName, booking.user.lastName].filter(Boolean).join(' ') || booking.user.email || booking.user.id
-            void rebookClientForSession({
-              customerId: booking.customer.id,
-              locationId: booking.location.id,
-              sessionId: booking.sessionId,
-              userId: booking.userId,
-              clientName,
-              invalidate: invalidateBookingViews,
-            })
-          },
-        })}
-        loadingMessage="Loading bookings..."
-        emptyMessage="No bookings found."
-        errorMessage="Failed to load bookings."
-      /> : null}
+
       {canViewAiSupportIssues ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-ai-support-issues`}
         title="AI support issues"
