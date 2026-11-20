@@ -50,6 +50,14 @@ export function cancelBookingForManagementRequest(bookingId: string, locationId:
   )
 }
 
+export function acceptWaitlistedBookingRequest(bookingId: string, locationId: string) {
+  return apiClient.patch<Booking>(
+    `/bookings/manage/${encodeURIComponent(bookingId)}/accept-waitlist`,
+    {},
+    { headers: { 'x-org-id': locationId } },
+  )
+}
+
 export function updateBookingAttendanceRequest(bookingId: string, locationId: string, attended: boolean | null) {
   return apiClient.patch<Booking>(
     `/bookings/manage/${encodeURIComponent(bookingId)}/attendance`,

@@ -4,7 +4,7 @@ import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { Modals } from '@/providers/modal'
 import { BookingCancellationConfirmation } from './BookingCancellationConfirmation'
-import { cancelBookingForManagementRequest, cancelClassPassBookingForManagementRequest, createManualBookingRequest, getBookingCancellationQuoteRequest, updateBookingAttendanceRequest, updateEgym2BookingDecisionRequest } from './api'
+import { acceptWaitlistedBookingRequest, cancelBookingForManagementRequest, cancelClassPassBookingForManagementRequest, createManualBookingRequest, getBookingCancellationQuoteRequest, updateBookingAttendanceRequest, updateEgym2BookingDecisionRequest } from './api'
 
 export async function cancelBookingWithChoice(bookingId: string, locationId: string, invalidate: () => Promise<unknown>) {
   try {
@@ -67,6 +67,23 @@ export async function updateBookingAttendance(bookingId: string, locationId: str
   }
 }
 
+export async function acceptWaitlistedBooking(bookingId: string, locationId: string, invalidate: () => Promise<unknown>) {
+  const confirmed = await Modals.confirm({
+    title: 'Accept this waitlisted booking?',
+    content: 'This will confirm the booking, use the member’s credits if applicable, and notify them.',
+    okText: 'Accept booking',
+    cancelText: 'Back',
+  })
+  if (!confirmed) return
+  try {
+    await acceptWaitlistedBookingRequest(bookingId, locationId)
+    await invalidate()
+    toast.success('Waitlisted booking accepted and the member was notified.')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Could not accept this waitlisted booking.')
+  }
+}
+
 export async function cancelClassPassBookingWithConfirmation(bookingId: string, locationId: string, invalidate: () => Promise<unknown>) {
   const confirmed = await Modals.confirm({
     title: 'Cancel ClassPass reservation?',
@@ -116,10 +133,14 @@ export function getBookingRowActions(input: {
   onRebook: () => void
   onSetAttendance: (attended: boolean | null) => void
   onCancelClassPass: () => void
+  onAcceptWaitlist?: () => void
   onEgym2Decision?: (action: 'ACCEPT' | 'REJECT') => void
   showAttendanceActionsInMenu?: boolean
 }): DropdownActionItem[] {
   const commands: DropdownActionItem[] = []
+  if (input.canEdit && input.status === 'WAITLISTED' && input.onAcceptWaitlist) {
+    commands.push({ label: 'Accept from waitlist', onClick: input.onAcceptWaitlist })
+  }
   if (input.canEdit && input.source === 'EGYM' && input.status === 'PENDING_APPROVAL' && input.onEgym2Decision) {
     commands.push(
       { label: 'Accept EGYM booking', onClick: () => input.onEgym2Decision?.('ACCEPT') },

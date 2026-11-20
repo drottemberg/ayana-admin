@@ -57,7 +57,7 @@ import { getBookingColumns } from '@/features/bookings/booking-columns'
 import { BookingListCard } from '@/features/bookings/BookingListCard'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import type { Booking } from '@/types/booking'
-import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
+import { acceptWaitlistedBooking, cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { getClassSchedulesRequest, getClassSessionsRequest } from '@/features/classes/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
@@ -406,6 +406,7 @@ export default function UserPage() {
           isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
           source: booking.source,
           onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
+          onAcceptWaitlist: () => { void acceptWaitlistedBooking(booking.id, booking.location.id, invalidateBookingViews) },
           onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
           onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
           onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },

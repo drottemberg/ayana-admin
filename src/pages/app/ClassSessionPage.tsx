@@ -19,7 +19,7 @@ import { getClassBookingColumns } from '@/features/classes/class-session-columns
 import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
 import { ClassBookingListCard } from '@/features/bookings/BookingListCard'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
-import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
+import { acceptWaitlistedBooking, cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CancelSessionConfirmation } from '@/features/classes/CancelSessionConfirmation'
@@ -555,6 +555,7 @@ export default function ClassSessionPage() {
         source: booking.source,
         showAttendanceActionsInMenu: false,
         onCancel: () => { void cancelBookingWithChoice(booking.id, resolvedLocationId, invalidateBookingViews) },
+        onAcceptWaitlist: () => { void acceptWaitlistedBooking(booking.id, resolvedLocationId, invalidateBookingViews) },
         onSetAttendance: (attended) => { void setBookingAttendance(booking.id, attended) },
         onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, resolvedLocationId, invalidateBookingViews) },
         onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, resolvedLocationId, action, invalidateBookingViews) },

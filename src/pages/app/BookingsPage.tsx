@@ -12,7 +12,7 @@ import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import type { Booking } from '@/types/booking'
 import { CreateManualBookingDrawer } from '@/features/bookings/CreateManualBookingDrawer'
-import { cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
+import { acceptWaitlistedBooking, cancelBookingWithChoice, cancelClassPassBookingWithConfirmation, decideEgym2Booking, getBookingRowActions, rebookClientForSession, updateBookingAttendance } from '@/features/bookings/booking-row-actions'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { getCoachFilterOptionsRequest } from '@/features/coaches/api'
@@ -71,6 +71,7 @@ export default function BookingsPage() {
           isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
           source: booking.source,
           onCancel: () => { void cancelBookingWithChoice(booking.id, booking.location.id, invalidateBookingViews) },
+          onAcceptWaitlist: () => { void acceptWaitlistedBooking(booking.id, booking.location.id, invalidateBookingViews) },
           onSetAttendance: (attended) => { void updateBookingAttendance(booking.id, booking.location.id, attended, invalidateBookingViews) },
           onCancelClassPass: () => { void cancelClassPassBookingWithConfirmation(booking.id, booking.location.id, invalidateBookingViews) },
           onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },
