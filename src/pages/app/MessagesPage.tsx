@@ -73,6 +73,7 @@ export default function MessagesPage() {
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
   const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
   const [emailSubject, setEmailSubject] = useState('')
+  const [emailPreheader, setEmailPreheader] = useState('')
   const [campaignName, setCampaignName] = useState('')
   const [testEmail, setTestEmail] = useState('')
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
@@ -173,6 +174,7 @@ export default function MessagesPage() {
       filters,
       channels: selectedChannels,
       emailSubject,
+      emailPreheader,
       message,
       files,
       buttons: replyButtons.map((label) => label.trim()).filter(Boolean).map((label) => ({ label })),
@@ -206,6 +208,7 @@ export default function MessagesPage() {
       setMessage('')
       setCampaignName('')
       setEmailSubject('')
+      setEmailPreheader('')
       setTestEmail('')
       setReplyButtons([])
       setFiles([])
@@ -224,7 +227,7 @@ export default function MessagesPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Could not send the message.'),
   })
   const sendTestEmailMutation = useMutation({
-    mutationFn: () => sendCustomerBroadcastTestEmailRequest({ customerId, to: testEmail, subject: emailSubject, message, files }),
+    mutationFn: () => sendCustomerBroadcastTestEmailRequest({ customerId, to: testEmail, subject: emailSubject, preheader: emailPreheader, message, files }),
     onSuccess: ({ to, unsubscribeLinkIncluded }) => toast.success(
       unsubscribeLinkIncluded
         ? `Test email queued for ${to}, with the unsubscribe link.`
@@ -320,6 +323,7 @@ export default function MessagesPage() {
           setSelectedRecipientIds(data.selectedRecipientIds ?? [])
           setSelectedChannels(data.selectedChannels ?? ['WHATSAPP', 'TELEGRAM', 'EMAIL'])
           setEmailSubject(data.emailSubject ?? '')
+          setEmailPreheader(data.emailPreheader ?? '')
           setTestEmail(data.testEmail ?? '')
           setMessage(draft.message ?? '')
           setReplyButtons(data.replyButtons ?? [])
@@ -347,6 +351,7 @@ export default function MessagesPage() {
     setMessage('')
     setCampaignName('')
     setEmailSubject('')
+    setEmailPreheader('')
     setTestEmail('')
     setFiles([])
     setLocationIds([])
@@ -383,6 +388,7 @@ export default function MessagesPage() {
       selectedRecipientIds,
       selectedChannels,
       emailSubject,
+      emailPreheader,
       testEmail,
       message,
       replyButtons,
@@ -617,7 +623,7 @@ export default function MessagesPage() {
         <section className="rounded-xl border border-border bg-card p-5">
           <label className="grid max-w-2xl gap-1.5 text-sm font-medium">
             <span>Campaign name</span>
-            <Input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} maxLength={100} placeholder="e.g. November class schedule" required />
+            <Input name="campaignName" autoComplete="off" value={campaignName} onChange={(event) => setCampaignName(event.target.value)} maxLength={100} placeholder="e.g. November class schedule" required />
             <span className="text-xs font-normal text-muted-foreground">Internal label shown in the campaign list; it is not sent to recipients.</span>
           </label>
         </section>
@@ -923,11 +929,15 @@ export default function MessagesPage() {
                 <div className="grid gap-3">
                   <label className="grid gap-1.5 text-sm font-medium">
                     <span>Test email address</span>
-                    <Input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} maxLength={254} placeholder="you@example.com" />
+                    <Input name="campaignTestEmail" type="email" autoComplete="off" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} maxLength={254} placeholder="you@example.com" />
                   </label>
                   <label className="grid gap-1.5 text-sm font-medium">
                     <span>Email subject</span>
-                    <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
+                    <Input name="campaignEmailSubject" autoComplete="off" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
+                  </label>
+                  <label className="grid gap-1.5 text-sm font-medium">
+                    <span>Email preheader</span>
+                    <Input name="campaignEmailPreheader" autoComplete="off" value={emailPreheader} onChange={(event) => setEmailPreheader(event.target.value)} maxLength={200} placeholder="Preview text shown beside the subject" />
                   </label>
                 </div>
               ) : null}

@@ -28,6 +28,10 @@ export function CampaignMessageEditor({ value, onChange, maxLength }: Props) {
     },
     editorProps: {
       attributes: {
+        name: 'campaignMessage',
+        autocomplete: 'off',
+        'data-1p-ignore': 'true',
+        'data-lpignore': 'true',
         class: 'min-h-36 w-full px-3 py-2 text-sm outline-none [&_h1]:mb-2 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:mb-2 [&_h2]:text-lg [&_h2]:font-semibold [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:italic',
       },
     },

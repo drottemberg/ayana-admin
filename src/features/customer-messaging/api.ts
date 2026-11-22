@@ -112,6 +112,7 @@ export type BroadcastHistoryItem = Record<string, unknown> & {
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
     emailSubject?: string
+    emailPreheader?: string
     whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
     buttons?: BroadcastReplyButton[]
   } | null
@@ -142,6 +143,7 @@ export type BroadcastHistoryDetail = BroadcastHistoryItem & {
     activity: BroadcastActivity
     channels?: BroadcastChannel[]
     emailSubject?: string
+    emailPreheader?: string
     whatsappTemplate?: { name: string; language: string; bodyParameters: string[]; bodyParameterNames?: string[]; headerImage: boolean } | null
     buttons?: BroadcastReplyButton[]
   } | null
@@ -261,6 +263,7 @@ export async function sendCustomerBroadcastRequest(input: {
   filters: BroadcastAudienceFilters
   channels: BroadcastChannel[]
   emailSubject?: string
+  emailPreheader?: string
   message: string
   files: File[]
   buttons?: BroadcastReplyButton[]
@@ -275,6 +278,7 @@ export async function sendCustomerBroadcastRequest(input: {
   body.append('activity', input.filters.activity)
   body.append('channels', JSON.stringify(input.channels))
   if (input.emailSubject?.trim()) body.append('emailSubject', input.emailSubject.trim())
+  if (input.emailPreheader?.trim()) body.append('emailPreheader', input.emailPreheader.trim())
   body.append('message', input.message)
   if (input.buttons?.length) body.append('buttons', JSON.stringify(input.buttons))
   if (input.whatsappTemplate) {
@@ -296,12 +300,14 @@ export async function sendCustomerBroadcastTestEmailRequest(input: {
   customerId: string
   to: string
   subject: string
+  preheader?: string
   message: string
   files: File[]
 }): Promise<{ queued: boolean; to: string; unsubscribeLinkIncluded: boolean }> {
   const body = new FormData()
   body.append('to', input.to.trim())
   body.append('subject', input.subject.trim())
+  if (input.preheader?.trim()) body.append('preheader', input.preheader.trim())
   body.append('message', input.message)
   input.files.forEach((file) => body.append('files', file, file.name))
   return apiClient.post(`/messaging/broadcast/customers/${input.customerId}/test-email`, body)
