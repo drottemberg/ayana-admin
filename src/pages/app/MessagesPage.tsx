@@ -294,8 +294,9 @@ export default function MessagesPage() {
     const next = new URLSearchParams()
     if (mode === 'DETAIL' && selectedBroadcastId) next.set('campaignId', selectedBroadcastId)
     else if (mode === 'CREATE' && customerId) next.set('customerId', customerId)
+    if (next.toString() === searchParams.toString()) return
     setSearchParams(next, { replace: true })
-  }, [customerId, mode, selectedBroadcastId, setSearchParams])
+  }, [customerId, mode, searchParams, selectedBroadcastId, setSearchParams])
 
   useEffect(() => {
     if (mode !== 'CREATE' || !customerId) return

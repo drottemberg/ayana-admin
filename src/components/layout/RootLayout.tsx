@@ -15,7 +15,7 @@ export function RootLayout() {
     return (
       <main className="min-h-svh w-full bg-background">
         <Suspense fallback={null}>
-          <Outlet key={sidebarRefreshKey ?? location.key} />
+          <Outlet key={sidebarRefreshKey} />
         </Suspense>
       </main>
     )
@@ -28,7 +28,7 @@ export function RootLayout() {
         <SidebarInset>
           <main>
             <Suspense fallback={null}>
-              <Outlet key={sidebarRefreshKey ?? location.key} />
+              <Outlet key={sidebarRefreshKey} />
             </Suspense>
           </main>
         </SidebarInset>
