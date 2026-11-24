@@ -5,6 +5,12 @@ on:
     branches:
       - production
   workflow_dispatch:
+    inputs:
+      publish_native:
+        description: Publish a native bundle to Capgo
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -91,6 +97,7 @@ jobs:
             "mv -f /data/project/ayana-admin/index.html.new /data/project/ayana-admin/index.html"
 
       - name: Publish native app update to Capgo
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_native
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
         run: |
