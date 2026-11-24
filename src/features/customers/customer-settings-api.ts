@@ -4,7 +4,6 @@ import { apiClient } from '@/lib/api-client'
 export type CustomerMessagingConfig = {
   webChatApiKey?: string | null
   webChatAllowedDomains?: string[]
-  webChatAllowedAppIds?: string[]
   whatsappPhoneNumberId?: string | null
   whatsappBusinessPhoneNumber?: string | null
   whatsappBusinessAccountId?: string | null
@@ -135,7 +134,7 @@ export async function loadCustomerMessagingConfigRow(
     ...config,
     id: customerId,
     webChat: config?.webChatApiKey
-      ? [config.webChatAllowedDomains?.join(', '), config.webChatAllowedAppIds?.length ? `Apps: ${config.webChatAllowedAppIds.join(', ')}` : ''].filter(Boolean).join(' · ') || 'Key configured'
+      ? config.webChatAllowedDomains?.join(', ') || 'Key configured'
       : 'Not configured',
     whatsapp: config?.whatsappPhoneNumberId || config?.whatsappBusinessPhoneNumber || config?.hasWhatsappAccessToken ? 'Configured' : 'Not configured',
     telegram: config?.telegramBotUsername

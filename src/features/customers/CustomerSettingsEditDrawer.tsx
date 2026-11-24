@@ -26,7 +26,6 @@ type Target = { kind: CustomerSettingKind; location?: Partial<CustomerLocationPo
 const messagingFields = [
   { key: 'webChatApiKey', label: 'Public web chat API key' },
   { key: 'webChatAllowedDomains', label: 'Website domains (one per line)', multiline: true },
-  { key: 'webChatAllowedAppIds', label: 'Allowed native app IDs (one per line)', multiline: true },
   { key: 'whatsappPhoneNumberId', label: 'WhatsApp phone number ID' },
   { key: 'whatsappBusinessPhoneNumber', label: 'WhatsApp business phone number (+33612345678)', type: 'tel' },
   { key: 'whatsappBusinessAccountId', label: 'WhatsApp Business Account ID' },
@@ -204,7 +203,7 @@ export function CustomerSettingsEditDrawer({
         const payload: Record<string, unknown> = {}
         for (const field of messagingFields) {
           const value = values[field.key]?.trim() ?? ''
-          if (field.key === 'webChatAllowedDomains' || field.key === 'webChatAllowedAppIds') {
+          if (field.key === 'webChatAllowedDomains') {
             const entries = value.split(/[\n,]+/).map((entry) => entry.trim()).filter(Boolean)
             if (JSON.stringify(entries) !== JSON.stringify((initialValues[field.key] ?? '').split('\n').map((entry) => entry.trim()).filter(Boolean))) {
               payload[field.key] = entries
