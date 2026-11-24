@@ -20,6 +20,7 @@ jobs:
     env:
       VITE_API_URL: https://api.ayana.club/api
       VITE_SOCKET_URL: https://api.ayana.club
+      VITE_APP_ID: club.ayana.admin
 
     steps:
       - name: Checkout
@@ -88,3 +89,13 @@ jobs:
             root@104.156.53.38:/data/project/ayana-admin/index.html.new
           ssh -i ~/.ssh/deploy_key root@104.156.53.38 \
             "mv -f /data/project/ayana-admin/index.html.new /data/project/ayana-admin/index.html"
+
+      - name: Publish native app update to Capgo
+        env:
+          CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
+        run: |
+          if [ -z "$CAPGO_TOKEN" ]; then
+            echo "::notice::Skipping Capgo upload. Configure CAPGO_TOKEN after registering club.ayana.admin in Capgo."
+            exit 0
+          fi
+          npx capgo bundle upload club.ayana.admin --path dist --channel production --apikey "$CAPGO_TOKEN" --auto-bump patch --comment "$GITHUB_SHA"

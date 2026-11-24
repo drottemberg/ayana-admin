@@ -7,6 +7,8 @@ import { AppSettingsProvider } from '@/providers/app-settings-provider'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { queryClient } from '@/lib/query-client'
+import { CapgoReady } from '@/components/CapgoReady'
+import { NativePushRegistration } from '@/features/notifications/NativePushRegistration'
 
 window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault()
@@ -22,16 +24,20 @@ window.addEventListener('vite:preloadError', (event) => {
 const root = createRoot(document.getElementById('root')!)
 
 if (window.location.hostname.startsWith('order.') || window.location.hostname.startsWith('booking.')) {
-  root.render(<App />)
+  root.render(<><CapgoReady /><App /></>)
 } else {
   root.render(
-    <QueryClientProvider client={queryClient}>
-      <AppSettingsProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </AppSettingsProvider>
-      <ReactQueryDevtools initialIsOpen={false} client={queryClient} buttonPosition='bottom-left' />
-    </QueryClientProvider>,
+    <>
+      <CapgoReady />
+      <QueryClientProvider client={queryClient}>
+        <AppSettingsProvider>
+          <AuthProvider>
+            <NativePushRegistration />
+            <App />
+          </AuthProvider>
+        </AppSettingsProvider>
+        <ReactQueryDevtools initialIsOpen={false} client={queryClient} buttonPosition='bottom-left' />
+      </QueryClientProvider>
+    </>,
   )
 }

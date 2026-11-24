@@ -26,6 +26,7 @@ type Target = { kind: CustomerSettingKind; location?: Partial<CustomerLocationPo
 const messagingFields = [
   { key: 'webChatApiKey', label: 'Public web chat API key' },
   { key: 'webChatAllowedDomains', label: 'Website domains (one per line)', multiline: true },
+  { key: 'webChatAllowedAppIds', label: 'Allowed native app IDs (one per line)', multiline: true },
   { key: 'whatsappPhoneNumberId', label: 'WhatsApp phone number ID' },
   { key: 'whatsappBusinessPhoneNumber', label: 'WhatsApp business phone number (+33612345678)', type: 'tel' },
   { key: 'whatsappBusinessAccountId', label: 'WhatsApp Business Account ID' },
@@ -203,10 +204,10 @@ export function CustomerSettingsEditDrawer({
         const payload: Record<string, unknown> = {}
         for (const field of messagingFields) {
           const value = values[field.key]?.trim() ?? ''
-          if (field.key === 'webChatAllowedDomains') {
-            const domains = value.split(/[\n,]+/).map((domain) => domain.trim()).filter(Boolean)
-            if (JSON.stringify(domains) !== JSON.stringify((initialValues[field.key] ?? '').split('\n').map((domain) => domain.trim()).filter(Boolean))) {
-              payload[field.key] = domains
+          if (field.key === 'webChatAllowedDomains' || field.key === 'webChatAllowedAppIds') {
+            const entries = value.split(/[\n,]+/).map((entry) => entry.trim()).filter(Boolean)
+            if (JSON.stringify(entries) !== JSON.stringify((initialValues[field.key] ?? '').split('\n').map((entry) => entry.trim()).filter(Boolean))) {
+              payload[field.key] = entries
             }
             continue
           }
@@ -267,7 +268,7 @@ export function CustomerSettingsEditDrawer({
           {!isLoading && target?.kind === 'messaging-config' ? <h3 className="font-medium">WhatsApp and Telegram</h3> : null}
           {!isLoading && target?.kind === 'messaging-config' ? (
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              The API key is public and goes in the website environment variable. Do not place a private secret in browser code. Add each allowed website origin, including the local development origin when needed.
+              The API key is public and goes in the website environment variable. Do not place a private secret in browser code. Add website domains for browsers and native app IDs for Capacitor apps.
               <div className="mt-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => {
                   const bytes = crypto.getRandomValues(new Uint8Array(32))

@@ -1,6 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { PushNotifications } from '@capacitor/push-notifications'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -217,8 +219,46 @@ export default function AccountPage() {
         </BaseCard>
 
         <PasswordSection hasPassword={user?.hasPassword ?? false} />
+        <NativePushSettings />
       </section>
     </>
+  )
+}
+
+function NativePushSettings() {
+  const [isEnabling, setIsEnabling] = useState(false)
+  if (!Capacitor.isNativePlatform() || !import.meta.env.VITE_APP_ID?.trim()) return null
+
+  const enable = async () => {
+    setIsEnabling(true)
+    try {
+      let permission = await PushNotifications.checkPermissions()
+      if (permission.receive !== 'granted') permission = await PushNotifications.requestPermissions()
+      if (permission.receive !== 'granted') {
+        toast.error('Allow notifications for AYANA in your device settings to enable them.')
+        return
+      }
+      await PushNotifications.register()
+      toast.success('Push notifications enabled for this device.')
+    } catch {
+      toast.error('Could not enable push notifications on this device.')
+    } finally {
+      setIsEnabling(false)
+    }
+  }
+
+  return (
+    <BaseCard className="md:max-w-2xl">
+      <p className="font-semibold">Push notifications</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Receive AYANA One updates on this device.
+      </p>
+      <div className="mt-4 flex justify-end">
+        <Button type="button" size="lg" loading={isEnabling} disabled={isEnabling} onClick={() => void enable()}>
+          Enable notifications
+        </Button>
+      </div>
+    </BaseCard>
   )
 }
 

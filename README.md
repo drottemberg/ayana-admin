@@ -37,3 +37,18 @@ unencrypted private deploy key authorized on the production server (not its
 PEM are accepted. The production web server should serve that directory for
 `admin.ayana.club` and route unknown paths to `index.html` for client-side
 routing.
+
+## Mobile app (Capacitor)
+
+The separate `club.ayana.admin` iOS and Android app packages this Vite frontend.
+Vite loads `.env`, `.env.production`, and the matching mode-specific files during
+builds. Copy `.env.production.example` to `.env.production` for native production
+builds, or set the `VITE_*` values in your local env files. Build and open a native
+project with `npm run cap:ios` or `npm run cap:android`; run `npm run cap:sync`
+after changing native plugins or configuration. Regenerate branded launcher and
+splash assets with `npm run cap:assets`.
+
+Register `club.ayana.admin` in Capgo once and configure `CAPGO_TOKEN` as a GitHub
+Actions secret in this repository. The production deploy workflow uploads Vite
+bundles to its `production` channel. OTA updates change web assets only; native plugin,
+permission, or configuration changes require a new store build.
