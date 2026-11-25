@@ -14,6 +14,8 @@ import { getAppMode } from '@/features/app/app-mode'
 import type { Order } from '@/types/order'
 import { queryClient } from '@/lib/query-client'
 import { toast } from 'sonner'
+import NiceModal from '@ebay/nice-modal-react'
+import { SendOrderInvoiceDialog } from '@/features/orders/components/SendOrderInvoiceDialog'
 
 const statuses = ['DRAFT', 'RECEIVED', 'PREPARING', 'READY', 'PICKED_UP', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'ERROR', 'PREORDER']
 const paymentStatuses = ['QUOTE', 'PENDING', 'PROCESSING', 'PAID', 'REFUNDED', 'CANCELLED', 'FAILED', 'PROCESSING_REFUND', 'OFFERED']
@@ -105,6 +107,7 @@ export default function OrdersPage() {
         ]}
         getRowCommands={(order) => [
           ...OrderService.getRowActions(order, canEditOrders, canRefundOrders),
+          ...(order.paymentStatus === 'PAID' ? [{ label: 'Send invoice…', onClick: () => void NiceModal.show(SendOrderInvoiceDialog, { orderId: order.id, shortCode: order.shortCode }) }] : []),
           ...(canCancelOrders && order.type === 'PRODUCT' && ['RECEIVED', 'PREPARING', 'READY'].includes(order.status)
             ? [{ label: 'Cancel / refund…', variant: 'destructive' as const, onClick: () => openCancellation(order) }]
             : []),

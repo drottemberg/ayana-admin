@@ -16,6 +16,7 @@ import { queryClient } from '@/lib/query-client'
 import { toast } from 'sonner'
 import NiceModal from '@ebay/nice-modal-react'
 import { OrderRefundDialog } from '@/features/orders/components/OrderRefundDialog'
+import { SendOrderInvoiceDialog } from '@/features/orders/components/SendOrderInvoiceDialog'
 
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : NO_VALUE_STR
 
@@ -195,6 +196,7 @@ export default function OrderPage() {
     <Card id="module-financial-history" className="border border-border p-0 ring-0">
       <CardHeader className="flex flex-row items-center justify-between border-b p-5">
         <CardTitle>Financial history</CardTitle>
+        {order.paymentStatus === 'PAID' ? <Button variant="outline" onClick={() => void NiceModal.show(SendOrderInvoiceDialog, { orderId: order.id, shortCode: order.shortCode })}>Send invoice…</Button> : null}
       </CardHeader>
       <CardContent className="p-0">
         {transactions.length ? <ol className="divide-y">

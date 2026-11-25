@@ -15,6 +15,8 @@ import { apiClient, AUTH_TOKEN_REFRESHED_EVENT_NAME } from '@/lib/api-client'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import ayanaLogo from '@/assets/logo.png'
+import NiceModal from '@ebay/nice-modal-react'
+import { SendOrderInvoiceDialog } from '@/features/orders/components/SendOrderInvoiceDialog'
 import './KitchenBoardPage.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
@@ -260,6 +262,9 @@ function KitchenCard({
           {language === 'fr' ? 'Gérer / annuler' : 'Manage / cancel'} <span aria-hidden="true">↗</span>
         </Link>
       )}
+      {order.paymentStatus === 'PAID' && <button type="button" className="kitchen-card-manage-order" onClick={() => void NiceModal.show(SendOrderInvoiceDialog, { orderId: order.id, shortCode: order.shortCode })}>
+        {language === 'fr' ? 'Envoyer la facture' : 'Send invoice'} <span aria-hidden="true">↗</span>
+      </button>}
       {isAwaitingPayment && order.paymentStatus === 'PROCESSING' && (
         <button type="button" className="kitchen-card-cancel-terminal" disabled={isUpdating} onClick={onCancelTerminalPayment}>
           {language === 'fr' ? 'Arrêter l’appel du terminal' : 'Stop terminal payment'}

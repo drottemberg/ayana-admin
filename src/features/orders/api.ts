@@ -19,6 +19,10 @@ export function setOrderStatusRequest(orderId: string, status: OrderStatus, comm
   return apiClient.patch<Order>(`/orders/${orderId}/status`, { status, comment })
 }
 
+export function sendOrderInvoiceRequest(orderId: string, email: string, name: string) {
+  return apiClient.post<{ email: string; shortCode: string }>(`/orders/manage/${orderId}/invoice`, { email, name })
+}
+
 export type KitchenLocation = {
   id: string
   name: string
