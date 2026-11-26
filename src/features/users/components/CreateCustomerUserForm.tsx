@@ -19,6 +19,9 @@ const schema = z.object({
   lastName: z.string().trim().min(1, 'Last name is required.'),
   email: z.string().trim().email('Enter a valid email.').or(z.literal('')),
   phone: z.string().optional().refine((value) => !value || !validatePhone(value), 'Enter a valid phone number.'),
+  newsletterEnabled: z.boolean(),
+  pushNotificationsEnabled: z.boolean(),
+  emailNotificationsEnabled: z.boolean(),
 }).refine((value) => Boolean(value.email?.trim() || value.phone?.trim()), {
   message: 'Enter an email address or phone number.',
   path: ['email'],
@@ -41,7 +44,7 @@ export function CreateCustomerUserForm({
   const { control, register, handleSubmit, formState: { errors, isDirty, isSubmitting } } = useForm<Values>({
     resolver: zodResolver(schema),
     mode: 'onChange',
-    defaultValues: { firstName: '', lastName: '', email: '', phone: '' },
+    defaultValues: { firstName: '', lastName: '', email: '', phone: '', newsletterEnabled: true, pushNotificationsEnabled: true, emailNotificationsEnabled: true },
   })
   const mutation = useMutation({
     mutationFn: createCustomerUserRequest,
@@ -62,6 +65,9 @@ export function CreateCustomerUserForm({
       lastName: values.lastName.trim(),
       ...(values.email?.trim() ? { email: values.email.trim() } : {}),
       ...(values.phone?.trim() ? { phone: normalizePhone(values.phone) } : {}),
+      newsletterEnabled: values.newsletterEnabled,
+      pushNotificationsEnabled: values.pushNotificationsEnabled,
+      emailNotificationsEnabled: values.emailNotificationsEnabled,
     })
   })
 
@@ -91,6 +97,11 @@ export function CreateCustomerUserForm({
             )}
           />
           <p className="text-sm text-muted-foreground">At least one contact method is required: email or phone.</p>
+          <div className="grid gap-2 border-t border-border pt-4 text-sm">
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('newsletterEnabled')} /> Newsletter opt-in</label>
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('pushNotificationsEnabled')} /> Push notifications</label>
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('emailNotificationsEnabled')} /> Email notifications</label>
+          </div>
         </FieldGroup>
       </div>
       <div className="mt-auto flex flex-col gap-3 px-7 py-6">

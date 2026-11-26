@@ -264,9 +264,12 @@ function getUserDetailSections(
     }] : []),
     {
       title: 'Preferences',
-      fields: user?.preferences && Object.keys(user.preferences).length
-        ? Object.entries(user.preferences).map(([key, value]) => ({ label: preferenceLabel(key), value: preferenceValue(value) }))
-        : [{ label: 'Preferences', value: 'No preferences saved' }],
+      fields: [
+        { label: 'Newsletter opt-in', value: user ? (user.newsletterEnabled ? 'Yes' : 'No') : NO_VALUE_STR },
+        { label: 'Push notifications', value: user ? (user.pushNotificationsEnabled ? 'Enabled' : 'Disabled') : NO_VALUE_STR },
+        { label: 'Email notifications', value: user ? (user.emailNotificationsEnabled ? 'Enabled' : 'Disabled') : NO_VALUE_STR },
+        ...(user?.preferences ? Object.entries(user.preferences).map(([key, value]) => ({ label: preferenceLabel(key), value: preferenceValue(value) })) : []),
+      ],
     },
   ]
 }

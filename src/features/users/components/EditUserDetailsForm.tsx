@@ -26,6 +26,9 @@ const detailsFormSchema = z.object({
   email: z.string().trim().email('Enter a valid email address.').or(z.literal('')),
   emailVerified: z.boolean(),
   invalidEmail: z.boolean(),
+  newsletterEnabled: z.boolean(),
+  pushNotificationsEnabled: z.boolean(),
+  emailNotificationsEnabled: z.boolean(),
   phone: z
     .string()
     .optional()
@@ -96,13 +99,16 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
       email: user.email ?? '',
       emailVerified: Boolean(user.emailVerifiedAt),
       invalidEmail: Boolean(user.invalidEmail),
+      newsletterEnabled: user.newsletterEnabled ?? true,
+      pushNotificationsEnabled: user.pushNotificationsEnabled ?? true,
+      emailNotificationsEnabled: user.emailNotificationsEnabled ?? true,
       phone: user.phone ?? '',
     },
   })
   const emailValue = useWatch({ control, name: 'email' })
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { firstName: string; lastName: string; email?: string | null; phone?: string | null; emailVerified: boolean; invalidEmail: boolean }) =>
+    mutationFn: (payload: { firstName: string; lastName: string; email?: string | null; phone?: string | null; emailVerified: boolean; invalidEmail: boolean; newsletterEnabled: boolean; pushNotificationsEnabled: boolean; emailNotificationsEnabled: boolean }) =>
       updateUserDetailsRequest(String(user.id), payload),
     onSuccess: async (updatedUser) => {
       await Promise.all([
@@ -125,6 +131,9 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
       phone: values.phone ? normalizePhone(values.phone) : null,
       emailVerified: values.emailVerified && !values.invalidEmail && Boolean(values.email.trim()),
       invalidEmail: values.invalidEmail && !values.emailVerified,
+      newsletterEnabled: values.newsletterEnabled,
+      pushNotificationsEnabled: values.pushNotificationsEnabled,
+      emailNotificationsEnabled: values.emailNotificationsEnabled,
     })
   })
 
@@ -171,6 +180,11 @@ function EditUserDetailsFormBody({ user, onCancel, onSaved, onDirtyChange }: Edi
               />
             )}
           />
+          <div className="grid gap-2 border-t border-border pt-4 text-sm">
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('newsletterEnabled')} /> Newsletter opt-in</label>
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('pushNotificationsEnabled')} /> Push notifications</label>
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('emailNotificationsEnabled')} /> Email notifications</label>
+          </div>
         </FieldGroup>
 
         <div className="mt-2 flex flex-col gap-3">

@@ -34,6 +34,9 @@ type UserRecord = {
   emailVerifiedAt?: string | null
   invalidEmail?: boolean
   invalidAt?: string | null
+  newsletterEnabled?: boolean
+  pushNotificationsEnabled?: boolean
+  emailNotificationsEnabled?: boolean
   phone?: string | null
   preferences?: Record<string, unknown> | null
   role?: User['role'] | null
@@ -69,6 +72,9 @@ export type CreateCustomerUserPayload = {
   lastName: string
   email?: string
   phone?: string
+  newsletterEnabled?: boolean
+  pushNotificationsEnabled?: boolean
+  emailNotificationsEnabled?: boolean
 }
 
 type UserMembershipRecord = {
@@ -135,6 +141,9 @@ function toUser(user: UserRecord): User {
     emailVerifiedAt: user.emailVerifiedAt ?? null,
     invalidEmail: user.invalidEmail ?? false,
     invalidAt: user.invalidAt ?? null,
+    newsletterEnabled: user.newsletterEnabled ?? true,
+    pushNotificationsEnabled: user.pushNotificationsEnabled ?? true,
+    emailNotificationsEnabled: user.emailNotificationsEnabled ?? true,
     phone: user.phone ?? undefined,
     preferences: user.preferences ?? null,
     position: firstMember?.position ?? user.position ?? undefined,
@@ -362,6 +371,9 @@ export async function updateUserRequest(userId: string, payload: CreateUserPaylo
     lastName: payload.lastName,
     email: payload.email,
     phone: payload.phone,
+    newsletterEnabled: payload.newsletterEnabled,
+    pushNotificationsEnabled: payload.pushNotificationsEnabled,
+    emailNotificationsEnabled: payload.emailNotificationsEnabled,
     position: payload.position,
     role: payload.role,
     permissions: payload.permissions,

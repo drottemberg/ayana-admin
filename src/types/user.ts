@@ -43,6 +43,9 @@ export type User = {
   emailVerifiedAt?: string | null
   invalidEmail?: boolean
   invalidAt?: string | null
+  newsletterEnabled?: boolean
+  pushNotificationsEnabled?: boolean
+  emailNotificationsEnabled?: boolean
   phone?: string
   preferences?: Record<string, unknown> | null
   position?: string | null
@@ -90,6 +93,9 @@ export type CreateUserPayload = {
   firstName: string
   lastName: string
   email: string
+  newsletterEnabled?: boolean
+  pushNotificationsEnabled?: boolean
+  emailNotificationsEnabled?: boolean
   password?: string
   phone?: string | null
   position?: string | null
@@ -104,6 +110,9 @@ export type UpdateUserDetailsPayload = {
   phone?: string | null
   emailVerified?: boolean
   invalidEmail?: boolean
+  newsletterEnabled?: boolean
+  pushNotificationsEnabled?: boolean
+  emailNotificationsEnabled?: boolean
   isActive?: boolean
 }
 

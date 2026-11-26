@@ -23,6 +23,9 @@ export type UserDrawerData = {
     firstName?: string
     lastName?: string
     email: string
+    newsletterEnabled?: boolean
+    pushNotificationsEnabled?: boolean
+    emailNotificationsEnabled?: boolean
     password?: string
     phone?: string
     position?: string

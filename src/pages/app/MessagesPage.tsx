@@ -450,7 +450,7 @@ export default function MessagesPage() {
   }
 
   const selectedRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id))
-  const selectedChatCount = selectedRecipients.filter((recipient) => selectedChannels.includes(recipient.channel)).length
+  const selectedChatCount = selectedRecipients.filter((recipient) => recipient.channel !== 'EMAIL' && selectedChannels.includes(recipient.channel)).length
   const selectedWhatsappRecipients = selectedChannels.includes('WHATSAPP')
     ? selectedRecipients.filter((recipient) => recipient.channel === 'WHATSAPP')
     : []
@@ -658,7 +658,7 @@ export default function MessagesPage() {
               <Select value={activity} onValueChange={(value) => setActivity(value as BroadcastActivity)}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Everyone who contacted this customer</SelectItem>
+                  <SelectItem value="ALL">All customer contacts</SelectItem>
                   <SelectItem value="CLASS_BOOKING">Booked a class</SelectItem>
                   <SelectItem value="CLASS_PURCHASE">Purchased a class pack or membership</SelectItem>
                   <SelectItem value="CLASS_BOOKING_OR_PURCHASE">Booked or purchased a class pack</SelectItem>
@@ -700,7 +700,7 @@ export default function MessagesPage() {
                 <div>
                   <h2 className="font-semibold">Recipients</h2>
                   <p className="text-sm text-muted-foreground">
-                    {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.length} chat channels · ${availableEmailCount} email addresses`}
+                    {audienceQuery.isFetching ? 'Loading recipients…' : `${audienceQuery.data?.people ?? 0} people · ${recipients.filter((recipient) => recipient.channel !== 'EMAIL').length} chat channels · ${availableEmailCount} email addresses`}
                   </p>
                   <p className="text-xs text-muted-foreground">Users who opted out of this customer’s campaigns are excluded. Addresses marked invalid after a hard bounce are excluded from email.</p>
                   {selectedWhatsappRecipients.length ? (
@@ -1226,7 +1226,7 @@ function getCampaignDeliveryColumns(onOpenHistory: (delivery: BroadcastDelivery)
 }
 
 function activityLabel(activity: BroadcastActivity) {
-  return ({ ALL: 'Everyone who contacted this customer', CLASS_BOOKING: 'Booked a class', CLASS_PURCHASE: 'Purchased a class pack or membership', CLASS_BOOKING_OR_PURCHASE: 'Booked or purchased a class pack', PRODUCT_PURCHASE: 'Purchased a product', BOTH: 'Booked a class and purchased a product' } as const)[activity]
+  return ({ ALL: 'All customer contacts', CLASS_BOOKING: 'Booked a class', CLASS_PURCHASE: 'Purchased a class pack or membership', CLASS_BOOKING_OR_PURCHASE: 'Booked or purchased a class pack', PRODUCT_PURCHASE: 'Purchased a product', BOTH: 'Booked a class and purchased a product' } as const)[activity]
 }
 
 function channelLabel(channel: BroadcastChannel) {
@@ -1249,14 +1249,14 @@ function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRe
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{recipient.userName}</span>
         <span className="block truncate text-xs text-muted-foreground">{recipient.channelLabel}</span>
-        {recipient.email ? <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span> : null}
+        {recipient.email && recipient.channel !== 'EMAIL' ? <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span> : null}
         {recipient.email && recipient.emailInvalid ? <span className="block text-xs text-amber-700">Email invalid after hard bounce · excluded from email</span> : null}
         {recipient.phone ? <span className="block truncate text-xs text-muted-foreground">{recipient.phone}</span> : null}
       </span>
       <span className="flex flex-col items-end gap-1">
-        <Badge variant="outline">{recipient.channel === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}</Badge>
+        <Badge variant="outline">{channelLabel(recipient.channel)}</Badge>
         {recipient.channel === 'WHATSAPP' ? <Badge variant={recipient.whatsappWindowOpen ? 'secondary' : 'destructive'}>{recipient.whatsappWindowOpen ? 'Direct · 24 h' : 'Template required'}</Badge> : null}
-        <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(recipient.lastContactAt).toLocaleDateString()}</span>
+        {recipient.lastContactAt ? <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(recipient.lastContactAt).toLocaleDateString()}</span> : null}
       </span>
     </label>
   )

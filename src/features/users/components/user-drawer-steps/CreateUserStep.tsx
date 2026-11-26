@@ -15,6 +15,9 @@ type CreateUserStepProps = {
     firstName: string
     lastName: string
     email: string
+    newsletterEnabled: boolean
+    pushNotificationsEnabled: boolean
+    emailNotificationsEnabled: boolean
     password?: string
     phone: string
     position: string
@@ -23,6 +26,9 @@ type CreateUserStepProps = {
     firstName: string
     lastName: string
     email: string
+    newsletterEnabled?: boolean
+    pushNotificationsEnabled?: boolean
+    emailNotificationsEnabled?: boolean
     password?: string
     phone: string
     position: string

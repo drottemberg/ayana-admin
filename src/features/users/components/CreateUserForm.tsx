@@ -26,6 +26,9 @@ const userFormSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.'),
   lastName: z.string().trim().min(1, 'Last name is required.'),
   email: z.string().trim().email('Enter a valid email.'),
+  newsletterEnabled: z.boolean(),
+  pushNotificationsEnabled: z.boolean(),
+  emailNotificationsEnabled: z.boolean(),
   phone: z
     .string()
     .optional()
@@ -64,6 +67,9 @@ type CreateUserFormProps = {
     firstName: string
     lastName: string
     email: string
+    newsletterEnabled?: boolean
+    pushNotificationsEnabled?: boolean
+    emailNotificationsEnabled?: boolean
     password?: string
     phone: string
     position: string
@@ -72,6 +78,9 @@ type CreateUserFormProps = {
     firstName: string
     lastName: string
     email: string
+    newsletterEnabled: boolean
+    pushNotificationsEnabled: boolean
+    emailNotificationsEnabled: boolean
     password?: string
     phone: string
     position: string
@@ -114,6 +123,9 @@ export function CreateUserForm({
       firstName: initialFormValues?.firstName ?? user?.firstName ?? '',
       lastName: initialFormValues?.lastName ?? user?.lastName ?? '',
       email: initialFormValues?.email ?? user?.email ?? '',
+      newsletterEnabled: initialFormValues?.newsletterEnabled ?? user?.newsletterEnabled ?? true,
+      pushNotificationsEnabled: initialFormValues?.pushNotificationsEnabled ?? user?.pushNotificationsEnabled ?? true,
+      emailNotificationsEnabled: initialFormValues?.emailNotificationsEnabled ?? user?.emailNotificationsEnabled ?? true,
       password: initialFormValues?.password ?? '',
       phone: initialFormValues?.phone ?? user?.phone ?? '',
       position: initialFormValues?.position ?? user?.position ?? '',
@@ -193,6 +205,9 @@ export function CreateUserForm({
       firstName: values.firstName.trim(),
       lastName: values.lastName.trim(),
       email: values.email.trim(),
+      newsletterEnabled: values.newsletterEnabled,
+      pushNotificationsEnabled: values.pushNotificationsEnabled,
+      emailNotificationsEnabled: values.emailNotificationsEnabled,
       phone: values.phone ? normalizePhone(values.phone) : null,
       position: values.position?.trim() || null,
       role: (role ?? values.role) as UserRoleType,
@@ -273,6 +288,12 @@ export function CreateUserForm({
             })}
           />
 
+          <div className="grid gap-2 border-t border-border pt-4 text-sm">
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('newsletterEnabled')} /> Newsletter opt-in</label>
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('pushNotificationsEnabled')} /> Push notifications</label>
+            <label className="flex items-center gap-2"><input type="checkbox" {...register('emailNotificationsEnabled')} /> Email notifications</label>
+          </div>
+
           <Controller
             control={control}
             name="role"
@@ -312,6 +333,9 @@ export function CreateUserForm({
                 firstName: values.firstName,
                 lastName: values.lastName,
                 email: values.email,
+                newsletterEnabled: values.newsletterEnabled,
+                pushNotificationsEnabled: values.pushNotificationsEnabled,
+                emailNotificationsEnabled: values.emailNotificationsEnabled,
                 password: values.password,
                 phone: values.phone ?? '',
                 position: values.position ?? '',

@@ -53,10 +53,10 @@ export type BroadcastRecipient = {
   email: string | null
   emailInvalid: boolean
   phone: string | null
-  channel: 'WHATSAPP' | 'TELEGRAM'
+  channel: 'WHATSAPP' | 'TELEGRAM' | 'EMAIL'
   channelId: string
   channelLabel: string
-  lastContactAt: string
+  lastContactAt: string | null
   whatsappWindowOpen: boolean | null
 }
 
