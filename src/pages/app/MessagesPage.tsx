@@ -71,7 +71,8 @@ export default function MessagesPage() {
   const [customerIdState, setCustomerId] = useState(searchParams.get('customerId') ?? '')
   const [locationIds, setLocationIds] = useState<string[]>([])
   const [activity, setActivity] = useState<BroadcastActivity>('ALL')
-  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+  const [legacyDraftRecipientIds, setLegacyDraftRecipientIds] = useState<string[] | null>(null)
   const [emailSubject, setEmailSubject] = useState('')
   const [emailPreheader, setEmailPreheader] = useState('')
   const [campaignName, setCampaignName] = useState('')
@@ -174,13 +175,15 @@ export default function MessagesPage() {
         .some((value) => value?.toLocaleLowerCase().includes(search)),
     ))
   }, [recipientSearch, recipientGroups])
+  const selectedRecipients = recipients.filter((recipient) => selectedUserIds.includes(recipient.userId) && selectedChannels.includes(recipient.channel))
+  const selectedActiveUserIds = [...new Set(selectedRecipients.map((recipient) => recipient.userId))]
   const sendMutation = useMutation({
     mutationFn: () => sendCustomerBroadcastRequest({
       customerId,
       name: campaignName,
       idempotencyKey: campaignRequestKey,
       draftId: draftId || undefined,
-      recipientIds: selectedRecipientIds,
+      recipientIds: selectedRecipients.map((recipient) => recipient.id),
       filters,
       channels: selectedChannels,
       emailSubject,
@@ -330,7 +333,12 @@ export default function MessagesPage() {
           setCampaignName(draft.name ?? '')
           setLocationIds(data.locationIds ?? [])
           setActivity(data.activity ?? 'ALL')
-          setSelectedRecipientIds(data.selectedRecipientIds ?? [])
+          if (Array.isArray(data.selectedUserIds)) {
+            setSelectedUserIds(data.selectedUserIds)
+            setLegacyDraftRecipientIds(null)
+          } else {
+            setLegacyDraftRecipientIds(Array.isArray(data.selectedRecipientIds) ? data.selectedRecipientIds : [])
+          }
           setSelectedChannels(data.selectedChannels ?? ['WHATSAPP', 'TELEGRAM', 'EMAIL'])
           setEmailSubject(data.emailSubject ?? '')
           setEmailPreheader(data.emailPreheader ?? '')
@@ -365,7 +373,8 @@ export default function MessagesPage() {
     setTestEmail('')
     setFiles([])
     setLocationIds([])
-    setSelectedRecipientIds([])
+    setSelectedUserIds([])
+    setLegacyDraftRecipientIds(null)
     setFailedDeliveries([])
     setDeliveryWarnings([])
     setSuppressedDeliveryCount(0)
@@ -384,18 +393,26 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (draftLoadingKey.current === customerId || restoredDraftKey.current === customerId) return
-    setSelectedRecipientIds(recipients.map((recipient) => recipient.id))
+    setSelectedUserIds([...new Set(recipients.map((recipient) => recipient.userId))])
     setFailedDeliveries([])
   }, [customerId, recipients])
+
+  useEffect(() => {
+    if (legacyDraftRecipientIds === null || audienceQuery.isFetching) return
+    const legacyIds = new Set(legacyDraftRecipientIds)
+    setSelectedUserIds([...new Set(recipients.filter((recipient) => legacyIds.has(recipient.id)).map((recipient) => recipient.userId))])
+    setLegacyDraftRecipientIds(null)
+  }, [audienceQuery.isFetching, legacyDraftRecipientIds, recipients])
 
   const saveDraft = async () => {
     if (!customerId) return toast.error('Select a customer before saving a draft.')
     if (!campaignName.trim()) return toast.error('Enter a campaign name before saving the draft.')
+    if (audienceQuery.isFetching || audienceQuery.isError) return toast.error('Wait for the recipients to load before saving the draft.')
     const draft = {
       name: campaignName.trim(),
       locationIds,
       activity,
-      selectedRecipientIds,
+      selectedUserIds: selectedActiveUserIds,
       selectedChannels,
       emailSubject,
       emailPreheader,
@@ -459,27 +476,23 @@ export default function MessagesPage() {
     setCustomerId('')
   }
 
-  const selectedRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id))
   const selectedChatCount = selectedRecipients.filter((recipient) => recipient.channel !== 'EMAIL' && selectedChannels.includes(recipient.channel)).length
   const selectedWhatsappRecipients = selectedChannels.includes('WHATSAPP')
     ? selectedRecipients.filter((recipient) => recipient.channel === 'WHATSAPP')
     : []
   const selectedWhatsappOutsideWindow = selectedWhatsappRecipients.filter((recipient) => !recipient.whatsappWindowOpen).length
-  const selectedEmailCount = selectedChannels.includes('EMAIL')
-    ? new Set(selectedRecipients.filter((recipient) => recipient.email && !recipient.emailInvalid).map((recipient) => recipient.userId)).size
-    : 0
+  const selectedEmailCount = selectedRecipients.filter((recipient) => recipient.channel === 'EMAIL').length
   const availableEmailCount = new Set(recipients.filter((recipient) => recipient.email && !recipient.emailInvalid).map((recipient) => recipient.userId)).size
-  const filteredRecipientIds = filteredRecipientGroups.flatMap((group) => group.channels.map((recipient) => recipient.id))
-  const allSelected = filteredRecipientIds.length > 0 && filteredRecipientIds.every((id) => selectedRecipientIds.includes(id))
-  const toggleAll = () => setSelectedRecipientIds((current) => allSelected
-    ? current.filter((id) => !filteredRecipientIds.includes(id))
-    : [...new Set([...current, ...filteredRecipientIds])],
+  const filteredUserIds = filteredRecipientGroups.map((group) => group.userId)
+  const allSelected = filteredUserIds.length > 0 && filteredUserIds.every((id) => selectedUserIds.includes(id))
+  const toggleAll = () => setSelectedUserIds((current) => allSelected
+    ? current.filter((id) => !filteredUserIds.includes(id))
+    : [...new Set([...current, ...filteredUserIds])],
   )
-  const toggleRecipientGroup = (group: BroadcastRecipient[]) => setSelectedRecipientIds((current) => {
-    const ids = group.map((recipient) => recipient.id)
-    return ids.every((id) => current.includes(id))
-      ? current.filter((id) => !ids.includes(id))
-      : [...new Set([...current, ...ids])]
+  const toggleRecipientGroup = (userId: string) => setSelectedUserIds((current) => {
+    return current.includes(userId)
+      ? current.filter((id) => id !== userId)
+      : [...current, userId]
   })
   const toggleLocation = (locationId: string) => {
     setLocationIds((current) => current.includes(locationId)
@@ -518,7 +531,7 @@ export default function MessagesPage() {
   const handleSend = () => {
     if (sendMutation.isPending) return
     if (!campaignName.trim()) return toast.error('Enter a campaign name.')
-    if (!selectedRecipientIds.length) return toast.error('Select at least one recipient.')
+    if (!selectedRecipients.length) return toast.error('Select at least one recipient with an active delivery channel.')
     if (!selectedChannels.length) return toast.error('Select at least one channel.')
     if (selectedChannels.includes('EMAIL') && !emailSubject.trim()) return toast.error('Enter an email subject.')
     if (selectedWhatsappOutsideWindow && !sendWhatsappTemplate) {
@@ -728,7 +741,7 @@ export default function MessagesPage() {
                 </Button>
               </div>
               <div className="border-b border-border p-3">
-                <Input value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search by name, email, or phone..." />
+                <Input type="search" name="campaignRecipientSearch" autoComplete="off" value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search by name, email, or phone..." />
               </div>
               <div className="max-h-[520px] divide-y divide-border overflow-y-auto">
                 {audienceQuery.isError ? <p className="p-4 text-sm text-destructive">Could not load recipients.</p> : null}
@@ -742,8 +755,8 @@ export default function MessagesPage() {
                   <RecipientRow
                     key={group.userId}
                     recipients={group.channels}
-                    selectedCount={group.channels.filter((recipient) => selectedRecipientIds.includes(recipient.id)).length}
-                    onToggle={() => toggleRecipientGroup(group.channels)}
+                    selected={selectedUserIds.includes(group.userId)}
+                    onToggle={() => toggleRecipientGroup(group.userId)}
                   />
                 ))}
               </div>
@@ -943,15 +956,15 @@ export default function MessagesPage() {
                 <div className="grid gap-3">
                   <label className="grid gap-1.5 text-sm font-medium">
                     <span>Test email address</span>
-                    <Input name="campaignTestEmail" type="email" autoComplete="off" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} maxLength={254} placeholder="you@example.com" />
+                    <Input name="campaignTestDestination" type="email" autoComplete="off" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} maxLength={254} placeholder="you@example.com" />
                   </label>
                   <label className="grid gap-1.5 text-sm font-medium">
-                    <span>Email subject</span>
-                    <Input name="campaignEmailSubject" autoComplete="off" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
+                    <span>Subject</span>
+                    <Input name="campaignSubjectLine" autoComplete="off" value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} maxLength={200} placeholder="Subject of the email" />
                   </label>
                   <label className="grid gap-1.5 text-sm font-medium">
-                    <span>Email preheader</span>
-                    <Input name="campaignEmailPreheader" autoComplete="off" value={emailPreheader} onChange={(event) => setEmailPreheader(event.target.value)} maxLength={200} placeholder="Preview text shown beside the subject" />
+                    <span>Preheader</span>
+                    <Input name="campaignPreviewText" autoComplete="off" value={emailPreheader} onChange={(event) => setEmailPreheader(event.target.value)} maxLength={200} placeholder="Preview text shown beside the subject" />
                   </label>
                 </div>
               ) : null}
@@ -1013,7 +1026,7 @@ export default function MessagesPage() {
                 <div className="flex flex-wrap justify-end gap-2">
                 {draftSavedAt ? <span className="self-center pr-1 text-xs text-muted-foreground">Draft saved at {new Date(draftSavedAt).toLocaleTimeString()}</span> : null}
                 {draftId ? <Button type="button" variant="outline" onClick={() => void removeDraft()}>Delete draft</Button> : null}
-                <Button type="button" variant="outline" onClick={() => void saveDraft()} disabled={!customerId}>Save draft</Button>
+                <Button type="button" variant="outline" onClick={() => void saveDraft()} disabled={!customerId || audienceQuery.isFetching || audienceQuery.isError}>Save draft</Button>
                 {selectedChannels.includes('EMAIL') ? <Button
                   type="button"
                   variant="outline"
@@ -1024,7 +1037,7 @@ export default function MessagesPage() {
                 <Button
                   onClick={handleSend}
                   loading={sendMutation.isPending}
-                  disabled={!customerId || !selectedRecipientIds.length || !selectedChannels.length || (!message.trim() && !files.length && !(sendWhatsappTemplate && selectedChannels.includes('WHATSAPP'))) || audienceQuery.isFetching}
+                  disabled={!customerId || !selectedRecipients.length || !selectedChannels.length || (!message.trim() && !files.length && !(sendWhatsappTemplate && selectedChannels.includes('WHATSAPP'))) || audienceQuery.isFetching}
                 >
                   Send to {selectedChatCount} chat channels + {selectedEmailCount} emails
                 </Button>
@@ -1256,7 +1269,7 @@ function statusLabel(status: string) {
   return ({ PENDING: 'Pending', ACCEPTED: 'Accepted', SENT: 'Sent', DELIVERED: 'Delivered', READ: 'Read', FAILED: 'Failed', SUPPRESSED: 'Opted out' } as Record<string, string>)[status] ?? status
 }
 
-function RecipientRow({ recipients, selectedCount, onToggle }: { recipients: BroadcastRecipient[]; selectedCount: number; onToggle: () => void }) {
+function RecipientRow({ recipients, selected, onToggle }: { recipients: BroadcastRecipient[]; selected: boolean; onToggle: () => void }) {
   const primary = recipients[0]
   const email = recipients.find((recipient) => recipient.email)?.email
   const phone = recipients.find((recipient) => recipient.phone)?.phone
@@ -1266,13 +1279,11 @@ function RecipientRow({ recipients, selectedCount, onToggle }: { recipients: Bro
     .map((recipient) => recipient.lastContactAt ? new Date(recipient.lastContactAt).getTime() : 0)
     .filter((timestamp) => timestamp > Date.UTC(2000, 0, 1))
     .sort((left, right) => right - left)[0]
-  const allSelected = selectedCount === recipients.length
   return (
     <label className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-muted/50">
       <input
         type="checkbox"
-        checked={allSelected}
-        ref={(input) => { if (input) input.indeterminate = selectedCount > 0 && !allSelected }}
+        checked={selected}
         onChange={onToggle}
       />
       <span className="min-w-0 flex-1">
