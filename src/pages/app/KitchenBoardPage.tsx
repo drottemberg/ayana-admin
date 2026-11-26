@@ -17,6 +17,8 @@ import { useConnect } from '@/features/app/use-connect'
 import ayanaLogo from '@/assets/logo.png'
 import NiceModal from '@ebay/nice-modal-react'
 import { SendOrderInvoiceDialog } from '@/features/orders/components/SendOrderInvoiceDialog'
+import { KitchenCartEditor } from '@/features/orders/components/KitchenCartEditor'
+import { AssistantChatWidget } from '@/features/assistant-chat/AssistantChatWidget'
 import './KitchenBoardPage.css'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
@@ -131,6 +133,7 @@ function KitchenCard({
   onCancelOrder,
   onRollback,
   onOpen,
+  onEdit,
   onSendReminder,
 }: {
   order: KitchenOrder
@@ -144,6 +147,7 @@ function KitchenCard({
   onCancelOrder: () => void
   onRollback: (() => void) | null
   onOpen: () => void
+  onEdit: () => void
   onSendReminder: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -262,6 +266,11 @@ function KitchenCard({
           {language === 'fr' ? 'Gérer / annuler' : 'Manage / cancel'} <span aria-hidden="true">↗</span>
         </Link>
       )}
+      {isAwaitingPayment && order.type === 'PRODUCT' && ['PENDING', 'FAILED'].includes(order.paymentStatus ?? '') && (
+        <button type="button" className="kitchen-card-manage-order" disabled={isUpdating} onClick={onEdit}>
+          {language === 'fr' ? 'Modifier le panier' : 'Edit cart'} <span aria-hidden="true">↗</span>
+        </button>
+      )}
       {order.paymentStatus === 'PAID' && <button type="button" className="kitchen-card-manage-order" onClick={() => void NiceModal.show(SendOrderInvoiceDialog, { orderId: order.id, shortCode: order.shortCode })}>
         {language === 'fr' ? 'Envoyer la facture' : 'Send invoice'} <span aria-hidden="true">↗</span>
       </button>}
@@ -294,6 +303,7 @@ function KitchenLane({
   onAdvance,
   onRollback,
   onOpen,
+  onEdit,
   onSendReminder,
   onStartTerminalPayment,
   onCancelTerminalPayment,
@@ -308,6 +318,7 @@ function KitchenLane({
   onAdvance: (order: KitchenOrder) => void
   onRollback: (order: KitchenOrder) => void
   onOpen: (order: KitchenOrder) => void
+  onEdit: (order: KitchenOrder) => void
   onSendReminder: (order: KitchenOrder) => void
   onStartTerminalPayment: (order: KitchenOrder) => void
   onCancelTerminalPayment: (order: KitchenOrder) => void
@@ -334,6 +345,7 @@ function KitchenLane({
             onCancelOrder={() => onCancelOrder(order)}
             onRollback={status !== 'AWAITING_PAYMENT' && rollbackTargetFor(order.status) ? () => onRollback(order) : null}
             onOpen={() => onOpen(order)}
+            onEdit={() => onEdit(order)}
             onSendReminder={() => onSendReminder(order)}
           />
         )) : (
@@ -365,6 +377,7 @@ export default function KitchenBoardPage() {
   const customerName = isAdminMode ? adminCustomer?.name : session?.currentOrganization?.name
   const [locationId, setLocationId] = useState('')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
   const [rollbackRequest, setRollbackRequest] = useState<{ orderId: string; fromStatus: OrderStatus; status: OrderStatus } | null>(null)
   const [rollbackReason, setRollbackReason] = useState('')
   const [reportFormOpen, setReportFormOpen] = useState(false)
@@ -975,6 +988,7 @@ export default function KitchenBoardPage() {
                         onAdvance={advance}
                         onRollback={(order) => requestRollback(order.id, order.status)}
                         onOpen={(order) => { setSelectedOrderId(order.id); setReportFormOpen(false) }}
+                        onEdit={(order) => { setSelectedOrderId(order.id); setEditingOrderId(order.id); setReportFormOpen(false) }}
                         onSendReminder={(order) => reminderMutation.mutate(order.id)}
                         onStartTerminalPayment={(order) => terminalPaymentMutation.mutate(order.id)}
                         onCancelTerminalPayment={stopTerminalPayment}
@@ -1008,19 +1022,35 @@ export default function KitchenBoardPage() {
       </main>
 
       {selectedOrderId && (
-        <div className="kitchen-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedOrderId(null) }}>
+        <div className="kitchen-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setSelectedOrderId(null); setEditingOrderId(null) } }}>
           <section className="kitchen-detail-panel" role="dialog" aria-modal="true" aria-label={tr('Détail de la commande', 'Order details')}>
             <header className="kitchen-detail-header">
               <div>
                 <span>{tr('Détail de la commande', 'Order details')}</span>
                 <h2>{orderDetails ? `#${orderDetails.order.shortCode ?? orderDetails.order.pickupNumber ?? orderDetails.order.id.slice(-5).toUpperCase()}` : '…'}</h2>
               </div>
-              <button type="button" className="kitchen-detail-close" onClick={() => setSelectedOrderId(null)} aria-label={tr('Fermer', 'Close')}>×</button>
+              <button type="button" className="kitchen-detail-close" onClick={() => { setSelectedOrderId(null); setEditingOrderId(null) }} aria-label={tr('Fermer', 'Close')}>×</button>
             </header>
             {detailQuery.isLoading ? <div className="kitchen-detail-state">{tr('Chargement du détail…', 'Loading order details…')}</div> : detailQuery.isError || !orderDetails ? (
               <div className="kitchen-detail-state is-error">{tr('Impossible de charger le détail.', 'Could not load order details.')}</div>
+            ) : editingOrderId === selectedOrderId && orderDetails.order.type === 'PRODUCT' && orderDetails.order.status === 'RECEIVED'
+              && orderDetails.order.paymentMethod === 'TERMINAL'
+              && ['PENDING', 'FAILED'].includes(orderDetails.order.paymentStatus) ? (
+              <KitchenCartEditor
+                key={orderDetails.order.id}
+                details={orderDetails}
+                locationId={locationId}
+                language={language}
+                onClose={() => setEditingOrderId(null)}
+                onSaved={() => {
+                  void queryClient.invalidateQueries({ queryKey: ordersQueryKeys.kitchen(locationId) })
+                  void queryClient.invalidateQueries({ queryKey: ['orders', 'kitchen-detail', selectedOrderId, locationId] })
+                  setEditingOrderId(null)
+                }}
+              />
             ) : (
               <div className="kitchen-detail-content">
+                {editingOrderId === selectedOrderId && <div className="kitchen-detail-state is-error">{tr('Le paiement a commencé ou la commande a changé. Le panier ne peut plus être modifié.', 'Payment started or the order changed. This cart can no longer be edited.')}</div>}
                 <section className="kitchen-detail-summary">
                   <div>
                     <span>{tr('Client', 'Customer')}</span>
@@ -1034,6 +1064,13 @@ export default function KitchenBoardPage() {
                   <div><span>{tr('Paiement', 'Payment')}</span><strong>{orderDetails.order.paymentStatus}</strong><small>{formatMoney(orderDetails.order.total, orderDetails.order.currency, language === 'fr' ? 'fr-FR' : 'en-GB')}</small></div>
                   <div><span>{tr('Reçue à', 'Received at')}</span><strong>{formatTime(orderDetails.order.createdAt, language === 'fr' ? 'fr-FR' : 'en-GB')}</strong><small>{orderDetails.order.deliveryType}</small></div>
                 </section>
+
+                {orderDetails.order.type === 'PRODUCT' && orderDetails.order.status === 'RECEIVED' && orderDetails.order.paymentMethod === 'TERMINAL'
+                  && ['PENDING', 'FAILED'].includes(orderDetails.order.paymentStatus) && (
+                  <button type="button" className="kitchen-detail-manage-order" onClick={() => setEditingOrderId(orderDetails.order.id)}>
+                    {tr('Modifier le panier avant paiement', 'Edit cart before payment')} <span aria-hidden="true">↗</span>
+                  </button>
+                )}
 
                 {['RECEIVED', 'PREPARING', 'READY'].includes(orderDetails.order.status) && (
                   <Link className="kitchen-detail-manage-order" to={`/orders/${orderDetails.order.id}`}>
@@ -1192,6 +1229,7 @@ export default function KitchenBoardPage() {
           </form>
         </div>
       )}
+      {customerId && locationId && <AssistantChatWidget organizationId={customerId} locationId={locationId} />}
     </div>
   )
 }

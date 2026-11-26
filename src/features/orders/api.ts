@@ -67,8 +67,10 @@ export type KitchenOrder = {
 export type KitchenOrderDetail = {
   order: {
     id: string
+    type: 'PRODUCT' | 'MEMBERSHIP' | 'MIXED'
     status: OrderStatus
     paymentStatus: string
+    paymentMethod?: string | null
     deliveryType: string
     currency: string
     total: number
@@ -77,6 +79,7 @@ export type KitchenOrderDetail = {
     shortCode?: string | null
     pickupNumber?: number | null
     createdAt: string
+    updatedAt: string
     note?: string | null
     tableNumber?: string | null
     guestName?: string | null
@@ -85,6 +88,7 @@ export type KitchenOrderDetail = {
   }
   items: Array<{
     id: string
+    variantId: string
     productName: string
     variantName?: string | null
     variantLabel?: string | null
@@ -95,7 +99,7 @@ export type KitchenOrderDetail = {
     subtotal: number
     vatAmount: number
     notes?: string | null
-    modifiers: Array<{ id: string; name: string; price: number; quantity: number }>
+    modifiers: Array<{ id: string; modifierId: string; name: string; price: number; quantity: number }>
   }>
   history: Array<{ status: string; comment?: string | null; createdAt: string }>
   transactions: Array<{ id: string; type: string; status: string; amount: number; currency: string; source: string; reason?: string | null; createdAt: string }>
@@ -114,6 +118,32 @@ export type KitchenOrderDetail = {
     createdAt: string
     resolvedAt?: string | null
   }>
+}
+
+export type KitchenCatalog = {
+  currency: string
+  products: Array<{
+    id: string
+    name: string
+    category: string
+    variants: Array<{ id: string; label: string; price: number; originalPrice?: number; stock: number; available: boolean }>
+    modifierGroups: Array<{ id: string; name: string; required: boolean; minSelect: number; maxSelect: number; options: Array<{ id: string; name: string; price: number }> }>
+  }>
+}
+
+export type KitchenCartInput = {
+  locationId: string
+  expectedUpdatedAt: string
+  guestName: string
+  items: Array<{ variantId: string; quantity: number; modifierIds: string[]; notes?: string }>
+}
+
+export function getKitchenCatalogRequest(locationId: string) {
+  return apiClient.get<KitchenCatalog>('/orders/kitchen/catalog', { params: { locationId } })
+}
+
+export function replaceKitchenCartRequest(orderId: string, input: KitchenCartInput) {
+  return apiClient.patch<KitchenOrderDetail>(`/orders/kitchen/${orderId}/cart`, input)
 }
 
 export type KitchenIssueCategory = 'MISSING_INGREDIENT' | 'OUT_OF_STOCK' | 'DELAY' | 'WRONG_ITEM' | 'QUALITY' | 'OTHER'

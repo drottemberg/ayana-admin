@@ -1,0 +1,28 @@
+.kitchen-cart-editor { display: grid; align-content: start; min-height: 0; flex: 1 1 auto; gap: 18px; overflow-y: auto; padding: 22px; color: #261e19; }
+.kitchen-cart-editor-hint { margin: 0; color: #6c5d50; line-height: 1.45; }
+.kitchen-cart-editor label { display: grid; gap: 7px; font-size: 14px; font-weight: 650; }
+.kitchen-cart-editor input:not([type="checkbox"]), .kitchen-cart-editor select, .kitchen-cart-editor textarea { width: 100%; min-height: 42px; border: 1px solid #dacbbd; border-radius: 10px; padding: 9px 11px; color: #261e19; background: #fffaf4; font: inherit; }
+.kitchen-cart-editor textarea { min-height: 66px; resize: vertical; }
+.kitchen-cart-editor-item { display: grid; gap: 15px; border: 1px solid #e7d8c6; border-radius: 18px; padding: 17px; background: #fffdf9; }
+.kitchen-cart-editor-item-head, .kitchen-cart-editor-quantity, .kitchen-cart-editor-add, .kitchen-cart-editor-total, .kitchen-cart-editor-actions { display: flex; align-items: center; gap: 10px; }
+.kitchen-cart-editor-item-head { justify-content: space-between; }
+.kitchen-cart-editor-item-head strong { font-size: 17px; }
+.kitchen-cart-editor button { min-height: 38px; border: 1px solid #d6c6b7; border-radius: 10px; padding: 6px 13px; color: #5f301d; background: #fffaf4; font-weight: 700; cursor: pointer; }
+.kitchen-cart-editor button:hover:not(:disabled) { border-color: #a63b1c; }
+.kitchen-cart-editor button:disabled { opacity: 0.48; cursor: not-allowed; }
+.kitchen-cart-editor-quantity span { margin-right: auto; font-size: 14px; font-weight: 650; }
+.kitchen-cart-editor-quantity strong { min-width: 20px; text-align: center; }
+.kitchen-cart-editor-quantity button { width: 38px; padding: 0; }
+.kitchen-cart-editor fieldset { min-width: 0; margin: 0; border: 0; padding: 0; }
+.kitchen-cart-editor legend { margin-bottom: 8px; font-size: 14px; font-weight: 700; }
+.kitchen-cart-editor-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.kitchen-cart-editor-options label { display: flex; align-items: center; gap: 7px; border: 1px solid #dccbb9; border-radius: 999px; padding: 8px 11px; background: #fffaf4; cursor: pointer; }
+.kitchen-cart-editor-options label.is-selected { border-color: #ae3b1d; background: #fce7dc; }
+.kitchen-cart-editor-options input { accent-color: #ae3b1d; }
+.kitchen-cart-editor-add select { flex: 1; min-width: 0; }
+.kitchen-cart-editor-total { justify-content: space-between; border-top: 1px solid #e8d8c7; padding-top: 16px; font-weight: 700; }
+.kitchen-cart-editor-total strong { font-size: 22px; color: #84320e; }
+.kitchen-cart-editor-error { margin: 0; color: #a33b1f; font-size: 14px; }
+.kitchen-cart-editor-actions { justify-content: flex-end; }
+.kitchen-cart-editor-actions .is-primary { border-color: #a93a19; color: white; background: #a93a19; }
+@media (max-width: 560px) { .kitchen-cart-editor { padding: 17px; } .kitchen-cart-editor-add { flex-wrap: wrap; } .kitchen-cart-editor-add button { width: 100%; } }

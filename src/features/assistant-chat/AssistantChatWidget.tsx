@@ -75,7 +75,7 @@ function readChatPosition(): FloatingPosition {
   }
 }
 
-export function AssistantChatWidget() {
+export function AssistantChatWidget({ organizationId, locationId }: { organizationId?: string; locationId?: string } = {}) {
   const { token, logout } = useAuth()
   const { session } = useConnect()
   const [open, setOpen] = useState(false)
@@ -85,6 +85,7 @@ export function AssistantChatWidget() {
   const [draft, setDraft] = useState('')
   const [draftAttachments, setDraftAttachments] = useState<ChatAttachment[]>([])
   const [uploading, setUploading] = useState(false)
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'transcribing'>('idle')
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [typing, setTyping] = useState(false)
@@ -94,6 +95,8 @@ export function AssistantChatWidget() {
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null)
+  const voiceStreamRef = useRef<MediaStream | null>(null)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -103,11 +106,21 @@ export function AssistantChatWidget() {
     moved: boolean
   } | null>(null)
   const draggedRef = useRef(false)
-  const selectedOrganizationId = session?.orgId ?? readSelectedOrgId()
+  const selectedOrganizationId = organizationId ?? session?.orgId ?? readSelectedOrgId()
   const handleUnauthorized = useCallback(async () => {
     const refreshed = await apiClient.refreshSession()
     if (!refreshed && !apiClient.getAuthToken()) await logout()
   }, [logout])
+
+  useEffect(() => {
+    return () => {
+      if (voiceRecorderRef.current?.state === 'recording') {
+        voiceRecorderRef.current.onstop = null
+        voiceRecorderRef.current.stop()
+      }
+      voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+    }
+  }, [])
 
   useEffect(() => {
     const syncDrawer = () => {
@@ -148,7 +161,7 @@ export function AssistantChatWidget() {
 
     const socket = io(`${socketUrl()}/messaging`, {
       path: '/api/socket.io',
-      auth: { token, organizationId: selectedOrganizationId, languageCode: navigator.language },
+      auth: { token, organizationId: selectedOrganizationId, locationId, languageCode: navigator.language },
       reconnection: true,
       transports: ['websocket', 'polling'],
     })
@@ -207,7 +220,7 @@ export function AssistantChatWidget() {
       socket.disconnect()
       if (socketRef.current === socket) socketRef.current = null
     }
-  }, [handleUnauthorized, open, selectedOrganizationId, token])
+  }, [handleUnauthorized, open, selectedOrganizationId, locationId, token])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -238,6 +251,93 @@ export function AssistantChatWidget() {
     },
     [draftAttachments, typing, uploading],
   )
+
+  const sendVoiceMessage = (content: string) => {
+    const socket = socketRef.current
+    if (!content.trim() || !socket?.connected) {
+      setError('The transcription could not be sent. Reconnect and try again.')
+      return
+    }
+    socket.emit('chat:send', { content: content.trim(), attachmentIds: [] }, (response: ChatAck) => {
+      if (!response?.ok) setError(response?.error ?? 'The transcription could not be sent.')
+    })
+  }
+
+  const transcribeVoice = async (blob: Blob) => {
+    if (!blob.size || blob.size > 10 * 1024 * 1024) {
+      setError('The recording must be shorter than 10 MB. Please try again.')
+      setVoiceState('idle')
+      return
+    }
+    setVoiceState('transcribing')
+    setError('')
+    const form = new FormData()
+    const extension = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+    form.append('audio', blob, `recording.${extension}`)
+    const upload = (authToken: string) => fetch(`${API_URL}/messaging/web-chat/staff-transcribe`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}`, 'x-app-context': appContext },
+      body: form,
+    })
+    try {
+      let authToken = apiClient.getAuthToken() ?? token ?? ''
+      let response = await upload(authToken)
+      if (response.status === 401 && await apiClient.refreshSession()) {
+        authToken = apiClient.getAuthToken() ?? ''
+        if (authToken) response = await upload(authToken)
+      }
+      if (!response.ok) throw new Error('The voice message could not be transcribed. Please try again.')
+      const result = await response.json() as { text?: string }
+      if (!result.text?.trim()) throw new Error('The recording did not contain recognizable speech.')
+      sendVoiceMessage(result.text)
+    } catch (voiceError) {
+      setError(voiceError instanceof Error ? voiceError.message : 'The voice message could not be transcribed.')
+    } finally {
+      setVoiceState('idle')
+    }
+  }
+
+  const toggleVoice = async () => {
+    if (voiceState === 'recording') {
+      if (voiceRecorderRef.current?.state === 'recording') voiceRecorderRef.current.stop()
+      return
+    }
+    if (voiceState !== 'idle' || !connected || !appContext) return
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setError('Microphone access requires a supported browser and HTTPS.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+      voiceStreamRef.current = stream
+      const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find((type) => MediaRecorder.isTypeSupported(type))
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      voiceRecorderRef.current = recorder
+      const chunks: Blob[] = []
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
+      recorder.onerror = () => {
+        stream.getTracks().forEach((track) => track.stop())
+        voiceStreamRef.current = null
+        voiceRecorderRef.current = null
+        setVoiceState('idle')
+        setError('The recording failed. Please try again.')
+      }
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop())
+        voiceStreamRef.current = null
+        voiceRecorderRef.current = null
+        void transcribeVoice(new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' }))
+      }
+      recorder.start()
+      setError('')
+      setVoiceState('recording')
+    } catch {
+      voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
+      voiceStreamRef.current = null
+      setError('Microphone access was denied or the recording could not start.')
+    }
+  }
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length || !token) return
@@ -566,14 +666,23 @@ export function AssistantChatWidget() {
                 disabled={!connected || typing || uploading}
                 rows={1}
               />
-              <Button
-                type="submit"
-                size="icon"
-                aria-label="Send message"
-                disabled={!connected || typing || uploading || (!draft.trim() && !draftAttachments.length)}
-              >
-                {uploading ? '…' : <SendIcon />}
-              </Button>
+              {voiceState !== 'idle' || (!draft.trim() && !draftAttachments.length) ? (
+                <Button
+                  type="button"
+                  variant={voiceState === 'recording' ? 'destructive' : 'outline'}
+                  size="icon"
+                  aria-label={voiceState === 'recording' ? 'Stop recording and send' : voiceState === 'transcribing' ? 'Transcribing voice message' : 'Record a voice message'}
+                  title={voiceState === 'recording' ? 'Stop and send' : 'Record a voice message'}
+                  disabled={voiceState !== 'recording' && (!connected || !appContext || typing || uploading || voiceState === 'transcribing')}
+                  onClick={() => void toggleVoice()}
+                >
+                  {voiceState === 'transcribing' ? '…' : <MicIcon recording={voiceState === 'recording'} />}
+                </Button>
+              ) : (
+                <Button type="submit" size="icon" aria-label="Send message" disabled={!connected || typing || uploading}>
+                  {uploading ? '…' : <SendIcon />}
+                </Button>
+              )}
             </div>
             <p className="mt-1.5 text-[10px] text-muted-foreground">
               Photos (JPEG, PNG, WebP) or PDF · max 10 MB each, 5 per message
@@ -644,6 +753,15 @@ function AttachIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-5" stroke="currentColor" strokeWidth="1.8">
       <path d="m20.5 11.5-8.9 8.9a5 5 0 0 1-7.1-7.1l9.2-9.2a3.3 3.3 0 0 1 4.7 4.7l-9.2 9.2a1.7 1.7 0 0 1-2.4-2.4l8.5-8.5" />
+    </svg>
+  )
+}
+
+function MicIcon({ recording }: { recording: boolean }) {
+  return recording ? <span aria-hidden="true" className="size-3 rounded-sm bg-current" /> : (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <rect x="9" y="2" width="6" height="13" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8" />
     </svg>
   )
 }
