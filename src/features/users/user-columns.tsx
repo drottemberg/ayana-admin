@@ -43,17 +43,17 @@ function userActivityColumn(): ColumnDef<User> {
 export function getUserActivityFilters(customerId?: string): DataTableFilter<User>[] {
   return [
     {
-      id: 'attendedSessions', label: 'Attended sessions', column: 'attendedSessions', selectionMode: 'single',
+      id: 'attendedSessions', label: 'Attended sessions', column: 'attendedSessions', selectionMode: 'multiple',
       queryFn: (search, page) => getUserActivityFilterOptionsRequest('attended', search, page, customerId),
       getValue: (user) => String(user.activitySummary?.attendedCount ?? 0),
     },
     {
-      id: 'remainingSessions', label: 'Sessions remaining', column: 'remainingSessions', selectionMode: 'single',
+      id: 'remainingSessions', label: 'Sessions remaining', column: 'remainingSessions', selectionMode: 'multiple',
       queryFn: (search, page) => getUserActivityFilterOptionsRequest('remaining', search, page, customerId),
       getValue: (user) => user.activitySummary?.unlimited ? 'UNLIMITED' : String(user.activitySummary?.remainingCredits ?? 0),
     },
     {
-      id: 'contractId', label: 'Contract', column: 'contractId', selectionMode: 'single',
+      id: 'contractId', label: 'Contract', column: 'contractId', selectionMode: 'multiple',
       queryFn: (search, page) => getUserContractFilterOptionsRequest(search, page, customerId),
       getValue: (user) => user.activitySummary?.latestContractPricingOptionId ?? '',
     },

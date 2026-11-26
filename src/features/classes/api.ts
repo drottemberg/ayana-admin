@@ -349,6 +349,12 @@ export async function getClassBookingsRequest(locationId: string, sessionId: str
   })
 }
 
+export function emailConfirmedSessionParticipantsRequest(locationId: string, sessionId: string, subject: string, message: string) {
+  return apiClient.post<{ recipients: number; sent: number; failed: number }>(`/class-sessions/${encodeURIComponent(sessionId)}/email-confirmed`, { subject, message }, {
+    headers: { 'x-org-id': locationId },
+  })
+}
+
 export async function getClassTypeRequest(id: string, locationId: string) {
   return apiClient.get<ClassType>(`/class-types/${encodeURIComponent(id)}`, {
     headers: { 'x-org-id': locationId },

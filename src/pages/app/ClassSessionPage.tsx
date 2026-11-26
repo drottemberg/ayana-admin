@@ -35,6 +35,8 @@ import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { saveCoachSessionAttendanceRequest } from '@/features/coaches/api'
 import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { CustomerRole } from '@/types/membership'
+import NiceModal from '@ebay/nice-modal-react'
+import { EmailSessionParticipantsDialog } from '@/features/classes/EmailSessionParticipantsDialog'
 import { CoachAttendanceDrawer } from '@/features/coaches/CoachAttendanceDrawer'
 import { CoachRosterMemberProfileDrawer } from '@/features/coaches/CoachRosterMemberProfileDrawer'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -426,6 +428,9 @@ export default function ClassSessionPage() {
       backTo: '/class-sessions',
       commands: classSession ? <div className="flex flex-col items-end gap-1.5 md:flex-row-reverse md:items-center md:gap-2">
         <div className="flex shrink-0 items-center gap-1.5">
+        {appSession?.permissions.classSessions?.edit && classSession.status !== 'DELETED' && classSession.status !== 'CANCELLED'
+          ? <Button type="button" variant="outline" onClick={() => void NiceModal.show(EmailSessionParticipantsDialog, { sessionId: classSession.id, locationId: resolvedLocationId, sessionName: classSession.className ?? 'Class session' })}>Email participants</Button>
+          : null}
           <Button type="button" variant="outline" size="icon" aria-label="Previous session" title="Previous session" disabled={!previousSessionQuery.data} onClick={() => previousSessionQuery.data && navigateToAdjacentSession(previousSessionQuery.data)}>
             <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
           </Button>

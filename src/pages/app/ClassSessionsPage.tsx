@@ -29,6 +29,8 @@ import { CustomerRole } from '@/types/membership'
 import { getCoachFilterOptionsRequest, releaseCoachSessionRequest } from '@/features/coaches/api'
 import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { getLocalStorage, setLocalStorage } from '@/utils/storage-utils'
+import NiceModal from '@ebay/nice-modal-react'
+import { EmailSessionParticipantsDialog } from '@/features/classes/EmailSessionParticipantsDialog'
 
 const CLASS_SESSION_DATE_FILTER_KEY = 'class-sessions.date-filter'
 type ClassSessionDateMode = 'all' | 'yesterday' | 'today' | 'upcoming' | 'tomorrow' | 'range'
@@ -270,6 +272,10 @@ export default function ClassSessionsPage() {
               label: 'View session',
               onClick: () => navigate(`/class-sessions/${item.id}?locationId=${encodeURIComponent(item.locationId ?? item.organizationId)}`),
             },
+            ...(session?.permissions.classSessions?.edit ? [{
+              label: 'Email confirmed participants…',
+              onClick: () => void NiceModal.show(EmailSessionParticipantsDialog, { sessionId: item.id, locationId: item.locationId ?? item.organizationId, sessionName: item.className ?? 'Class session' }),
+            }] : []),
             ...(canResumeSessions && (item.status === 'SCHEDULED' || item.status === 'COMPLETED') ? [{
               label: 'Edit session',
               icon: PencilEdit02Icon,
