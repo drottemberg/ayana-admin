@@ -7,6 +7,8 @@ export type Partnership = Record<string, unknown> & {
   customerName?: string | null
   name: string
   locationScope: 'ALL' | 'SPECIFIC'
+  audienceScope: 'ALL' | 'SPECIFIC'
+  endsAt?: string | null
   locationIds: string[]
   locations: Array<{ id: string; name: string }>
   emailRules: string[]
@@ -14,12 +16,14 @@ export type Partnership = Record<string, unknown> & {
   pricingOptionDiscounts: PartnershipDiscount[]
   isActive: boolean
   isDeleted: boolean
-  status: 'ACTIVE' | 'DISABLED' | 'DELETED'
+  status: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'DELETED'
   deletedAt?: string | null
 }
 export type PartnershipInput = {
   name: string
   locationScope: 'ALL' | 'SPECIFIC'
+  audienceScope: 'ALL' | 'SPECIFIC'
+  endsAt: string | null
   isActive: boolean
   locationIds: string[]
   emailRules: string[]
@@ -31,7 +35,7 @@ function withCustomer(path: string, customerId: string) {
   return `${path}?${new URLSearchParams({ customerId })}`
 }
 
-export function listPartnershipsRequest(customerId?: string, search = '', status?: 'ACTIVE' | 'DISABLED' | 'DELETED' | 'ALL') {
+export function listPartnershipsRequest(customerId?: string, search = '', status?: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'DELETED' | 'ALL') {
   const params = new URLSearchParams()
   if (customerId) params.set('customerId', customerId)
   if (search.trim()) params.set('search', search.trim())

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AppDrawer } from '@/components/app/AppDrawer'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { getAppMode } from '@/features/app/app-mode'
@@ -28,9 +29,9 @@ import { SelectInputAsync } from '@/components/ui/select-input'
 import { createPageHeaderAction } from '@/components/ui/page-header'
 
 const EMPTY_FORM: PartnershipInput = {
-  name: '', locationScope: 'ALL', isActive: true, locationIds: [], emailRules: [],
-  productDiscounts: [{ productId: null, percent: 10 }],
-  pricingOptionDiscounts: [{ pricingOptionId: null, percent: 10 }],
+  name: '', locationScope: 'ALL', audienceScope: 'ALL', endsAt: null, isActive: true, locationIds: [], emailRules: [],
+  productDiscounts: [],
+  pricingOptionDiscounts: [],
 }
 
 function allRowsState<T extends Record<string, unknown>>(): DataTableState<T> {
@@ -54,7 +55,7 @@ export default function PartnershipsPage() {
   const loadRows = useCallback(async (state: DataTableState<Partnership>) => {
     const customerId = isAdmin ? state.filters.customerId?.[0] : fixedCustomerId
     const selectedStatuses = state.filters.status ?? []
-    const status = selectedStatuses.length === 1 ? selectedStatuses[0] as 'ACTIVE' | 'DISABLED' | 'DELETED' : selectedStatuses.length > 1 ? 'ALL' : undefined
+    const status = selectedStatuses.length === 1 ? selectedStatuses[0] as 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'DELETED' : selectedStatuses.length > 1 ? 'ALL' : undefined
     const rows = await listPartnershipsRequest(customerId, state.search, status)
     const filtered = selectedStatuses.length ? rows.filter((row) => selectedStatuses.includes(row.status)) : rows
     const pageSize = state.pagination.pageSize
@@ -66,25 +67,26 @@ export default function PartnershipsPage() {
     try {
       await setPartnershipStatusRequest(row.customerId, row.id, !row.isActive)
       await queryClient.invalidateQueries({ queryKey: ['partnerships'] })
-      toast.success(row.isActive ? 'Partnership disabled.' : 'Partnership enabled.')
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not update partnership.') }
+      toast.success(row.isActive ? 'Offer disabled.' : 'Offer enabled.')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not update offer.') }
   }
   const remove = async (row: Partnership) => {
-    const confirmed = await Modals.confirm({ operation: `delete partnership “${row.name}”`, okButtonProps: { variant: 'destructive' } })
+    const confirmed = await Modals.confirm({ operation: `delete offer “${row.name}”`, okButtonProps: { variant: 'destructive' } })
     if (!confirmed) return
     try {
       await deletePartnershipRequest(row.customerId, row.id)
       await queryClient.invalidateQueries({ queryKey: ['partnerships'] })
-      toast.success('Partnership deleted.')
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not delete partnership.') }
+      toast.success('Offer deleted.')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not delete offer.') }
   }
 
   const columns = useMemo<ColumnDef<Partnership>[]>(() => [
     ...(isAdmin ? [{ accessorKey: 'customerId', header: 'Customer', cell: ({ row }: any) => row.original.customerName ?? row.original.customerId } as ColumnDef<Partnership>] : []),
-    { accessorKey: 'status', header: 'Status', cell: ({ row }) => <span className="grid justify-items-start gap-1"><Badge variant="outline" className={row.original.status === 'ACTIVE' ? 'border-green-200 text-green-800' : row.original.status === 'DELETED' ? 'border-red-200 text-red-800' : 'text-muted-foreground'}>{row.original.status === 'DELETED' ? 'Deleted' : row.original.status === 'DISABLED' ? 'Disabled' : 'Active'}</Badge>{row.original.deletedAt ? <span className="text-xs text-muted-foreground">{new Date(row.original.deletedAt).toLocaleDateString()}</span> : null}</span> },
-    { accessorKey: 'name', header: 'Partnership', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { accessorKey: 'status', header: 'Status', cell: ({ row }) => <span className="grid justify-items-start gap-1"><Badge variant="outline" className={row.original.status === 'ACTIVE' ? 'border-green-200 text-green-800' : row.original.status === 'DELETED' ? 'border-red-200 text-red-800' : 'text-muted-foreground'}>{row.original.status === 'DELETED' ? 'Deleted' : row.original.status === 'DISABLED' ? 'Disabled' : row.original.status === 'EXPIRED' ? 'Expired' : 'Active'}</Badge>{row.original.deletedAt ? <span className="text-xs text-muted-foreground">{new Date(row.original.deletedAt).toLocaleDateString()}</span> : null}</span> },
+    { accessorKey: 'name', header: 'Offer', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
     { accessorKey: 'locationScope', header: 'Locations', cell: ({ row }) => row.original.locationScope === 'ALL' ? 'All locations' : row.original.locations.map((item) => item.name).join(', ') },
-    { accessorKey: 'emailSummary', header: 'Eligible emails', cell: ({ row }) => <span className="block max-w-xs truncate" title={row.original.emailRules.join(', ')}>{row.original.emailRules.join(', ')}</span> },
+    { accessorKey: 'emailSummary', header: 'Audience', cell: ({ row }) => row.original.audienceScope === 'ALL' ? 'Everyone' : <span className="block max-w-xs truncate" title={row.original.emailRules.join(', ')}>{row.original.emailRules.join(', ')}</span> },
+    { accessorKey: 'endsAt', header: 'Ends', cell: ({ row }) => row.original.endsAt ? new Date(row.original.endsAt).toLocaleDateString() : 'No end date' },
     { accessorKey: 'discountSummary', header: 'Discounts', cell: ({ row }) => `${row.original.productDiscounts.length} product · ${row.original.pricingOptionDiscounts.length} pricing option` },
   ], [isAdmin])
 
@@ -98,14 +100,14 @@ export default function PartnershipsPage() {
       id: 'customerId', label: 'Customer', column: 'customerId' as const, selectionMode: 'single' as const,
       queryFn: getCustomerFilterOptionsRequest,
     }] : []),
-    { id: 'status', label: 'Status', column: 'status' as const, options: ['ACTIVE', 'DISABLED', 'DELETED'], getValue: (row: Partnership) => row.status },
+    { id: 'status', label: 'Status', column: 'status' as const, options: ['ACTIVE', 'DISABLED', 'EXPIRED', 'DELETED'], getValue: (row: Partnership) => row.status },
   ]
 
   return <>
     <PageHeader
-      title="Partnerships"
-      subtitle="Manage email eligibility, locations, and percentage discounts."
-      primaryAction={canCreate && (isAdmin || fixedCustomerId) ? createPageHeaderAction('Add partnership', openCreate) : undefined}
+      title="Offers"
+      subtitle="Manage audience, locations, expiry and percentage discounts."
+      primaryAction={canCreate && (isAdmin || fixedCustomerId) ? createPageHeaderAction('Add offer', openCreate) : undefined}
     />
     <section className="space-y-4 p-4 md:p-6">
       <DataTableAsync
@@ -115,13 +117,13 @@ export default function PartnershipsPage() {
         refetchOnMount="always"
         tableKey="partnerships.root"
         columns={columns}
-        searchPlaceholder="Search partnerships"
+        searchPlaceholder="Search offers"
         searchColumns={['name', 'emailSummary']}
         filters={filters}
         getRowCommands={rowActions}
-        loadingMessage="Loading partnerships..."
-        emptyMessage="No partnerships found."
-        errorMessage="Could not load partnerships."
+        loadingMessage="Loading offers..."
+        emptyMessage="No offers found."
+        errorMessage="Could not load offers."
       />
     </section>
     <PartnershipEditor
@@ -163,6 +165,8 @@ function PartnershipEditor({ customerId, isAdmin, partnership, open, onOpenChang
     setForm(partnership ? {
       name: partnership.name,
       locationScope: partnership.locationScope,
+      audienceScope: partnership.audienceScope ?? 'SPECIFIC',
+      endsAt: partnership.endsAt ?? null,
       isActive: partnership.isActive,
       locationIds: partnership.locationIds,
       emailRules: partnership.emailRules,
@@ -190,7 +194,7 @@ function PartnershipEditor({ customerId, isAdmin, partnership, open, onOpenChang
       setLocations(nextLocations)
       setProducts(nextProducts)
       setPricingOptions(nextOptions)
-    }).catch((error) => toast.error(error instanceof Error ? error.message : 'Could not load partnership options.'))
+    }).catch((error) => toast.error(error instanceof Error ? error.message : 'Could not load offer options.'))
       .finally(() => setLoadingOptions(false))
   }, [effectiveCustomerId, isOpen])
 
@@ -205,25 +209,26 @@ function PartnershipEditor({ customerId, isAdmin, partnership, open, onOpenChang
     event.preventDefault()
     const emailRules = emailText.split(/[\n,;]+/).map((item) => item.trim()).filter(Boolean)
     if (!effectiveCustomerId) { toast.error('Select a customer.'); return }
-    if (!form.name.trim()) { toast.error('Enter a partnership name.'); return }
-    if (!emailRules.length) { toast.error('Add at least one email or domain rule.'); return }
+    if (!form.name.trim()) { toast.error('Enter an offer name.'); return }
+    if (form.audienceScope === 'SPECIFIC' && !emailRules.length) { toast.error('Add at least one email, domain or phone number.'); return }
+    if (!form.productDiscounts.length && !form.pricingOptionDiscounts.length) { toast.error('Add at least one discount rule.'); return }
     if (form.locationScope === 'SPECIFIC' && !form.locationIds.length) { toast.error('Select at least one location.'); return }
     if ([...form.productDiscounts, ...form.pricingOptionDiscounts].some((item) => !Number.isFinite(Number(item.percent)) || item.percent <= 0 || item.percent >= 100)) { toast.error('Each discount must be greater than 0% and less than 100%.'); return }
-    const input: PartnershipInput = { ...form, name: form.name.trim(), emailRules }
+    const input: PartnershipInput = { ...form, name: form.name.trim(), emailRules: form.audienceScope === 'ALL' ? [] : emailRules }
     setSaving(true)
     try {
       if (partnership) await updatePartnershipRequest(partnership.customerId, partnership.id, input)
       else await createPartnershipRequest(effectiveCustomerId, input)
-      toast.success(partnership ? 'Partnership updated.' : 'Partnership created.')
+      toast.success(partnership ? 'Offer updated.' : 'Offer created.')
       onSaved()
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not save partnership.') }
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not save offer.') }
     finally { setSaving(false) }
   }
 
   return <AppDrawer
     open={isOpen}
     onOpenChange={onOpenChange}
-    title={partnership ? 'Edit partnership' : 'Add partnership'}
+    title={partnership ? 'Edit offer' : 'Add offer'}
     description="Manage eligibility, locations, and percentage discounts."
     contentClassName="sm:max-w-2xl"
   >
@@ -241,14 +246,20 @@ function PartnershipEditor({ customerId, isAdmin, partnership, open, onOpenChang
           onSelectedItemsChange={(items) => setSelectedCustomer(items[0] ?? null)}
           disabled={Boolean(partnership)}
         /> : null}
-        <label className="grid gap-1.5 text-sm font-medium"><span>Name</span><Input required maxLength={120} value={form.name} onChange={(event) => setField('name', event.target.value)} placeholder="Company or partner name" /></label>
-        <div className="grid gap-2">
-          <span className="text-sm font-medium">Eligible email addresses or domains</span>
-          <Textarea rows={4} value={emailText} onChange={(event) => setEmailText(event.target.value)} placeholder={'@amazon.fr\n@amazon.com\njane@amazon.fr'} />
-          <p className="text-xs text-muted-foreground">Use one rule per line. A value starting with @ matches a complete email domain.</p>
+        <label className="grid gap-1.5 text-sm font-medium"><span>Name</span><Input required maxLength={120} value={form.name} onChange={(event) => setField('name', event.target.value)} placeholder="Offer name" /></label>
+        <div className="grid gap-2"><label className="text-sm font-medium" htmlFor="offer-audience">Who can use this offer?</label>
+          <select id="offer-audience" className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={form.audienceScope} onChange={(event) => setField('audienceScope', event.target.value as PartnershipInput['audienceScope'])}>
+            <option value="ALL">Everyone</option><option value="SPECIFIC">Specific people</option>
+          </select>
         </div>
+        <DatePicker clearable label="End date (optional)" value={form.endsAt?.slice(0, 10) ?? ''} onValueChange={(value) => setField('endsAt', value ? new Date(`${value}T23:59:59.999`).toISOString() : null)} />
+        {form.audienceScope === 'SPECIFIC' ? <div className="grid gap-2">
+          <span className="text-sm font-medium">Eligible emails, domains or phone numbers</span>
+          <Textarea rows={4} value={emailText} onChange={(event) => setEmailText(event.target.value)} placeholder={'@company.com\nname@company.com\n+33612345678'} />
+          <p className="text-xs text-muted-foreground">One rule per line. Use international format for phone numbers.</p>
+        </div> : null}
         <div className="grid gap-3 rounded-lg border p-4">
-          <div className="grid gap-1"><strong className="text-sm">Location scope</strong><p className="text-xs text-muted-foreground">The partnership is only available at the selected customer locations.</p></div>
+          <div className="grid gap-1"><strong className="text-sm">Location scope</strong><p className="text-xs text-muted-foreground">The offer is available at the selected customer locations.</p></div>
           <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={form.locationScope} onChange={(event) => setField('locationScope', event.target.value as PartnershipInput['locationScope'])}>
             <option value="ALL">All locations</option><option value="SPECIFIC">Selected locations</option>
           </select>
@@ -259,7 +270,7 @@ function PartnershipEditor({ customerId, isAdmin, partnership, open, onOpenChang
         </div>
         <div className="flex flex-col-reverse gap-2 border-t px-5 py-4 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" loading={saving}>{partnership ? 'Save changes' : 'Create partnership'}</Button>
+          <Button type="submit" loading={saving}>{partnership ? 'Save changes' : 'Create offer'}</Button>
         </div>
       </form>
   </AppDrawer>

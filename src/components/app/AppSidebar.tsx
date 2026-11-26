@@ -57,8 +57,8 @@ const data = {
       feature: Feature.PRICING_OPTIONS,
     },
     {
-      title: 'Partnerships',
-      url: '/partnerships',
+      title: 'Offers',
+      url: '/offers',
       icon: <Icon icon={EntityIcon.pricingOptions} />,
       feature: Feature.PARTNERSHIPS,
     },

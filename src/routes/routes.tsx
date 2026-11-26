@@ -126,6 +126,7 @@ export const router = createBrowserRouter([
           { path: 'invites', element: <InvitesPage /> },
           { path: 'pricing-options', element: <PricingOptionsPage /> },
           { path: 'partnerships', element: <PartnershipsPage /> },
+          { path: 'offers', element: <PartnershipsPage /> },
           { path: 'integrations', element: <IntegrationsPage /> },
           { path: 'classes', element: <ClassesPage /> },
           { path: 'classes/:classTypeId', element: <ClassTypePage /> },
