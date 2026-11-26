@@ -157,13 +157,23 @@ export default function MessagesPage() {
   const libraryTemplates = whatsappTemplateLibraryQuery.data ?? []
   const selectedLibraryTemplate = libraryTemplates.find((template) => `${template.name}::${template.language}` === selectedLibraryTemplateKey)
   const recipients = audienceQuery.data?.items ?? EMPTY_RECIPIENTS
-  const filteredRecipients = useMemo(() => {
+  const recipientGroups = useMemo(() => {
+    const groups = new Map<string, BroadcastRecipient[]>()
+    for (const recipient of recipients) {
+      const group = groups.get(recipient.userId) ?? []
+      group.push(recipient)
+      groups.set(recipient.userId, group)
+    }
+    return [...groups.entries()].map(([userId, channels]) => ({ userId, channels }))
+  }, [recipients])
+  const filteredRecipientGroups = useMemo(() => {
     const search = recipientSearch.trim().toLocaleLowerCase()
-    if (!search) return recipients
-    return recipients.filter((recipient) => [recipient.userName, recipient.email, recipient.phone, recipient.channelLabel]
-      .some((value) => value?.toLocaleLowerCase().includes(search)),
-    )
-  }, [recipientSearch, recipients])
+    if (!search) return recipientGroups
+    return recipientGroups.filter((group) => group.channels.some((recipient) =>
+      [recipient.userName, recipient.email, recipient.phone, recipient.channelLabel]
+        .some((value) => value?.toLocaleLowerCase().includes(search)),
+    ))
+  }, [recipientSearch, recipientGroups])
   const sendMutation = useMutation({
     mutationFn: () => sendCustomerBroadcastRequest({
       customerId,
@@ -459,14 +469,18 @@ export default function MessagesPage() {
     ? new Set(selectedRecipients.filter((recipient) => recipient.email && !recipient.emailInvalid).map((recipient) => recipient.userId)).size
     : 0
   const availableEmailCount = new Set(recipients.filter((recipient) => recipient.email && !recipient.emailInvalid).map((recipient) => recipient.userId)).size
-  const allSelected = filteredRecipients.length > 0 && filteredRecipients.every((recipient) => selectedRecipientIds.includes(recipient.id))
+  const filteredRecipientIds = filteredRecipientGroups.flatMap((group) => group.channels.map((recipient) => recipient.id))
+  const allSelected = filteredRecipientIds.length > 0 && filteredRecipientIds.every((id) => selectedRecipientIds.includes(id))
   const toggleAll = () => setSelectedRecipientIds((current) => allSelected
-    ? current.filter((id) => !filteredRecipients.some((recipient) => recipient.id === id))
-    : [...new Set([...current, ...filteredRecipients.map((recipient) => recipient.id)])],
+    ? current.filter((id) => !filteredRecipientIds.includes(id))
+    : [...new Set([...current, ...filteredRecipientIds])],
   )
-  const toggleRecipient = (recipientId: string) => setSelectedRecipientIds((current) =>
-    current.includes(recipientId) ? current.filter((id) => id !== recipientId) : [...current, recipientId],
-  )
+  const toggleRecipientGroup = (group: BroadcastRecipient[]) => setSelectedRecipientIds((current) => {
+    const ids = group.map((recipient) => recipient.id)
+    return ids.every((id) => current.includes(id))
+      ? current.filter((id) => !ids.includes(id))
+      : [...new Set([...current, ...ids])]
+  })
   const toggleLocation = (locationId: string) => {
     setLocationIds((current) => current.includes(locationId)
       ? current.filter((id) => id !== locationId)
@@ -709,7 +723,7 @@ export default function MessagesPage() {
                     </p>
                   ) : null}
                 </div>
-                <Button variant="outline" size="sm" onClick={toggleAll} disabled={!filteredRecipients.length || audienceQuery.isFetching}>
+                <Button variant="outline" size="sm" onClick={toggleAll} disabled={!filteredRecipientGroups.length || audienceQuery.isFetching}>
                   {allSelected ? 'Deselect all' : 'Select all'}
                 </Button>
               </div>
@@ -721,15 +735,15 @@ export default function MessagesPage() {
                 {!audienceQuery.isFetching && !recipients.length ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">No reachable contacts match these filters.</p>
                 ) : null}
-                {!audienceQuery.isFetching && recipients.length > 0 && !filteredRecipients.length ? (
+                {!audienceQuery.isFetching && recipients.length > 0 && !filteredRecipientGroups.length ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">No recipients match this search.</p>
                 ) : null}
-                {filteredRecipients.map((recipient) => (
+                {filteredRecipientGroups.map((group) => (
                   <RecipientRow
-                    key={recipient.id}
-                    recipient={recipient}
-                    checked={selectedRecipientIds.includes(recipient.id)}
-                    onToggle={() => toggleRecipient(recipient.id)}
+                    key={group.userId}
+                    recipients={group.channels}
+                    selectedCount={group.channels.filter((recipient) => selectedRecipientIds.includes(recipient.id)).length}
+                    onToggle={() => toggleRecipientGroup(group.channels)}
                   />
                 ))}
               </div>
@@ -1242,21 +1256,35 @@ function statusLabel(status: string) {
   return ({ PENDING: 'Pending', ACCEPTED: 'Accepted', SENT: 'Sent', DELIVERED: 'Delivered', READ: 'Read', FAILED: 'Failed', SUPPRESSED: 'Opted out' } as Record<string, string>)[status] ?? status
 }
 
-function RecipientRow({ recipient, checked, onToggle }: { recipient: BroadcastRecipient; checked: boolean; onToggle: () => void }) {
+function RecipientRow({ recipients, selectedCount, onToggle }: { recipients: BroadcastRecipient[]; selectedCount: number; onToggle: () => void }) {
+  const primary = recipients[0]
+  const email = recipients.find((recipient) => recipient.email)?.email
+  const phone = recipients.find((recipient) => recipient.phone)?.phone
+    ?? recipients.find((recipient) => recipient.channel === 'WHATSAPP')?.channelId
+  const channels = [...new Set(recipients.map((recipient) => recipient.channel))]
+  const latestContactAt = recipients
+    .map((recipient) => recipient.lastContactAt ? new Date(recipient.lastContactAt).getTime() : 0)
+    .filter((timestamp) => timestamp > Date.UTC(2000, 0, 1))
+    .sort((left, right) => right - left)[0]
+  const allSelected = selectedCount === recipients.length
   return (
     <label className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-muted/50">
-      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <input
+        type="checkbox"
+        checked={allSelected}
+        ref={(input) => { if (input) input.indeterminate = selectedCount > 0 && !allSelected }}
+        onChange={onToggle}
+      />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{recipient.userName}</span>
-        <span className="block truncate text-xs text-muted-foreground">{recipient.channelLabel}</span>
-        {recipient.email && recipient.channel !== 'EMAIL' ? <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span> : null}
-        {recipient.email && recipient.emailInvalid ? <span className="block text-xs text-amber-700">Email invalid after hard bounce · excluded from email</span> : null}
-        {recipient.phone ? <span className="block truncate text-xs text-muted-foreground">{recipient.phone}</span> : null}
+        <span className="block truncate text-sm font-medium">{primary.userName}</span>
+        {email ? <span className="block truncate text-xs text-muted-foreground">{email}</span> : null}
+        {phone ? <span className="block truncate text-xs text-muted-foreground">{phone}</span> : null}
+        {recipients.some((recipient) => recipient.emailInvalid) ? <span className="block text-xs text-amber-700">Email invalid after hard bounce · excluded from email</span> : null}
       </span>
       <span className="flex flex-col items-end gap-1">
-        <Badge variant="outline">{channelLabel(recipient.channel)}</Badge>
-        {recipient.channel === 'WHATSAPP' ? <Badge variant={recipient.whatsappWindowOpen ? 'secondary' : 'destructive'}>{recipient.whatsappWindowOpen ? 'Direct · 24 h' : 'Template required'}</Badge> : null}
-        {recipient.lastContactAt ? <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(recipient.lastContactAt).toLocaleDateString()}</span> : null}
+        <span className="flex flex-wrap justify-end gap-1">{channels.map((channel) => <Badge key={channel} variant="outline">{channelLabel(channel)}</Badge>)}</span>
+        {recipients.some((recipient) => recipient.channel === 'WHATSAPP' && !recipient.whatsappWindowOpen) ? <Badge variant="destructive">Template required</Badge> : null}
+        {latestContactAt ? <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:block">{new Date(latestContactAt).toLocaleDateString()}</span> : null}
       </span>
     </label>
   )
