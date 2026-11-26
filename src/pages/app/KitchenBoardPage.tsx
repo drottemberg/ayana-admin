@@ -1078,6 +1078,20 @@ export default function KitchenBoardPage() {
                   </Link>
                 )}
 
+                {orderDetails.order.paymentStatus === 'PAID' && (
+                  <button
+                    type="button"
+                    className="kitchen-detail-manage-order"
+                    onClick={() => {
+                      const { id, shortCode } = orderDetails.order
+                      setSelectedOrderId(null)
+                      void NiceModal.show(SendOrderInvoiceDialog, { orderId: id, shortCode })
+                    }}
+                  >
+                    {tr('Envoyer la facture', 'Send invoice')} <span aria-hidden="true">↗</span>
+                  </button>
+                )}
+
                 {rollbackTargetFor(orderDetails.order.status) && (orderDetails.order.status !== 'PICKED_UP' || orderDetails.order.deliveryType !== 'DELIVERY') && (
                   <button
                     type="button"

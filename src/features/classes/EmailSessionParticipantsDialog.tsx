@@ -29,7 +29,7 @@ export const EmailSessionParticipantsDialog = NiceModal.create<{ sessionId: stri
   return <Dialog open={modal.open} onOpenChange={modal.onOpenChange}>
     <DialogContent>
       <DialogHeader showCloseButton><DialogTitle>Email confirmed participants</DialogTitle>
-        <DialogDescription>{sessionName} · {bookings.isLoading ? 'Loading recipients…' : `${count} confirmed booking${count === 1 ? '' : 's'}`}. Each recipient receives a separate email.</DialogDescription>
+        <DialogDescription>{sessionName} · {bookings.isLoading ? 'Loading recipients…' : `${count} confirmed booking${count === 1 ? '' : 's'}`}. Each recipient receives a separate email with the session name, date, time and location above your message.</DialogDescription>
       </DialogHeader>
       <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
         <label className="grid gap-1.5 text-sm font-medium">Subject<input required maxLength={200} className="h-9 rounded-md border border-input bg-background px-3 font-normal" value={subject} onChange={(event) => setSubject(event.target.value)} /></label>

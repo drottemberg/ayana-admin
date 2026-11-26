@@ -7,12 +7,15 @@ import ArrowLeft01Icon from '@hugeicons/core-free-icons/ArrowLeft01Icon'
 import ArrowRight01Icon from '@hugeicons/core-free-icons/ArrowRight01Icon'
 import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
 import Delete02Icon from '@hugeicons/core-free-icons/Delete02Icon'
+import Mail02Icon from '@hugeicons/core-free-icons/Mail02Icon'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
+import Refresh01Icon from '@hugeicons/core-free-icons/Refresh01Icon'
 import UserRemove01Icon from '@hugeicons/core-free-icons/UserRemove01Icon'
 
 import { RelatedEntityModule, DetailPageLayout, DetailSidePanel, type DetailPanelSection } from '@/components/app/detail-page-layout'
 import { Badge } from '@/components/ui/badge'
-import { PageHeader, PageHeaderIconAction } from '@/components/ui/page-header'
+import { PageHeader } from '@/components/ui/page-header'
+import type { DropdownActionItem } from '@/components/ui/dropdown-menu'
 import { EntityIcon } from '@/components/app/entity-icons'
 import { NO_VALUE_STR } from '@/constants'
 import { getClassBookingColumns } from '@/features/classes/class-session-columns'
@@ -416,6 +419,55 @@ export default function ClassSessionPage() {
     ],
   }]
 
+  const destructiveCommands: DropdownActionItem[] = classSession ? [
+    ...((classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
+      ? [{ label: 'Cancel session', icon: CalendarRemove01Icon, variant: 'destructive' as const, onClick: () => void cancelSession() }]
+      : []),
+    ...(classSession.status !== 'DELETED' && classSession.status !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete
+      ? [{ label: 'Delete session', icon: Delete02Icon, variant: 'destructive' as const, onClick: async () => {
+        try {
+          const result = await deleteClassSessionWithConfirmation(classSession, resolvedLocationId, queryClient)
+          if (result) navigate('/class-sessions')
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
+        }
+      } }]
+      : []),
+  ] : []
+
+  const sessionCommands: DropdownActionItem[] = classSession ? [
+    { type: 'label', label: 'Session commands' },
+    ...(appSession?.permissions.classSessions?.edit && classSession.status !== 'DELETED' && classSession.status !== 'CANCELLED'
+      ? [{ label: 'Email participants', icon: Mail02Icon, onClick: () => void NiceModal.show(EmailSessionParticipantsDialog, { sessionId: classSession.id, locationId: resolvedLocationId, sessionName: classSession.className ?? 'Class session' }) }]
+      : []),
+    ...((classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') && appSession?.permissions.classSessions?.edit
+      ? [{ label: 'Edit session', icon: PencilEdit02Icon, onClick: () => setIsEditOpen(true) }]
+      : []),
+    ...(canWithdrawCoach && classSession.status === 'SCHEDULED' && classSession.coachId && new Date(classSession.startTime).getTime() > Date.now()
+      ? [{ label: 'Withdraw coach', icon: UserRemove01Icon, onClick: async () => {
+        const confirmed = await Modals.confirm({ operation: 'withdraw the coach and request a cover for this session' })
+        if (!confirmed) return
+        try {
+          await withdrawSessionCoachRequest(classSession.id, resolvedLocationId)
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
+            queryClient.invalidateQueries({ queryKey: ['coaches'] }),
+          ])
+          toast.success('The coach was withdrawn and qualified coaches were notified to cover this session.')
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Could not withdraw the coach.')
+        }
+      } }]
+      : []),
+    ...(classSession.status === 'CANCELLED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.edit
+      ? [{ label: 'Reactivate session', icon: Refresh01Icon, onClick: () => void reactivateSession() }]
+      : []),
+    ...(classSession.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
+      ? [{ label: 'Resume session', icon: Refresh01Icon, onClick: () => void resumeSession() }]
+      : []),
+    ...(destructiveCommands.length ? [{ type: 'separator' as const }, ...destructiveCommands] : []),
+  ] : []
+
   if (isError || (!isLoading && !classSession)) {
     return <><PageHeader title="Session not found" subtitle={sessionId} backTo="/class-sessions" /><section className="p-4 md:p-6"><div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Failed to load this class session.</div></section></>
   }
@@ -423,76 +475,18 @@ export default function ClassSessionPage() {
   return <DetailPageLayout
     header={{
       title: classSession?.className ?? 'Class session',
-      titleClassName: 'line-clamp-2 whitespace-normal',
+      titleClassName: 'whitespace-normal break-words',
       subtitle: formatDate(classSession?.startTime, classSession?.timezone),
       backTo: '/class-sessions',
-      commands: classSession ? <div className="flex flex-col items-end gap-1.5 md:flex-row-reverse md:items-center md:gap-2">
-        <div className="flex shrink-0 items-center gap-1.5">
-        {appSession?.permissions.classSessions?.edit && classSession.status !== 'DELETED' && classSession.status !== 'CANCELLED'
-          ? <Button type="button" variant="outline" onClick={() => void NiceModal.show(EmailSessionParticipantsDialog, { sessionId: classSession.id, locationId: resolvedLocationId, sessionName: classSession.className ?? 'Class session' })}>Email participants</Button>
-          : null}
-          <Button type="button" variant="outline" size="icon" aria-label="Previous session" title="Previous session" disabled={!previousSessionQuery.data} onClick={() => previousSessionQuery.data && navigateToAdjacentSession(previousSessionQuery.data)}>
-            <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
-          </Button>
-          <Button type="button" variant="outline" size="icon" aria-label="Next session" title="Next session" disabled={!nextSessionQuery.data} onClick={() => nextSessionQuery.data && navigateToAdjacentSession(nextSessionQuery.data)}>
-            <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-          </Button>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-        {(((classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') && appSession?.permissions.classSessions?.edit)
-          || ((classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete)
-          || (String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete)) ? <>
-          {(classSession.status === 'SCHEDULED' || classSession.status === 'COMPLETED') && appSession?.permissions.classSessions?.edit
-            ? <PageHeaderIconAction icon={PencilEdit02Icon} label="Edit session" onClick={() => setIsEditOpen(true)} />
-            : null}
-          {canWithdrawCoach && classSession.status === 'SCHEDULED' && classSession.coachId && new Date(classSession.startTime).getTime() > Date.now()
-            ? <PageHeaderIconAction
-                icon={UserRemove01Icon}
-                label="Withdraw coach"
-                onClick={async () => {
-                  const confirmed = await Modals.confirm({ operation: 'withdraw the coach and request a cover for this session' })
-                  if (!confirmed) return
-                  try {
-                    await withdrawSessionCoachRequest(classSession.id, resolvedLocationId)
-                    await Promise.all([
-                      queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-                      queryClient.invalidateQueries({ queryKey: ['coaches'] }),
-                    ])
-                    toast.success('The coach was withdrawn and qualified coaches were notified to cover this session.')
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : 'Could not withdraw the coach.')
-                  }
-                }}
-              />
-            : null}
-          {(classSession.status === 'SCHEDULED' || classSession.status === 'PAUSED') && appSession?.permissions.classSessions?.delete
-            ? <PageHeaderIconAction icon={CalendarRemove01Icon} label="Cancel session" variant="destructive" onClick={cancelSession} />
-            : null}
-          {String(classSession.status) !== 'DELETED' && String(classSession.status) !== 'COMPLETED' && new Date(classSession.startTime).getTime() > Date.now() && appSession?.permissions.classSessions?.delete
-            ? <PageHeaderIconAction
-                icon={Delete02Icon}
-                label="Delete session"
-                variant="destructive"
-                onClick={async () => {
-                  try {
-                    const result = await deleteClassSessionWithConfirmation(classSession, resolvedLocationId, queryClient)
-                    if (result) navigate('/class-sessions')
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : 'Could not delete the class session.')
-                  }
-                }}
-              />
-            : null}
-        </> : null}
-        </div>
-      </div> : undefined,
-      primaryAction: classSession?.status === 'CANCELLED'
-        && new Date(classSession.startTime).getTime() > Date.now()
-        && appSession?.permissions.classSessions?.edit
-        ? { children: 'Reactivate session', onClick: reactivateSession }
-        : classSession?.status === 'PAUSED' && appSession?.permissions.classSessions?.edit
-          ? { children: 'Resume session', onClick: resumeSession }
-          : undefined,
+      commands: <div className="flex shrink-0 items-center gap-1.5">
+        <Button type="button" variant="outline" size="icon" aria-label="Previous session" title="Previous session" disabled={!previousSessionQuery.data} onClick={() => previousSessionQuery.data && navigateToAdjacentSession(previousSessionQuery.data)}>
+          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+        </Button>
+        <Button type="button" variant="outline" size="icon" aria-label="Next session" title="Next session" disabled={!nextSessionQuery.data} onClick={() => nextSessionQuery.data && navigateToAdjacentSession(nextSessionQuery.data)}>
+          <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+        </Button>
+      </div>,
+      options: sessionCommands,
     }}
     modules={[
       { key: 'bookings', label: 'Bookings', count: classSession?.bookedCount },
