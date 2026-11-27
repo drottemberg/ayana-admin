@@ -111,7 +111,7 @@ const bookingStatusIcons: Record<BookingStatus, { label: string; icon: IconSvgEl
   CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'text-emerald-800' },
   PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'text-amber-800' },
   WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'text-amber-800' },
-  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'text-slate-800' },
+  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'text-gray-600' },
   NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'text-rose-800' },
   CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'text-rose-800' },
   LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'text-rose-800' },
