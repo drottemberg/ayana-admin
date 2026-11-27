@@ -83,9 +83,8 @@ export function ClassSessionEditDrawer({
     setCreateClassPassSchedule(false)
     setClassPassSpots(String(session.capacity))
     setClassTypeId(session.classTypeId)
-    const isPast = session.status === 'COMPLETED' || new Date(session.endTime).getTime() <= Date.now()
-    setCoachId(isPast ? session.coachId ?? NO_COACH_VALUE : session.scheduleId && !session.coachOverride ? SCHEDULE_COACH_VALUE : session.coachId ?? NO_COACH_VALUE)
-    setCoachName(isPast ? session.coachCustomName ?? session.coachName ?? '' : session.coachCustomName ?? (session.coachOverride && !session.coachId ? session.coachName ?? '' : ''))
+    setCoachId(session.coachId ?? NO_COACH_VALUE)
+    setCoachName(session.coachCustomName ?? (!session.coachId ? session.coachName ?? '' : ''))
     setRoomId(session.scheduleId && !session.roomOverride ? SCHEDULE_ROOM_VALUE : session.roomId ?? NO_ROOM_VALUE)
   }, [open, session, timeZone])
 
@@ -150,6 +149,9 @@ export function ClassSessionEditDrawer({
       return
     }
 
+    const originalCoachId = session.coachId ?? NO_COACH_VALUE
+    const originalCoachName = (session.coachCustomName ?? (!session.coachId ? session.coachName ?? '' : '')).trim()
+    const coachChanged = coachId === SCHEDULE_COACH_VALUE || coachId !== originalCoachId || coachName.trim() !== originalCoachName
     const payload: UpdateClassSessionPayload = pastSession ? {
       coachId: coachId === NO_COACH_VALUE ? null : coachId,
       coachName: coachName.trim() || null,
@@ -158,9 +160,11 @@ export function ClassSessionEditDrawer({
       startTime: startIso,
       endTime: endIso,
       capacity: capacityValue,
-      coachId: coachId === SCHEDULE_COACH_VALUE || coachId === NO_COACH_VALUE ? null : coachId,
-      coachName: coachName.trim() || null,
-      useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
+      ...(coachChanged ? {
+        coachId: coachId === SCHEDULE_COACH_VALUE || coachId === NO_COACH_VALUE ? null : coachId,
+        coachName: coachName.trim() || null,
+        useScheduleCoach: coachId === SCHEDULE_COACH_VALUE,
+      } : {}),
       roomId: roomId === SCHEDULE_ROOM_VALUE || roomId === NO_ROOM_VALUE ? null : roomId,
       useScheduleRoom: roomId === SCHEDULE_ROOM_VALUE,
       ...(startMoved && hasMappedClassPassSchedule ? {

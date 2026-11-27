@@ -147,7 +147,7 @@ export type UpdateClassSessionPayload = {
   startTime?: string
   endTime?: string
   capacity?: number
-  coachId: string | null
+  coachId?: string | null
   coachName?: string | null
   useScheduleCoach?: boolean
   roomId?: string | null
