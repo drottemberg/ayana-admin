@@ -108,20 +108,20 @@ function CoachVisitPill({ previousVisits }: { previousVisits?: number | null }) 
 }
 
 const bookingStatusIcons: Record<BookingStatus, { label: string; icon: IconSvgElement; tone: string }> = {
-  CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'text-emerald-800' },
-  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'text-amber-800' },
-  WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'text-amber-800' },
-  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'text-gray-600' },
-  NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'text-rose-800' },
-  CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'text-rose-800' },
-  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'text-rose-800' },
+  CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'bg-emerald-800 text-emerald-50' },
+  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'bg-amber-800 text-amber-50' },
+  WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'bg-amber-800 text-amber-50' },
+  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'bg-gray-600 text-gray-50' },
+  NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'bg-rose-800 text-rose-50' },
+  CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'bg-rose-800 text-rose-50' },
+  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'bg-rose-800 text-rose-50' },
 }
 
 function BookingStatusIcon({ status }: { status: string }) {
   const presentation = bookingStatusIcons[status as BookingStatus]
   if (!presentation) return <StatusPill status={status} />
-  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-5 shrink-0 items-center justify-center', presentation.tone)}>
-    <HugeiconsIcon icon={presentation.icon} strokeWidth={2} className="size-5" aria-hidden="true" />
+  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-md', presentation.tone)}>
+    <HugeiconsIcon icon={presentation.icon} strokeWidth={2} className="size-4" aria-hidden="true" />
   </span>
 }
 
