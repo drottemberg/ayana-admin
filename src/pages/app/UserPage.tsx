@@ -29,6 +29,7 @@ import { getUserMarketingPreferencesRequest, getUserRequest, type UserMarketingP
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
+import { MergeUserDrawer } from '@/features/users/components/MergeUserDrawer'
 import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
 import { Drawer, DrawerId } from '@/providers/drawer'
 import { LocationScope } from '@/types/membership'
@@ -325,6 +326,7 @@ export default function UserPage() {
   const [accessDrawerOpen, setAccessDrawerOpen] = useState(false)
   const [editingAccess, setEditingAccess] = useState<AccessToken | null>(null)
   const [qrAccess, setQrAccess] = useState<AccessToken | null>(null)
+  const [keptUser, setKeptUser] = useState<User | null>(null)
   const [contractToRemoveCredits, setContractToRemoveCredits] = useState<ClientContract | null>(null)
   const currentCustomerId = session?.currentOrganization?.id
   const currentCustomerName = session?.currentOrganization?.name
@@ -377,6 +379,9 @@ export default function UserPage() {
   const actorCustomerMembership = currentCustomerId
     ? session?.user.customerMemberships.find((membership) => membership.customerId === currentCustomerId)
     : undefined
+  const canMerge = !isAdminContext && Boolean(permissions?.edit) &&
+    ['MANAGER', 'ADMIN', 'OWNER'].includes(actorCustomerMembership?.role ?? '') &&
+    Boolean(user && !user.isDeleted && !user.isStaff)
   const actorLocationScope = actorCustomerMembership?.locationScope ?? actorCustomerMembership?.storeScope
   const allowedScheduleLocationIds = isAdminContext
     ? null
@@ -435,7 +440,10 @@ export default function UserPage() {
         title: user ? `${user.firstName} ${user.lastName}` : 'User',
         subtitle: user ? UserService.roleToString(user.role) : userId,
         backTo: '/users',
-        options: user ? UserService.getDetailHeaderActions(user, permissions).options : [],
+        options: user ? [
+          ...(UserService.getDetailHeaderActions(user, permissions).options ?? []),
+          ...(canMerge ? [{ label: 'Merge with…', onClick: () => setKeptUser(user) }] : []),
+        ] : [],
       }}
       modules={modules}
       aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canViewCreditWallets,
@@ -672,6 +680,7 @@ export default function UserPage() {
         onOpenChange={(open) => { setAccessDrawerOpen(open); if (!open) setEditingAccess(null) }}
         user={user} access={editingAccess} currentCustomerId={isAdminContext ? undefined : currentCustomerId} /> : null}
       <AccessTokenQrDialog access={qrAccess} onOpenChange={(open) => { if (!open) setQrAccess(null) }} />
+      <MergeUserDrawer keptUser={keptUser} onOpenChange={(open) => { if (!open) setKeptUser(null) }} />
     </DetailPageLayout>
   )
 }

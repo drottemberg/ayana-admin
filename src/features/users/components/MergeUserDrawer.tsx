@@ -41,7 +41,7 @@ export function MergeUserDrawer({ keptUser, onOpenChange }: { keptUser: User | n
   })
 
   return <AppDrawer open={Boolean(keptUser)} onOpenChange={onOpenChange} title="Merge accounts"
-    description="The account from this row is kept. Select the other account to absorb into it."
+    description="This account is kept. Select the other account to absorb into it."
     contentClassName="sm:max-w-xl">
     {({ containerRef }) => <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
