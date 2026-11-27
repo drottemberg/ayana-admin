@@ -172,13 +172,17 @@ export function BookingListCard({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           {showUser ? <div className="flex min-w-0 items-center gap-1.5">
-            <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="min-w-0 truncate text-base font-semibold leading-5 text-foreground hover:underline">{memberName}</Link>
+            <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="min-w-0 line-clamp-2 text-base font-semibold leading-5 text-foreground [overflow-wrap:anywhere] hover:underline" title={memberName}>{memberName}</Link>
+            <BookingStatusIcon status={booking.status} />
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
             <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div> : null}
-          <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.location.id)}`} className={cn('block truncate text-sm leading-5 text-[#625b56] hover:underline', showUser && 'mt-0.5 font-medium')}>
-            {booking.className || booking.sessionId}
-          </Link>
+          <div className="flex min-w-0 items-start gap-1.5">
+            <Link to={`/class-sessions/${encodeURIComponent(booking.sessionId)}?locationId=${encodeURIComponent(booking.location.id)}`} className={cn('block min-w-0 truncate text-sm leading-5 text-[#625b56] hover:underline', showUser && 'mt-0.5 font-medium')}>
+              {booking.className || booking.sessionId}
+            </Link>
+            {!showUser ? <BookingStatusIcon status={booking.status} /> : null}
+          </div>
           {!sessionDate && classTime ? <div className="mt-0.5 text-xs leading-4 text-muted-foreground">{classTime}</div> : null}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
@@ -189,7 +193,6 @@ export function BookingListCard({
           {secondaryDetails ? <div className="mt-1 truncate text-xs text-muted-foreground">{secondaryDetails}</div> : null}
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <StatusPill status={booking.status} />
           {actions ? <div className="-mr-2 -mt-2">{actions}</div> : null}
         </div>
       </div>
@@ -259,11 +262,11 @@ export function ClassBookingListCard({
         <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold', memberAvatarColor(booking.userId))} aria-hidden="true">{memberAvatarInitials(name)}</div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="truncate text-sm font-semibold text-foreground underline-offset-2 hover:underline">{name}</Link>
+            <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 line-clamp-2 text-sm font-semibold text-foreground [overflow-wrap:anywhere] underline-offset-2 hover:underline" title={name}>{name}</Link>
+            <BookingStatusIcon status={booking.status} />
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
             <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div>
-          <StatusPill status={booking.status} />
           <SourcePill source={booking.source} />
           {showContractDetails && booking.source === 'DIRECT' && booking.hasCurrentContractBalance ? <CurrentContractPill booking={booking} /> : null}
         </div>
