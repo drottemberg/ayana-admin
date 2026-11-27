@@ -47,6 +47,7 @@ import { EntityIcon } from '@/components/app/entity-icons'
 import { Modals } from '@/providers/modal'
 import { formatDateTime } from '@/utils/date-utils'
 import { BusinessOverviewDashboard } from '@/features/reports/BusinessOverviewDashboard'
+import { HomeAccessQr } from '@/features/devices/HomeAccessQr'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 
@@ -292,20 +293,21 @@ export default function HomePage() {
 
   const sessionListUrl = customerId ? scopedListUrl('/class-sessions', customerId, locationId, userId, true) : '/class-sessions'
   const bookingListUrl = customerId ? scopedListUrl('/bookings', customerId, locationId, userId) : '/bookings'
+  const accessQr = getAppMode() === 'customer' ? <HomeAccessQr customerId={customerId} userId={userId} /> : null
 
-  if (hasBusinessDashboard) return <BusinessOverviewDashboard />
+  if (hasBusinessDashboard) return <BusinessOverviewDashboard headerAction={accessQr} />
 
   return (
     <DetailPageLayout
       header={{
         title: 'Home',
         subtitle: 'Your studio activity.',
-        commands: showCoachModules
+        commands: <div className="flex items-center gap-2">{accessQr}{showCoachModules
           ? <Button type="button" size="lg" onClick={() => {
               setIsMyCoachProfileOpen(true)
               if (!myCoachProfile.data) void myCoachProfile.refetch()
             }}><HugeiconsIcon icon={PencilEdit02Icon} strokeWidth={2} />Edit my coach profile</Button>
-          : undefined,
+          : null}</div>,
       }}
       modules={modules}
       aside={null}

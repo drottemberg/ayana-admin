@@ -50,8 +50,10 @@ type DateTimePickerProps = {
   name?: string
   value?: string
   defaultValue?: string
+  defaultTime?: string
   required?: boolean
   disabled?: boolean
+  clearable?: boolean
   'aria-invalid'?: boolean | 'true' | 'false'
   onValueChange?: (value: string) => void
   onChange?: (event: DateTimePickerChangeEvent) => void
@@ -106,8 +108,10 @@ const DateTimePicker = React.forwardRef<HTMLInputElement, DateTimePickerProps>(
       id,
       value,
       defaultValue = '',
+      defaultTime = '00:00',
       required,
       disabled,
+      clearable = false,
       onValueChange,
       onChange,
       onBlur,
@@ -126,7 +130,7 @@ const DateTimePicker = React.forwardRef<HTMLInputElement, DateTimePickerProps>(
     const currentValue = isControlled ? value : internalValue
     const date = parseDateTimeValue(currentValue)
     const dateValue = toDateValue(date)
-    const timeValue = toTimeValue(date) || '00:00'
+    const timeValue = toTimeValue(date) || defaultTime
     const [open, setOpen] = React.useState(false)
     const [autoContainer, setAutoContainer] = React.useState<HTMLElement | null>(null)
 
@@ -231,6 +235,11 @@ const DateTimePicker = React.forwardRef<HTMLInputElement, DateTimePickerProps>(
                   onBlur={handleBlur}
                 />
               </div>
+              {clearable && date ? (
+                <Button type="button" variant="ghost" size="sm" onClick={() => { handleDateChange(undefined); setOpen(false) }}>
+                  Clear date and time
+                </Button>
+              ) : null}
             </div>
           </PopoverContent>
         </Popover>

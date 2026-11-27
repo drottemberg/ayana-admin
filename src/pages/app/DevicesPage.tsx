@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 import { DataTableAsync } from '@/components/data-table'
 import { createPageHeaderAction, PageHeader } from '@/components/ui/page-header'
 import { accessDeviceColumns } from '@/features/devices/access-device-columns'
-import { getAccessDeviceOrganization, getAccessDevicesRequest, type AccessDevice } from '@/features/devices/access-device-api'
+import { getAccessDeviceOrganization, getAccessDevicesRequest, getDeviceKindsRequest, type AccessDevice } from '@/features/devices/access-device-api'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
 import { AccessDeviceDrawer } from '@/features/devices/AccessDeviceDrawer'
 import { useConnect } from '@/features/app/use-connect'
@@ -11,9 +12,8 @@ import { readSelectedLocationScope } from '@/features/organizations/storage'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 import type { Customer } from '@/types/customer'
 
-const DEVICE_TYPES = ['GENERIC', 'AC600', 'STRIPE_TERMINAL']
-
 export default function DevicesPage() {
+  const { data: deviceKinds = [] } = useQuery({ queryKey: ['devices', 'kinds'], queryFn: getDeviceKindsRequest })
   const { session } = useConnect()
   const portal = getPortalSafe()
   const customerId = session?.currentOrganization?.id
@@ -63,7 +63,7 @@ export default function DevicesPage() {
               label: 'Type',
               column: 'type',
               selectionMode: 'multiple',
-              options: DEVICE_TYPES,
+              options: deviceKinds.map((kind) => kind.type),
             },
             {
               id: 'isActive',

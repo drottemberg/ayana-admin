@@ -16,6 +16,7 @@ import { Drawer, DrawerId } from '@/providers/drawer'
 import type { User } from '@/types/user'
 import { getPortalSafe, Portal } from '@/utils/portal-utils'
 import { CoachProfileDrawer } from '@/features/coaches/CoachProfileDrawer'
+import { MergeUserDrawer } from '@/features/users/components/MergeUserDrawer'
 import { getCoachProfileRequest } from '@/features/coaches/api'
 import type { CoachProfile } from '@/features/coaches/types'
 import { ApiError } from '@/lib/api-client'
@@ -61,6 +62,10 @@ export function UsersTable({
   const portal = getPortalSafe()
   const isCustomerContext = getAppMode() === 'customer'
   const currentOrganizationId = session?.currentOrganization?.id ?? undefined
+  const currentMembership = session?.user.customerMemberships.find((item) => item.customerId === currentOrganizationId)
+  const canMerge = isCustomerContext && Boolean(permissions?.edit) &&
+    ['MANAGER', 'ADMIN', 'OWNER'].includes(currentMembership?.role ?? '')
+  const [keptUser, setKeptUser] = useState<User | null>(null)
   const [coachEditor, setCoachEditor] = useState<{
     customerId: string
     customerName: string
@@ -151,6 +156,8 @@ export function UsersTable({
       getCommands={(selectedUsers) => UserService.getTableActions(selectedUsers, permissions)}
       getRowCommands={(user) => [
         ...UserService.getActions(user, permissions),
+        ...(canMerge && !user.isDeleted && !user.isStaff
+          ? [{ label: 'Merge with…', onClick: () => setKeptUser(user) }] : []),
         ...(session?.permissions.coaches?.edit
           ? (user.customerMemberships ?? [])
             .filter((membership) => membership.role === 'INSTRUCTOR' && (!isCustomerContext || membership.customerId === currentOrganizationId))
@@ -173,5 +180,6 @@ export function UsersTable({
       open
       onOpenChange={(open) => { if (!open) setCoachEditor(null) }}
     /> : null}
+    <MergeUserDrawer keptUser={keptUser} onOpenChange={(open) => { if (!open) setKeptUser(null) }} />
   </>
 }

@@ -15,6 +15,7 @@ const routeFeatures: FeatureRoute[] = [
   { pathPrefix: '/contracts', feature: Feature.CONTRACTS },
   { pathPrefix: '/customers', feature: Feature.CUSTOMERS },
   { pathPrefix: '/devices', feature: Feature.DEVICES },
+  { pathPrefix: '/access/scans', feature: Feature.DEVICES },
   { pathPrefix: '/issues', feature: Feature.ISSUES },
   { pathPrefix: '/agent-support-issues', feature: Feature.ISSUES },
   { pathPrefix: '/media', feature: Feature.MEDIA },

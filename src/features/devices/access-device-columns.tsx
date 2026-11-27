@@ -25,7 +25,7 @@ export const accessDeviceColumns: ColumnDef<AccessDevice>[] = [
   {
     accessorKey: 'name',
     header: 'Name',
-    cell: ({ row }) => row.original.label?.trim() || row.original.deviceId,
+    cell: ({ row }) => <Link className="font-medium underline-offset-2 hover:underline" to={`/devices/registered/${row.original.id}`}>{row.original.label?.trim() || row.original.deviceId}</Link>,
   },
   {
     accessorKey: 'deviceId',
@@ -46,7 +46,7 @@ export const accessDeviceColumns: ColumnDef<AccessDevice>[] = [
     header: 'Customer / location',
     cell: ({ row }) => {
       const organization = row.original.organization
-      if (!organization) return row.original.organizationId
+      if (!organization) return '—'
       const path = organization.type === 'LOCATION' ? `/locations/${organization.id}` : `/customers/${organization.id}`
       return <Link className="underline-offset-2 hover:underline" to={path}>{organization.name || organization.id}</Link>
     },

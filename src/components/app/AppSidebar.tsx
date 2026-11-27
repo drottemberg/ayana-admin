@@ -149,6 +149,12 @@ const data = {
       feature: Feature.DEVICES,
     },
     {
+      title: 'Access scan logs',
+      url: '/access/scans',
+      icon: <Icon icon={EntityIcon.commandLogs} />,
+      feature: Feature.DEVICES,
+    },
+    {
       title: 'Customers',
       url: '/customers',
       icon: <Icon icon={EntityIcon.customers} />,
@@ -243,11 +249,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const settingsItems = React.useMemo(
     () => data.settings.filter((item) =>
       canUseFeature(item, hasFeature)
+      && (item.title !== 'Access scan logs' || Boolean(session?.permissions.devices?.view))
       && (item.title !== 'Integrations' || getAppMode() === 'customer')
       && (item.title !== 'System settings' || getAppMode() === 'admin')
       && (item.title !== 'Settings' || (getAppMode() === 'customer' && Boolean(session?.permissions.organization?.editSelf))),
     ),
-    [hasFeature, session?.permissions.organization?.editSelf],
+    [hasFeature, session?.permissions.organization?.editSelf, session?.permissions.devices?.view],
   )
   return (
     <Sidebar collapsible="icon" {...props}>

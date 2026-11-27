@@ -7,6 +7,7 @@ export type AccessDevice = {
   deviceId: string
   name: string
   type: 'GENERIC' | 'AC600' | 'STRIPE_TERMINAL' | string
+  group?: 'ACCESS' | 'PAYMENT_TERMINAL'
   purpose: 'ACCESS' | 'CHECK_IN' | 'PAYMENT' | string
   organizationId: string
   organization: { id: string; name: string | null; type: string } | null
@@ -15,10 +16,24 @@ export type AccessDevice = {
   createdAt: string
 }
 
+export type DeviceKind = {
+  type: string
+  group: 'ACCESS' | 'PAYMENT_TERMINAL'
+  purposes: string[]
+}
+
+export function getDeviceKindsRequest() {
+  return apiClient.get<DeviceKind[]>('/devices/types')
+}
+
+export function getRegisteredDeviceRequest(id: string) {
+  return apiClient.get<AccessDevice>(`/devices/${id}`)
+}
+
 export type CreateAccessDeviceInput = {
   deviceId: string
   secret: string
-  type: 'GENERIC' | 'AC600' | 'STRIPE_TERMINAL'
+  type: string
   organizationId: string
   purpose: 'ACCESS' | 'CHECK_IN' | 'PAYMENT'
   label?: string
@@ -32,13 +47,13 @@ export type CreatedAccessDevice = AccessDevice & { secret: string }
 export function getAccessDeviceOrganization(device: AccessDevice): { id: string; name: string; type: 'CUSTOMER' | 'LOCATION' } {
   return {
     id: device.organization?.id ?? device.organizationId,
-    name: device.organization?.name ?? device.organizationId,
+    name: device.organization?.name ?? 'Unnamed customer / location',
     type: device.organization?.type === 'LOCATION' ? 'LOCATION' : 'CUSTOMER',
   }
 }
 
 export const accessDevicesListConfig = {
-  url: '/access/devices/list',
+  url: '/devices/list',
   toPayload: (state: DataTableState<AccessDevice>, filters?: Record<string, unknown>) => ({
     ...toApiListDto(state, filters),
     orderBy: 'createdAt',
@@ -59,9 +74,9 @@ export async function getAccessDevicesRequest(
 }
 
 export function createAccessDeviceRequest(payload: CreateAccessDeviceInput) {
-  return apiClient.post<CreatedAccessDevice>('/access/devices', payload)
+  return apiClient.post<CreatedAccessDevice>('/devices', payload)
 }
 
 export function updateAccessDeviceRequest(id: string, payload: UpdateAccessDeviceInput) {
-  return apiClient.patch<AccessDevice>(`/access/devices/${id}`, payload)
+  return apiClient.patch<AccessDevice>(`/devices/${id}`, payload)
 }

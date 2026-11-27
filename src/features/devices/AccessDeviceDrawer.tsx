@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { AppDrawer } from '@/components/app/AppDrawer'
@@ -9,14 +10,14 @@ import { SelectInputAsync } from '@/components/ui/select-input'
 import { getCustomersListRequest } from '@/features/customers/api'
 import { getAllLocationsForCustomerRequest } from '@/features/locations/api'
 import { devicesQueryKeys } from '@/features/devices/query-keys'
-import { createAccessDeviceRequest, updateAccessDeviceRequest, type AccessDevice, type CreatedAccessDevice } from '@/features/devices/access-device-api'
+import { createAccessDeviceRequest, getDeviceKindsRequest, updateAccessDeviceRequest, type AccessDevice, type CreatedAccessDevice } from '@/features/devices/access-device-api'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { ALL_LOCATIONS_SCOPE, readSelectedLocationScope } from '@/features/organizations/storage'
 import type { Customer } from '@/types/customer'
 import type { Location } from '@/types/location'
 
-type DeviceType = 'GENERIC' | 'AC600' | 'STRIPE_TERMINAL'
+type DeviceType = string
 type DevicePurpose = 'ACCESS' | 'CHECK_IN' | 'PAYMENT'
 type DeviceOrganization = { id: string; name: string; type: 'CUSTOMER' | 'LOCATION' }
 
@@ -38,6 +39,7 @@ export function AccessDeviceDrawer({
   device?: AccessDevice
 }) {
   const queryClient = useQueryClient()
+  const { data: deviceKinds = [] } = useQuery({ queryKey: ['devices', 'kinds'], queryFn: getDeviceKindsRequest, enabled: open })
   const { session } = useConnect()
   const isAdmin = getAppMode() === 'admin'
   const sessionCustomer = !isAdmin && session?.currentOrganization?.id
@@ -63,7 +65,8 @@ export function AccessDeviceDrawer({
       ? undefined
       : customer?.id
   const assignedOrganizationId = fixedOrganization?.id ?? (useLocation ? location?.id : customerId)
-  const isStripeTerminal = type === 'STRIPE_TERMINAL'
+  const selectedKind = deviceKinds.find((kind) => kind.type === type)
+  const isStripeTerminal = selectedKind?.group === 'PAYMENT_TERMINAL' || type === 'STRIPE_TERMINAL'
   const organizationDescription = useMemo(() => {
     if (fixedOrganization) return `${fixedOrganization.name} (${fixedOrganization.type.toLowerCase()})`
     if (useLocation) return location?.name ?? 'Select a location'
@@ -245,14 +248,14 @@ export function AccessDeviceDrawer({
                 onChange={(event) => {
                   const nextType = event.target.value as DeviceType
                   setType(nextType)
-                  if (nextType === 'STRIPE_TERMINAL') {
+                  const kind = deviceKinds.find((item) => item.type === nextType)
+                  if (kind && !kind.purposes.includes(purpose)) setPurpose(kind.purposes[0] as DevicePurpose)
+                  if (kind?.group === 'PAYMENT_TERMINAL') {
                     if (!fixedOrganization) setUseLocation(true)
                   }
                 }}
               >
-                <option value="GENERIC">Generic</option>
-                <option value="AC600">AC600</option>
-                <option value="STRIPE_TERMINAL">Stripe Terminal</option>
+                {deviceKinds.map((kind) => <option key={kind.type} value={kind.type}>{kind.type === 'STRIPE_TERMINAL' ? 'Stripe Terminal' : kind.type === 'GENERIC' ? 'Generic' : kind.type}</option>)}
               </select>
             </label>
 
@@ -273,9 +276,7 @@ export function AccessDeviceDrawer({
                 value={purpose}
                 onChange={(event) => setPurpose(event.target.value as DevicePurpose)}
               >
-                <option value="ACCESS">Access</option>
-                <option value="CHECK_IN">Check-in</option>
-                <option value="PAYMENT">Payment</option>
+                {(selectedKind?.purposes ?? [purpose]).map((value) => <option key={value} value={value}>{({ ACCESS: 'Access', CHECK_IN: 'Check-in', PAYMENT: 'Payment' } as Record<string, string>)[value] ?? value}</option>)}
               </select>
             </label>
 

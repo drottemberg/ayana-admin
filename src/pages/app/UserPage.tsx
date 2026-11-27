@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import PencilEdit02Icon from '@hugeicons/core-free-icons/PencilEdit02Icon'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useParams } from 'react-router-dom'
@@ -14,20 +14,18 @@ import {
 } from '@/components/app/detail-page-layout'
 import { type DataTableAsyncResult, type DataTableState } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
-import { SelectInput } from '@/components/ui/select-input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
 import { useConnect } from '@/features/app/use-connect'
 import { getAppMode } from '@/features/app/app-mode'
-import { getCustomersListRequest, getCustomersRequest } from '@/features/customers/api'
+import { getCustomersRequest } from '@/features/customers/api'
 import { customerColumns } from '@/features/customers/customer-columns'
 import { customersQueryKeys } from '@/features/customers/query-keys'
 import { OrganizationService } from '@/features/organizations/organization-service'
 import { getAllLocationsForCustomerRequest, getLocationRequest } from '@/features/locations/api'
 import { locationColumns } from '@/features/locations/location-columns'
 import { locationsQueryKeys } from '@/features/locations/query-keys'
-import { getUserMarketingPreferencesRequest, getUserRequest, updateUserMarketingPreferenceRequest } from '@/features/users/api'
+import { getUserMarketingPreferencesRequest, getUserRequest, type UserMarketingPreference } from '@/features/users/api'
 import { UserStatusBadge } from '@/features/users/UserStatusBadge'
 import { usersQueryKeys } from '@/features/users/query-keys'
 import { UserService } from '@/features/users/user-service'
@@ -67,6 +65,9 @@ import { GiftCreditsDrawer, GrantCreditsDrawer, RemoveCreditsDrawer } from '@/fe
 import { getAiSupportIssuesRequest, updateAiSupportIssueRequest } from '@/features/ai-support-issues/api'
 import { aiSupportIssueQueryKeys } from '@/features/ai-support-issues/query-keys'
 import type { AiSupportIssue } from '@/features/ai-support-issues/types'
+import { activateAccessTokenRequest, deactivateAccessTokenRequest, getAccessScansRequest, getAccessTokensRequest, type AccessScan, type AccessToken } from '@/features/devices/access-api'
+import { AccessTokenDrawer } from '@/features/devices/AccessTokenDrawer'
+import { AccessTokenQrDialog } from '@/features/devices/AccessTokenQrDialog'
 
 const MODULE_ANCHOR_PREFIX = 'module'
 
@@ -78,6 +79,24 @@ const aiSupportIssueColumns: ColumnDef<AiSupportIssue>[] = [
     header: 'Summary',
     cell: ({ row }) => <Link className="block max-w-72 whitespace-normal break-words underline-offset-2 hover:underline" to={`/agent-support-issues?issueId=${encodeURIComponent(row.original.id)}`}>{row.original.summary}</Link>,
   },
+]
+
+const accessTokenColumns: ColumnDef<AccessToken>[] = [
+  { accessorKey: 'createdAt', header: 'Created', cell: ({ row }) => formatDateTime(row.original.createdAt) },
+  { accessorKey: 'organizationName', header: 'Customer / locations', cell: ({ row }) => <span>{row.original.organizationName || '—'} · {row.original.locationScope === 'ALL' ? 'All locations' : row.original.locationScope === 'SPECIFIC' ? row.original.locationNames?.join(', ') || `${row.original.locationIds?.length ?? 0} selected` : 'Location'}</span> },
+  { accessorKey: 'purpose', header: 'Purpose' },
+  { accessorKey: 'label', header: 'Label', cell: ({ row }) => row.original.label || '—' },
+  { accessorKey: 'usedCount', header: 'Uses', cell: ({ row }) => `${row.original.usedCount} / ${row.original.maxUses ?? '∞'}` },
+  { accessorKey: 'expiresAt', header: 'Expires', cell: ({ row }) => row.original.expiresAt ? formatDateTime(row.original.expiresAt) : 'Never' },
+  { accessorKey: 'isActive', header: 'Status', cell: ({ row }) => <Badge variant={row.original.isActive ? 'default' : 'secondary'}>{row.original.isActive ? 'Active' : 'Disabled'}</Badge> },
+]
+
+const userAccessScanColumns: ColumnDef<AccessScan>[] = [
+  { accessorKey: 'createdAt', header: 'Scanned', cell: ({ row }) => formatDateTime(row.original.createdAt) },
+  { accessorKey: 'allowed', header: 'Result', cell: ({ row }) => <Badge variant={row.original.allowed ? 'default' : 'destructive'}>{row.original.allowed ? 'Allowed' : 'Denied'}</Badge> },
+  { accessorKey: 'deviceId', header: 'Device', cell: ({ row }) => row.original.deviceName || row.original.deviceId },
+  { accessorKey: 'organizationName', header: 'Location', cell: ({ row }) => row.original.organizationName || '—' },
+  { accessorKey: 'reason', header: 'Reason' },
 ]
 
 function makeViewAllTo(path: string, userId: string) {
@@ -221,6 +240,9 @@ function getUserDetailSections(
   creditWallets?: { customerId: string; customerName: string; balance: number; unlimited: boolean }[],
   creditWalletsLoading = false,
   canViewCreditWallets = false,
+  marketingPreferences?: UserMarketingPreference[],
+  marketingPreferencesLoading = false,
+  marketingPreferencesError = false,
 ): DetailPanelSection[] {
   return [
     {
@@ -266,6 +288,14 @@ function getUserDetailSections(
       title: 'Preferences',
       fields: [
         { label: 'Newsletter opt-in', value: user ? (user.newsletterEnabled ? 'Yes' : 'No') : NO_VALUE_STR },
+        ...(marketingPreferencesLoading ? [{ label: 'Explicit campaign opt-out', value: 'Loading…' }] :
+          marketingPreferencesError ? [{ label: 'Explicit campaign opt-out', value: 'Could not load' }] :
+          marketingPreferences?.length ? marketingPreferences.map((preference) => ({
+            label: `Explicit campaign opt-out · ${preference.customerName}`,
+            value: preference.customerOptedOut
+              ? `Yes${preference.optedOutAt ? ` · since ${formatDateTime(preference.optedOutAt, NO_VALUE_STR)}` : ' · date unavailable'}`
+              : 'No',
+          })) : [{ label: 'Explicit campaign opt-out', value: NO_VALUE_STR }]),
         { label: 'Push notifications', value: user ? (user.pushNotificationsEnabled ? 'Enabled' : 'Disabled') : NO_VALUE_STR },
         { label: 'Email notifications', value: user ? (user.emailNotificationsEnabled ? 'Enabled' : 'Disabled') : NO_VALUE_STR },
         ...(user?.preferences ? Object.entries(user.preferences).map(([key, value]) => ({ label: preferenceLabel(key), value: preferenceValue(value) })) : []),
@@ -286,15 +316,20 @@ export default function UserPage() {
   const canCreateBookings = Boolean(session?.permissions.bookings?.create)
   const canEditBookings = Boolean(session?.permissions.bookings?.edit)
   const canViewOrders = Boolean(session?.permissions.orders?.view)
+  const canViewAccess = Boolean(session?.permissions.devices?.view)
+  const canCreateAccess = Boolean(session?.permissions.devices?.create)
+  const canEditAccess = Boolean(session?.permissions.devices?.edit)
   const [contractsToGrant, setContractsToGrant] = useState<ClientContract[]>([])
   const [grantCreditsOpen, setGrantCreditsOpen] = useState(false)
   const [walletAdjustmentOpen, setWalletAdjustmentOpen] = useState(false)
+  const [accessDrawerOpen, setAccessDrawerOpen] = useState(false)
+  const [editingAccess, setEditingAccess] = useState<AccessToken | null>(null)
+  const [qrAccess, setQrAccess] = useState<AccessToken | null>(null)
   const [contractToRemoveCredits, setContractToRemoveCredits] = useState<ClientContract | null>(null)
   const currentCustomerId = session?.currentOrganization?.id
   const currentCustomerName = session?.currentOrganization?.name
   const isAdminContext = getAppMode() === 'admin'
   const canViewAiSupportIssues = Boolean(session?.permissions.aiSupportIssues?.view)
-  const canManageMarketingPreferences = Boolean(permissions?.edit && (isAdminContext || currentCustomerId))
   const invalidateBookingViews = async () => Promise.all([
     queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
     queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
@@ -308,6 +343,20 @@ export default function UserPage() {
       toast.error(error instanceof Error ? error.message : 'Could not update the issue.')
     }
   }
+  const disableAccess = async (access: AccessToken) => {
+    try {
+      await deactivateAccessTokenRequest(access.id, access.organizationId)
+      await queryClient.invalidateQueries({ queryKey: ['access-tokens', userId] })
+      toast.success('Access disabled.')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not disable access.') }
+  }
+  const enableAccess = async (access: AccessToken) => {
+    try {
+      await activateAccessTokenRequest(access.id, access.organizationId)
+      await queryClient.invalidateQueries({ queryKey: ['access-tokens', userId] })
+      toast.success('Access enabled.')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not enable access.') }
+  }
   const {
     data: user,
     isError,
@@ -316,6 +365,11 @@ export default function UserPage() {
     queryKey: usersQueryKeys.detail(userId),
     queryFn: () => getUserRequest(userId),
     enabled: Boolean(userId),
+  })
+  const marketingPreferences = useQuery({
+    queryKey: [...usersQueryKeys.detail(userId), 'marketing-preferences'],
+    queryFn: () => getUserMarketingPreferencesRequest(userId),
+    enabled: Boolean(userId && permissions?.view),
   })
   const isPartnerCoach = Boolean(user?.customerMemberships?.some((membership) => membership.role === 'INSTRUCTOR'))
   const canViewCoachSchedules = Boolean(isPartnerCoach && session?.permissions.classSchedules?.view)
@@ -358,8 +412,8 @@ export default function UserPage() {
           ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
         ]
       : []),
-    ...(canManageMarketingPreferences ? [{ key: 'marketing-messages', label: 'Marketing messages' }] : []),
     ...(canViewAiSupportIssues ? [{ key: 'ai-support-issues', label: 'AI support issues' }] : []),
+    ...(canViewAccess ? [{ key: 'access-tokens', label: 'Access' }, { key: 'access-scans', label: 'Access scans' }] : []),
   ]
 
   if (isError && !user) {
@@ -384,7 +438,8 @@ export default function UserPage() {
         options: user ? UserService.getDetailHeaderActions(user, permissions).options : [],
       }}
       modules={modules}
-      aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canViewCreditWallets)} isLoading={isLoading} />}
+      aside={<DetailSidePanel sections={getUserDetailSections(user, creditWallets.data?.items, creditWallets.isLoading, canViewCreditWallets,
+        marketingPreferences.data?.items, marketingPreferences.isLoading, marketingPreferences.isError)} isLoading={isLoading} />}
     >
       {canViewBookings ? <RelatedEntityModule
         id={`${MODULE_ANCHOR_PREFIX}-bookings`}
@@ -580,109 +635,43 @@ export default function UserPage() {
         loadingMessage="Loading orders..."
         emptyMessage="No orders found."
       /> : null}
-      {canManageMarketingPreferences && user ? (
-        <MarketingMessagesModule userId={userId} isAdminContext={isAdminContext} currentCustomerId={currentCustomerId} />
-      ) : null}
+      {canViewAccess ? <RelatedEntityModule<AccessToken>
+        id={`${MODULE_ANCHOR_PREFIX}-access-tokens`}
+        title="Access"
+        icon={EntityIcon.devices}
+        queryKey={['access-tokens', userId, currentCustomerId]}
+        loadData={(state) => getAccessTokensRequest(state, { userId })}
+        tableKey={`access.tokens.user.${userId}`}
+        columns={accessTokenColumns}
+        action={canCreateAccess && user ? { label: 'Create access', onClick: () => { setEditingAccess(null); setAccessDrawerOpen(true) } } : undefined}
+        getRowCommands={(access) => canEditAccess ? [
+          { label: 'Edit access', onClick: () => { setEditingAccess(access); setAccessDrawerOpen(true) } },
+          ...(access.isActive ? [{ label: 'Generate QR code', onClick: () => setQrAccess(access) }] : []),
+          ...(access.isActive ? [{ label: 'Disable access', onClick: () => void disableAccess(access) }] : []),
+          ...(!access.isActive ? [{ label: 'Enable access', onClick: () => void enableAccess(access) }] : []),
+        ] : []}
+        showPagination
+        loadingMessage="Loading access…"
+        emptyMessage="No access created for this user."
+      /> : null}
+      {canViewAccess ? <RelatedEntityModule<AccessScan>
+        id={`${MODULE_ANCHOR_PREFIX}-access-scans`}
+        title="Access scans"
+        icon={EntityIcon.commandLogs}
+        viewAllTo={`/access/scans?f.userId=${encodeURIComponent(userId)}`}
+        queryKey={['access-scans', 'user', userId, currentCustomerId]}
+        loadData={(state) => getAccessScansRequest(state, { userId })}
+        tableKey={`access.scans.user.${userId}`}
+        columns={userAccessScanColumns}
+        pageSize={5}
+        showPagination
+        loadingMessage="Loading access scans…"
+        emptyMessage="No access scans for this user."
+      /> : null}
+      {(canCreateAccess || canEditAccess) && user ? <AccessTokenDrawer open={accessDrawerOpen}
+        onOpenChange={(open) => { setAccessDrawerOpen(open); if (!open) setEditingAccess(null) }}
+        user={user} access={editingAccess} currentCustomerId={isAdminContext ? undefined : currentCustomerId} /> : null}
+      <AccessTokenQrDialog access={qrAccess} onOpenChange={(open) => { if (!open) setQrAccess(null) }} />
     </DetailPageLayout>
-  )
-}
-
-function MarketingMessagesModule({
-  userId,
-  isAdminContext,
-  currentCustomerId,
-}: {
-  userId: string
-  isAdminContext: boolean
-  currentCustomerId?: string
-}) {
-  const queryClient = useQueryClient()
-  const [selectedCustomerId, setSelectedCustomerId] = useState(currentCustomerId ?? '')
-  const queryKey = [...usersQueryKeys.detail(userId), 'marketing-preferences'] as const
-  const preferences = useQuery({ queryKey, queryFn: () => getUserMarketingPreferencesRequest(userId) })
-  const customers = useQuery({
-    queryKey: [...customersQueryKeys.all, 'marketing-opt-out-picker'],
-    queryFn: () => getCustomersListRequest(),
-    enabled: isAdminContext,
-  })
-  const updatePreference = useMutation({
-    mutationFn: (input: { customerId: string; optedOut: boolean }) => updateUserMarketingPreferenceRequest(userId, input),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey }),
-    onError: () => toast.error('Could not update the marketing message preference.'),
-  })
-  const optOutSelectedCustomer = useMutation({
-    mutationFn: () => updateUserMarketingPreferenceRequest(userId, { customerId: selectedCustomerId, optedOut: true }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey })
-      toast.success('User opted out of bulk campaigns for this customer.')
-    },
-    onError: () => toast.error('Could not opt this user out of bulk campaigns.'),
-  })
-
-  useEffect(() => {
-    if (currentCustomerId) setSelectedCustomerId(currentCustomerId)
-  }, [currentCustomerId])
-
-  return (
-    <Card id={`${MODULE_ANCHOR_PREFIX}-marketing-messages`} className="scroll-mt-20">
-      <CardHeader>
-        <CardTitle>Marketing messages</CardTitle>
-        <CardDescription>
-          Only opted-in users receive bulk campaigns for that customer. Transactional messages such as booking and order updates remain enabled.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {isAdminContext ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
-              <SelectInput
-                aria-label="Customer for marketing opt-out"
-                placeholder="Select customer"
-                searchable
-                items={(customers.data ?? []).map((customer) => ({ value: customer.id, label: customer.name }))}
-                isLoading={customers.isLoading}
-                emptyMessage={customers.isError ? 'Failed to load customers.' : 'No customers found.'}
-                value={selectedCustomerId || undefined}
-                onValueChange={(value) => setSelectedCustomerId(String(value ?? ''))}
-              />
-            </div>
-            <Button
-              variant="outline"
-              disabled={
-                !selectedCustomerId ||
-                optOutSelectedCustomer.isPending ||
-                preferences.data?.items.find((item) => item.customerId === selectedCustomerId)?.optedOut === true
-              }
-              onClick={() => optOutSelectedCustomer.mutate()}
-            >
-              Opt out
-            </Button>
-          </div>
-        ) : null}
-        {preferences.isLoading ? <p className="text-muted-foreground">Loading customer preferences…</p> : null}
-        {preferences.isError ? <p className="text-destructive">Could not load marketing preferences.</p> : null}
-        {!preferences.isLoading && !preferences.isError && !preferences.data?.items.length ? (
-          <p className="text-muted-foreground">No customer messaging history found for this user.</p>
-        ) : null}
-        {preferences.data?.items.map((preference) => (
-          <label key={preference.customerId} className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border p-4">
-            <span className="min-w-0">
-              <span className="block truncate font-medium">{preference.customerName}</span>
-              <span className="block text-muted-foreground">
-                {preference.optedIn ? 'Opted in to bulk campaigns' : preference.optedOut ? 'Opted out of bulk campaigns' : 'Not opted in · excluded from bulk campaigns'}
-              </span>
-            </span>
-            <input
-              aria-label={`Opt in to bulk campaigns from ${preference.customerName}`}
-              type="checkbox"
-              className="size-5 shrink-0 accent-primary"
-              checked={preference.optedIn}
-              disabled={updatePreference.isPending}
-              onChange={(event) => updatePreference.mutate({ customerId: preference.customerId, optedOut: !event.currentTarget.checked })}
-            />
-          </label>
-        ))}
-      </CardContent>
-    </Card>
   )
 }

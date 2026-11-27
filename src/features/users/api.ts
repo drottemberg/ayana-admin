@@ -63,6 +63,7 @@ export type UserMarketingPreference = {
   customerName: string
   optedIn: boolean
   optedOut: boolean
+  customerOptedOut: boolean
   optedOutAt: string | null
   source: string | null
 }
@@ -75,6 +76,28 @@ export type CreateCustomerUserPayload = {
   newsletterEnabled?: boolean
   pushNotificationsEnabled?: boolean
   emailNotificationsEnabled?: boolean
+}
+
+export type UserMergeCandidate = { id: string; firstName: string; lastName: string; email: string | null; phone: string | null }
+export type UserMergePreview = {
+  source: UserMergeCandidate
+  target: UserMergeCandidate
+  counts: Record<string, number>
+  conflicts: string[]
+  warnings: string[]
+}
+
+export function getUserMergeCandidatesRequest(search: string) {
+  return apiClient.get<UserMergeCandidate[]>(`/users/merge-candidates?search=${encodeURIComponent(search)}`)
+}
+
+export function previewUserMergeRequest(targetUserId: string, sourceUserId: string) {
+  return apiClient.post<UserMergePreview>(`/users/${encodeURIComponent(targetUserId)}/merge/preview`, { sourceUserId })
+}
+
+export function mergeUsersRequest(targetUserId: string, sourceUserId: string) {
+  return apiClient.post<{ sourceUserId: string; targetUserId: string; counts: Record<string, number> }>(
+    `/users/${encodeURIComponent(targetUserId)}/merge`, { sourceUserId })
 }
 
 type UserMembershipRecord = {

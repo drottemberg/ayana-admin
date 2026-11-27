@@ -123,7 +123,7 @@ function DashboardMetrics({ data, revenueTab }: { data: DashboardOverview; reven
   </div>
 }
 
-export function BusinessOverviewDashboard() {
+export function BusinessOverviewDashboard({ headerAction }: { headerAction?: ReactNode } = {}) {
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -222,7 +222,7 @@ export function BusinessOverviewDashboard() {
     ])
 
     return <DetailPageLayout
-      header={{ title: 'Home', subtitle: 'Your studio activity.' }}
+      header={{ title: 'Home', subtitle: 'Your studio activity.', commands: headerAction }}
       modules={customerHomeModules}
       aside={null}
     >

@@ -16,6 +16,8 @@ const DashboardPage = lazy(() => import('@/pages/app/DashboardPage'))
 const HomePage = lazy(() => import('@/pages/app/HomePage'))
 const DevicesPage = lazy(() => import('@/pages/app/DevicesPage'))
 const DevicePage = lazy(() => import('@/pages/app/DevicePage'))
+const RegisteredDevicePage = lazy(() => import('@/pages/app/RegisteredDevicePage'))
+const AccessScansPage = lazy(() => import('@/pages/app/AccessScansPage'))
 const ContractsPage = lazy(() => import('@/pages/app/ContractsPage'))
 const ContractPage = lazy(() => import('@/pages/app/ContractPage'))
 const LocationsPage = lazy(() => import('@/pages/app/LocationsPage'))
@@ -97,6 +99,8 @@ export const router = createBrowserRouter([
           { index: true, element: <HomePage /> },
           { path: 'dashboard', element: <DashboardPage /> },
           { path: 'devices', element: <DevicesPage /> },
+          { path: 'devices/registered/:deviceId', element: <RegisteredDevicePage /> },
+          { path: 'access/scans', element: <AccessScansPage /> },
           { path: 'llm-configs', element: <LlmConfigsPage /> },
           { path: 'platform-settings', element: <PlatformSettingsPage /> },
           { path: 'devices/:deviceId', element: <DevicePage /> },
