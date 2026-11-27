@@ -2,14 +2,21 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
-import { HugeiconsIcon } from '@hugeicons/react'
+import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
+import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
+import Queue01Icon from '@hugeicons/core-free-icons/Queue01Icon'
+import CalendarCheckIn01Icon from '@hugeicons/core-free-icons/CalendarCheckIn01Icon'
+import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
+import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
+import TimeHalfPassIcon from '@hugeicons/core-free-icons/TimeHalfPassIcon'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StatusPill } from '@/components/app/StatusPill'
 import { NO_VALUE_STR } from '@/constants'
 import { cn } from '@/lib/utils'
-import type { Booking } from '@/types/booking'
+import type { Booking, BookingStatus } from '@/types/booking'
 import type { ClassBooking } from '@/types/class-type'
 import { memberAvatarColor, memberAvatarInitials } from './member-avatar'
 
@@ -100,6 +107,24 @@ function CoachVisitPill({ previousVisits }: { previousVisits?: number | null }) 
   </Badge>
 }
 
+const bookingStatusIcons: Record<BookingStatus, { label: string; icon: IconSvgElement; tone: string }> = {
+  CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'text-emerald-800' },
+  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'text-amber-800' },
+  WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'text-amber-800' },
+  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'text-slate-800' },
+  NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'text-rose-800' },
+  CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'text-rose-800' },
+  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'text-rose-800' },
+}
+
+function BookingStatusIcon({ status }: { status: string }) {
+  const presentation = bookingStatusIcons[status as BookingStatus]
+  if (!presentation) return <StatusPill status={status} />
+  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-5 shrink-0 items-center justify-center', presentation.tone)}>
+    <HugeiconsIcon icon={presentation.icon} strokeWidth={2} className="size-5" aria-hidden="true" />
+  </span>
+}
+
 type CurrentContractData = Pick<Booking, 'currentContractName' | 'currentContractCreditsRemaining' | 'hasCurrentContractBalance'>
 
 function CurrentContractPill({ booking }: { booking: CurrentContractData }) {
@@ -107,8 +132,8 @@ function CurrentContractPill({ booking }: { booking: CurrentContractData }) {
   const balance = booking.currentContractCreditsRemaining === null ? '∞' : String(booking.currentContractCreditsRemaining ?? 0)
   const contractName = booking.currentContractName || 'Credits'
   const label = `${contractName} · ${balance}`
-  return <Badge variant="secondary" className="h-6 max-w-full rounded-full border-0 bg-[#eef3e9] px-3 text-xs font-medium text-[#4e6545]" title={label} aria-label={label}>
-    <span className="truncate">{label}</span>
+  return <Badge variant="secondary" className="h-auto min-h-6 max-w-full min-w-0 rounded-xl border-0 bg-[#eef3e9] px-3 py-1 text-left text-xs font-medium whitespace-normal text-[#4e6545]" title={label} aria-label={label}>
+    <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
   </Badge>
 }
 
@@ -258,11 +283,10 @@ export function ClassBookingListCard({
     <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', memberAvatarColor(booking.userId))} aria-hidden="true">{memberAvatarInitials(name)}</div>
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 truncate text-base font-semibold leading-5 text-foreground hover:underline">{name}</Link>
-            <StudioVisitPill previousVisits={booking.studioVisitCount} />
-            <CoachVisitPill previousVisits={booking.coachVisitCount} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start gap-1.5">
+            <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 line-clamp-2 text-base font-semibold leading-5 text-foreground [overflow-wrap:anywhere] hover:underline" title={name}>{name}</Link>
+            <BookingStatusIcon status={booking.status} />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <SourcePill source={booking.source} />
@@ -270,9 +294,12 @@ export function ClassBookingListCard({
             {showContractDetails && booking.source === 'DIRECT' && booking.hasCurrentContractBalance ? <CurrentContractPill booking={booking} /> : null}
           </div>
         </div>
-        <div className="flex shrink-0 items-start gap-2">
-          <StatusPill status={booking.status} />
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
           {actions ? <div className="-mr-2 -mt-2">{actions}</div> : null}
+          <div className="flex items-center gap-1.5">
+            <StudioVisitPill previousVisits={booking.studioVisitCount} />
+            <CoachVisitPill previousVisits={booking.coachVisitCount} />
+          </div>
         </div>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[#a29b96]">

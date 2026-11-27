@@ -429,3 +429,12 @@ code {
     user-select: text !important;
   }
 }
+
+/* App pages use p-4 on their outer content wrapper. Keep vertical spacing on
+   small screens while letting page content reach the viewport edges. */
+@media (max-width: 767px) {
+  [data-slot="sidebar-inset"] > main > .p-4,
+  [data-slot="sidebar-inset"] > main > .p-6 {
+    padding-inline: 0;
+  }
+}
