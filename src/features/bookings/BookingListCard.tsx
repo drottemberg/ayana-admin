@@ -108,20 +108,20 @@ function CoachVisitPill({ previousVisits }: { previousVisits?: number | null }) 
 }
 
 const bookingStatusIcons: Record<BookingStatus, { label: string; icon: IconSvgElement; tone: string }> = {
-  CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
-  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'border-amber-200 bg-amber-50 text-amber-800' },
-  WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'border-amber-200 bg-amber-50 text-amber-800' },
-  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'border-gray-300 bg-gray-50 text-gray-600' },
-  NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'border-rose-200 bg-rose-50 text-rose-800' },
-  CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'border-rose-200 bg-rose-50 text-rose-800' },
-  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'border-rose-200 bg-rose-50 text-rose-800' },
+  CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'text-emerald-800' },
+  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'text-amber-800' },
+  WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'text-amber-800' },
+  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'text-gray-600' },
+  NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'text-rose-800' },
+  CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'text-rose-800' },
+  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'text-rose-800' },
 }
 
 function BookingStatusIcon({ status }: { status: string }) {
   const presentation = bookingStatusIcons[status as BookingStatus]
   if (!presentation) return <StatusPill status={status} />
-  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-md border', presentation.tone)}>
-    <HugeiconsIcon icon={presentation.icon} strokeWidth={2} className="size-4" aria-hidden="true" />
+  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-5 shrink-0 items-center justify-center', presentation.tone)}>
+    <HugeiconsIcon icon={presentation.icon} strokeWidth={2} className="size-5" aria-hidden="true" />
   </span>
 }
 
