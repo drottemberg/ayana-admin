@@ -43,6 +43,8 @@ export function AccessTokenDrawer({ open, onOpenChange, user, currentCustomerId,
   const [locationIds, setLocationIds] = useState<string[]>([])
   const [purpose, setPurpose] = useState<'ACCESS' | 'CHECK_IN'>('ACCESS')
   const [code, setCode] = useState('')
+  const [isDynamic, setIsDynamic] = useState(false)
+  const [qrValiditySeconds, setQrValiditySeconds] = useState('60')
   const [label, setLabel] = useState('')
   const [maxUses, setMaxUses] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
@@ -58,6 +60,8 @@ export function AccessTokenDrawer({ open, onOpenChange, user, currentCustomerId,
     setLocationIds(access?.locationIds ?? [])
     setPurpose(access?.purpose ?? 'ACCESS')
     setCode(access?.token ?? '')
+    setIsDynamic(access?.isDynamic ?? false)
+    setQrValiditySeconds(String(access?.qrValiditySeconds ?? 60))
     setLabel(access?.label ?? '')
     setMaxUses(access?.maxUses == null ? '' : String(access.maxUses))
     setExpiresAt(access?.expiresAt ?? '')
@@ -74,12 +78,15 @@ export function AccessTokenDrawer({ open, onOpenChange, user, currentCustomerId,
     if (scheduleEnabled && schedule.some((slot) => slot.endTime <= slot.startTime)) {
       toast.error('Each schedule slot must end after it starts.'); return
     }
+    if (isDynamic && (!Number.isInteger(Number(qrValiditySeconds)) || Number(qrValiditySeconds) < 1 || Number(qrValiditySeconds) > 3600)) {
+      toast.error('Enter a QR validity between 1 and 3600 seconds.'); return
+    }
     const accessSchedule = scheduleEnabled ? schedule : null
     setSaving(true)
     try {
       if (access) {
         await updateAccessTokenRequest(access.id, {
-          token: code.trim(), label: label.trim() || null,
+          token: code.trim(), isDynamic, qrValiditySeconds: isDynamic ? Number(qrValiditySeconds) : undefined, label: label.trim() || null,
           maxUses: maxUses ? Number(maxUses) : null,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
           schedule: accessSchedule,
@@ -90,6 +97,8 @@ export function AccessTokenDrawer({ open, onOpenChange, user, currentCustomerId,
       } else {
         const token = await createAccessTokenRequest({
           userId: String(user.id), organizationId: selectedOrganizationId, purpose,
+          isDynamic,
+          ...(isDynamic ? { qrValiditySeconds: Number(qrValiditySeconds) } : {}),
           locationScope, locationIds: locationScope === 'SPECIFIC' ? locationIds : [],
           ...(code.trim() ? { token: code.trim() } : {}),
           ...(label.trim() ? { label: label.trim() } : {}),
@@ -109,10 +118,10 @@ export function AccessTokenDrawer({ open, onOpenChange, user, currentCustomerId,
   return <AppDrawer open={open} onOpenChange={onOpenChange} title={created ? 'Access created' : access ? 'Edit access' : 'Create access'}
     description={created ? 'You can edit the code or generate its QR code from the access list.' : `${access ? 'Edit' : 'Create'} an access code for ${user.firstName} ${user.lastName}.`}>
     {created ? <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-      <p className="text-sm text-muted-foreground">You can edit this code or generate its QR code later from the access list.</p>
-      <code className="block break-all rounded-md border bg-muted p-3 text-sm">{created.token}</code>
+      <p className="text-sm text-muted-foreground">{created.isDynamic ? `The QR code changes every ${created.qrValiditySeconds} seconds. Open it from Home or the access list.` : 'You can edit this code or generate its QR code later from the access list.'}</p>
+      {!created.isDynamic ? <code className="block break-all rounded-md border bg-muted p-3 text-sm">{created.token}</code> : null}
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => void navigator.clipboard.writeText(created.token).then(() => toast.success('Code copied.'))}>Copy code</Button>
+        {!created.isDynamic ? <Button variant="outline" onClick={() => void navigator.clipboard.writeText(created.token).then(() => toast.success('Code copied.'))}>Copy code</Button> : null}
         <Button onClick={() => onOpenChange(false)}>Done</Button>
       </div>
     </div> : <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void submit(event)}>
@@ -147,6 +156,10 @@ export function AccessTokenDrawer({ open, onOpenChange, user, currentCustomerId,
         <Input value={code} onChange={(event) => setCode(event.target.value)} minLength={4} maxLength={64}
           pattern="[A-Za-z0-9_-]{4,64}" required={Boolean(access)} autoComplete="off" />
       </label>
+      <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={isDynamic} onChange={(event) => setIsDynamic(event.target.checked)} />Dynamic QR code</label>
+      {isDynamic ? <label className="grid gap-1.5 text-sm font-medium">QR validity (seconds)
+        <Input type="number" min="1" max="3600" step="1" required value={qrValiditySeconds} onChange={(event) => setQrValiditySeconds(event.target.value)} />
+      </label> : null}
       <label className="grid gap-1.5 text-sm font-medium">Label (optional)<Input value={label} onChange={(event) => setLabel(event.target.value)} /></label>
       <label className="grid gap-1.5 text-sm font-medium">Maximum uses (optional)<Input type="number" min="1" step="1" value={maxUses} onChange={(event) => setMaxUses(event.target.value)} /></label>
       <DateTimePicker label="Expires at (date and time, optional)" value={expiresAt} onValueChange={setExpiresAt} defaultTime="23:59" clearable />

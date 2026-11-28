@@ -85,7 +85,7 @@ const aiSupportIssueColumns: ColumnDef<AiSupportIssue>[] = [
 const accessTokenColumns: ColumnDef<AccessToken>[] = [
   { accessorKey: 'createdAt', header: 'Created', cell: ({ row }) => formatDateTime(row.original.createdAt) },
   { accessorKey: 'organizationName', header: 'Customer / locations', cell: ({ row }) => <span>{row.original.organizationName || '—'} · {row.original.locationScope === 'ALL' ? 'All locations' : row.original.locationScope === 'SPECIFIC' ? row.original.locationNames?.join(', ') || `${row.original.locationIds?.length ?? 0} selected` : 'Location'}</span> },
-  { accessorKey: 'purpose', header: 'Purpose' },
+  { accessorKey: 'purpose', header: 'Purpose', cell: ({ row }) => `${row.original.purpose} · ${row.original.isDynamic ? 'Dynamic QR' : 'Static code'}` },
   { accessorKey: 'label', header: 'Label', cell: ({ row }) => row.original.label || '—' },
   { accessorKey: 'usedCount', header: 'Uses', cell: ({ row }) => `${row.original.usedCount} / ${row.original.maxUses ?? '∞'}` },
   { accessorKey: 'expiresAt', header: 'Expires', cell: ({ row }) => row.original.expiresAt ? formatDateTime(row.original.expiresAt) : 'Never' },

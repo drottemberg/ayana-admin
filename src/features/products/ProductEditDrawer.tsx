@@ -26,6 +26,8 @@ type ProductEditDrawerProps = {
   addSection?: 'variants' | 'options' | null
   focusSection?: 'variants' | 'options' | null
   addOptionGroupId?: string | null
+  canCreate?: boolean
+  canDelete?: boolean
 }
 
 function numberValue(event: ChangeEvent<HTMLInputElement>, fallback = 0) {
@@ -59,6 +61,8 @@ export function ProductEditDrawer({
   addSection,
   focusSection,
   addOptionGroupId,
+  canCreate = false,
+  canDelete = false,
 }: ProductEditDrawerProps) {
   const queryClient = useQueryClient()
   const customerId = product?.customerId ?? product?.organizationId ?? product?.customer.id ?? ''
@@ -317,7 +321,7 @@ export function ProductEditDrawer({
                       Base prices are shared by this customer. Locations can override them.
                     </p>
                   </div>
-                  <Button
+                  {canCreate ? <Button
                     type="button"
                     size="sm"
                     variant="outline"
@@ -329,7 +333,7 @@ export function ProductEditDrawer({
                     }
                   >
                     Add variant
-                  </Button>
+                  </Button> : null}
                 </div>
                 {!variants.length ? (
                   <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
@@ -392,7 +396,7 @@ export function ProductEditDrawer({
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">Variant attributes</span>
-                        <Button
+                        {canCreate ? <Button
                           type="button"
                           variant="link"
                           size="xs"
@@ -401,7 +405,7 @@ export function ProductEditDrawer({
                           }
                         >
                           Add attribute
-                        </Button>
+                        </Button> : null}
                       </div>
                       {(variant.attributes ?? []).map((attribute, attributeIndex) => (
                         <div
@@ -424,7 +428,7 @@ export function ProductEditDrawer({
                               setVariantAttribute(index, attributeIndex, { value: event.target.value })
                             }
                           />
-                          <Button
+                          {canDelete ? <Button
                             type="button"
                             variant="ghost"
                             size="sm"
@@ -436,7 +440,7 @@ export function ProductEditDrawer({
                             }
                           >
                             ×
-                          </Button>
+                          </Button> : null}
                         </div>
                       ))}
                     </div>
@@ -453,7 +457,7 @@ export function ProductEditDrawer({
                       be overridden for this product.
                     </p>
                   </div>
-                  <Button
+                  {canCreate ? <Button
                     type="button"
                     size="sm"
                     variant="outline"
@@ -465,7 +469,7 @@ export function ProductEditDrawer({
                     }
                   >
                     Add group
-                  </Button>
+                  </Button> : null}
                 </div>
                 {!modifierGroups.length ? (
                   <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
@@ -517,19 +521,19 @@ export function ProductEditDrawer({
                           onChange={(event) => setGroup(groupIndex, { maxSelect: numberValue(event, 1) })}
                         />
                       </div>
-                      <Button
+                      {canDelete || !group.id ? <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => setModifierGroups((current) => current.filter((_, row) => row !== groupIndex))}
                       >
                         Remove group
-                      </Button>
+                      </Button> : null}
                     </div>
                     <div className="space-y-3 border-t pt-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">Options</span>
-                        <Button
+                        {canCreate ? <Button
                           type="button"
                           variant="link"
                           size="xs"
@@ -550,7 +554,7 @@ export function ProductEditDrawer({
                           }
                         >
                           Add option
-                        </Button>
+                        </Button> : null}
                       </div>
                       {group.modifiers.map((modifier, modifierIndex) => (
                         <div

@@ -88,6 +88,10 @@ export const userColumns: ColumnDef<User>[] = [
   {
     id: 'name',
     header: 'Name',
+    accessorFn: (user) => [user.firstName, user.lastName]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(' ') || user.email || String(user.id),
     cell: ({ row }) => {
       const name = [row.original.firstName, row.original.lastName]
         .map((part) => part?.trim())

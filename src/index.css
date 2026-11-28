@@ -433,6 +433,18 @@ code {
 /* App pages use p-4 on their outer content wrapper. Keep vertical spacing on
    small screens while letting page content reach the viewport edges. */
 @media (max-width: 767px) {
+  html,
+  body {
+    touch-action: pan-x pan-y;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  [contenteditable="true"] {
+    font-size: 16px !important;
+  }
+
   [data-slot="sidebar-inset"] > main > .p-4,
   [data-slot="sidebar-inset"] > main > .p-6 {
     padding-inline: 0;

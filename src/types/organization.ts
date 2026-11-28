@@ -46,6 +46,8 @@ export type Organization = {
   address?: Address
   description?: string
   googleReviewUrl?: string | null
+  classReviewUrl?: string | null
+  orderReviewUrl?: string | null
   websiteUrl?: string | null
   instagramUrl?: string | null
   timezone?: string

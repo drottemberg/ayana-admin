@@ -74,7 +74,7 @@ function getProductDetailSections(
     {
       title: 'Product details',
       icon: EntityIcon.products,
-      actions: product ? (
+      actions: product && onEdit ? (
         <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={onEdit}>
             Edit product
@@ -324,6 +324,9 @@ export default function ProductPage() {
   const { session } = useConnect()
   const queryClient = useQueryClient()
   const canManageOrders = Boolean(session?.permissions.orders?.edit)
+  const canCreateProduct = Boolean(session?.permissions.products?.create)
+  const canEditProduct = Boolean(session?.permissions.products?.edit)
+  const canDeleteProduct = Boolean(session?.permissions.products?.delete)
 
   const {
     data: product,
@@ -404,6 +407,7 @@ export default function ProductPage() {
     add = false,
     groupId: string | null = null,
   ) => {
+    if (add ? !canCreateProduct : !canEditProduct) return
     setAddProductSection(add ? section : null)
     setFocusProductSection(section)
     setAddOptionGroupId(groupId)
@@ -416,7 +420,7 @@ export default function ProductPage() {
     setFocusProductSection(null)
     setAddOptionGroupId(null)
   }
-  const headerActions = ProductService.getDetailHeaderActions(product, navigate)
+  const headerActions = canEditProduct ? ProductService.getDetailHeaderActions(product, navigate) : { options: [] }
 
   return (
     <DetailPageLayout
@@ -426,15 +430,15 @@ export default function ProductPage() {
         backTo: '/products',
         primaryAction: headerActions.primaryAction,
         secondaryAction: headerActions.secondaryAction,
-        options: headerActions.options,
+        options: headerActions.options?.filter((action) => canDeleteProduct || !('label' in action) || action.label !== 'Destroy'),
       }}
       modules={getModules(product)}
       aside={
         <DetailSidePanel
           sections={getProductDetailSections(
             product,
-            () => openProductEditor(),
-            () => setEditingScope(product),
+            canEditProduct ? () => openProductEditor() : undefined,
+            canEditProduct ? () => setEditingScope(product) : undefined,
           )}
         />
       }
@@ -448,14 +452,14 @@ export default function ProductPage() {
         loadData={(state: DataTableState<ProductVariantRow>) => pageLocalRows(productVariantRows(product), state)}
         tableKey="products.detail.modules.variants"
         columns={productVariantColumns(product.customer?.currency || 'EUR')}
-        getRowCommands={(variant): DropdownActionItem[] => [
+        getRowCommands={(variant): DropdownActionItem[] => canEditProduct ? [
           { label: 'Edit variant', onClick: () => openProductEditor('variants') },
           {
             label: variant.isActive ? 'Disable' : 'Enable',
             onClick: () => void ProductManagementService.setVariantActive(product, variant.id, !variant.isActive),
           },
-        ]}
-        action={{ label: 'Add variant', iconOnly: true, onClick: () => openProductEditor('variants', true) }}
+        ] : []}
+        action={canCreateProduct ? { label: 'Add variant', iconOnly: true, onClick: () => openProductEditor('variants', true) } : undefined}
         loadingMessage="Loading variants..."
         emptyMessage="No variants configured. Add a variant to set a price."
         refetchOnMount="always"
@@ -472,9 +476,9 @@ export default function ProductPage() {
         tableKey="products.detail.modules.options"
         columns={productOptionColumns}
         getRowCommands={(group): DropdownActionItem[] => [
-          { label: 'Edit group and options', onClick: () => openProductEditor('options') },
-          ...(group.id ? [{ label: 'Add option', icon: Add01Icon, onClick: () => openProductEditor('options', false, group.id) }] : []),
-          ...(group.id
+          ...(canEditProduct ? [{ label: 'Edit group and options', onClick: () => openProductEditor('options') }] : []),
+          ...(canCreateProduct && group.id ? [{ label: 'Add option', icon: Add01Icon, onClick: () => openProductEditor('options', false, group.id) }] : []),
+          ...(canDeleteProduct && group.id
             ? [
                 {
                   label: 'Remove from product',
@@ -483,7 +487,7 @@ export default function ProductPage() {
               ]
             : []),
         ]}
-        action={{ label: 'Add option group', iconOnly: true, onClick: () => openProductEditor('options', true) }}
+        action={canCreateProduct ? { label: 'Add option group', iconOnly: true, onClick: () => openProductEditor('options', true) } : undefined}
         loadingMessage="Loading option groups..."
         emptyMessage="No option groups linked to this product."
         refetchOnMount="always"
@@ -497,13 +501,13 @@ export default function ProductPage() {
         loadData={(state: DataTableState<ProductLocationRow>) => pageLocalRows(productLocationRows(product), state)}
         tableKey="products.detail.modules.locations"
         columns={productLocationColumns}
-        getRowCommands={(location): DropdownActionItem[] => [
+        getRowCommands={(location): DropdownActionItem[] => canEditProduct ? [
           {
             label: 'Edit location settings',
             onClick: () => setEditingLocation({ locationId: location.locationId, settings: location.settings }),
           },
-        ]}
-        action={{ label: 'Add location', iconOnly: true, onClick: () => setEditingScope(product) }}
+        ] : []}
+        action={canEditProduct ? { label: 'Add location', iconOnly: true, onClick: () => setEditingScope(product) } : undefined}
         loadingMessage="Loading location settings..."
         emptyMessage="No locations found for this customer."
         refetchOnMount="always"
@@ -542,6 +546,8 @@ export default function ProductPage() {
         addSection={addProductSection}
         focusSection={focusProductSection}
         addOptionGroupId={addOptionGroupId}
+        canCreate={canCreateProduct}
+        canDelete={canDeleteProduct}
         onOpenChange={closeProductEditor}
       />
       <ProductScopeDrawer

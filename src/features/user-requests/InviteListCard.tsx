@@ -45,18 +45,19 @@ export function InviteListCard({
         {memberAvatarInitials(name)}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-base font-semibold leading-5 text-foreground" title={name}>{name}</div>
-            {details ? <div className="mt-1 truncate text-sm leading-5 text-muted-foreground" title={details}>{details}</div> : null}
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-3 sm:flex sm:gap-3">
+          <div className="min-w-0 sm:flex-1">
+            <div className="line-clamp-2 text-base font-semibold leading-5 text-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:block sm:truncate" title={name}>{name}</div>
+            {details ? <div className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:block sm:truncate" title={details}>{details}</div> : null}
           </div>
-          <div className="flex shrink-0 items-start gap-2">
-            <StatusPill status={request.status} />
-            {actions}
-            {quickActions}
+          <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+            {actions ? <div className="sm:order-2">{actions}</div> : null}
+            <span className="sm:order-1"><StatusPill status={request.status} /></span>
           </div>
+          {date ? <div className="col-span-2 text-xs text-[#a29b96] sm:hidden">{date}</div> : null}
+          {quickActions ? <div className="col-span-2 flex justify-end sm:shrink-0">{quickActions}</div> : null}
         </div>
-        {date ? <div className="mt-2 text-xs text-[#a29b96]">{date}</div> : null}
+        {date ? <div className="mt-2 hidden text-xs text-[#a29b96] sm:block">{date}</div> : null}
       </div>
     </article>
   )

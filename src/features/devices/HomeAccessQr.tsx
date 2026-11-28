@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import QRCode from 'qrcode'
 import QrCodeIcon from '@hugeicons/core-free-icons/QrCodeIcon'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getMyAccessTokensRequest, type MyAccessToken } from './access-api'
+import { useAccessQr } from './use-access-qr'
 
 function accessLabel(access: MyAccessToken) {
   const purpose = access.purpose === 'CHECK_IN' ? 'Check-in' : 'Access'
@@ -21,7 +21,6 @@ function accessLabel(access: MyAccessToken) {
 export function HomeAccessQr({ customerId, userId }: { customerId: string | null; userId: string }) {
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState('')
-  const [image, setImage] = useState('')
   const { data: accesses = [], refetch } = useQuery({
     queryKey: ['access', 'my-tokens', customerId, userId],
     queryFn: () => getMyAccessTokensRequest(customerId!),
@@ -31,20 +30,12 @@ export function HomeAccessQr({ customerId, userId }: { customerId: string | null
     refetchInterval: 60_000,
   })
   const selected = accesses.find((access) => access.id === selectedId) ?? accesses[0]
+  const { image, error } = useAccessQr(selected ?? null, open, 'mine', customerId ?? undefined)
 
   useEffect(() => {
     if (!accesses.length) { setOpen(false); setSelectedId(''); return }
     if (!accesses.some((access) => access.id === selectedId)) setSelectedId(accesses[0].id)
   }, [accesses, selectedId])
-
-  useEffect(() => {
-    setImage('')
-    if (!open || !selected) return
-    let active = true
-    void QRCode.toDataURL(selected.token, { width: 1024, margin: 2, errorCorrectionLevel: 'M' })
-      .then((url) => { if (active) setImage(url) })
-    return () => { active = false }
-  }, [open, selected?.id, selected?.token])
 
   const show = async () => {
     const result = await refetch()
@@ -70,7 +61,7 @@ export function HomeAccessQr({ customerId, userId }: { customerId: string | null
         </label> : selected ? <p className="text-sm font-medium">{accessLabel(selected)}</p> : null}
         <div className="flex min-h-72 items-center justify-center rounded-lg border bg-white p-4">
           {image ? <img src={image} alt="Access QR code" className="aspect-square w-full max-w-sm" />
-            : <span className="text-sm text-muted-foreground">Generating QR code…</span>}
+            : <span className="text-sm text-muted-foreground">{error ? 'Could not load the QR code.' : 'Generating QR code…'}</span>}
         </div>
       </DialogContent>
     </Dialog>

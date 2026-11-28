@@ -202,13 +202,16 @@ export function toUsersListPayload(tableState: DataTableState<User>, hiddenFilte
     ...hiddenFilters,
   }
 
-  return toApiListDto(
+  const payload = toApiListDto(
     {
       ...tableState,
       filters: Object.fromEntries(Object.entries(tableState.filters).filter(([key]) => key !== 'customerId')),
     },
     filters,
   )
+  return tableState.sorting.length || !['users', 'staff'].includes(String(hiddenFilters?.userDirectory ?? ''))
+    ? payload
+    : { ...payload, orderBy: 'name', order: SortOrder.asc }
 }
 
 export const usersListConfig = {

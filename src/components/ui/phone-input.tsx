@@ -6,10 +6,12 @@ import {
   type CountryCode,
 } from 'libphonenumber-js'
 import { getTimezone } from 'countries-and-timezones'
+import ArrowDown01Icon from '@hugeicons/core-free-icons/ArrowDown01Icon'
+import { HugeiconsIcon } from '@hugeicons/react'
 
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { SelectInput, type SelectInputItem } from '@/components/ui/select-input'
+import { Input, inputBaseClassName } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import * as GeoUtils from '@/utils/geo-utils'
 
 type PhoneInputProps = {
@@ -57,7 +59,7 @@ function getBrowserCountry(): CountryCode {
   return 'FR'
 }
 
-function getPhoneCountryItems(locale: string): SelectInputItem[] {
+function getPhoneCountryItems(locale: string): Array<{ value: string; label: string }> {
   return GeoUtils.getCountries({ locale })
     .filter((country) => phoneCountryCodes.has(country.value))
     .map((country) => ({
@@ -96,7 +98,7 @@ function getDisplayParts(value: string, fallbackCountry: CountryCode) {
 }
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
-  ({ id, name, label, value = '', placeholder = 'Phone number', error, disabled, required, nativeCountrySelector, compactCountrySelector, defaultCountry, controlLayout = 'default', onValueChange, onBlur }, ref) => {
+  ({ id, name, label, value = '', placeholder = 'Phone number', error, disabled, required, defaultCountry, controlLayout = 'default', onValueChange, onBlur }, ref) => {
     const inputId = id ?? React.useId()
     const browserCountry = React.useMemo(
       () => defaultCountry && isPhoneCountryCode(defaultCountry) ? defaultCountry : getBrowserCountry(),
@@ -109,7 +111,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
       return current.country
     })
     const selectedCountryLabel = items.find((item) => item.value === country)?.label
-    const compactSelectedCountryLabel = typeof selectedCountryLabel === 'string'
+    const shortSelectedCountryLabel = typeof selectedCountryLabel === 'string'
       ? selectedCountryLabel.split(' · ')[0]
       : ''
     const [nationalNumber, setNationalNumber] = React.useState(() =>
@@ -148,16 +150,17 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
           className="flex min-w-0 gap-2"
           style={controlLayout === 'wide-number' ? {
             display: 'grid',
-            gridTemplateColumns: 'minmax(105px, 0.4fr) minmax(0, 0.6fr)',
+            gridTemplateColumns: 'minmax(96px, 0.28fr) minmax(0, 1fr)',
             width: '100%',
             minWidth: 0,
           } : undefined}
         >
-          {nativeCountrySelector || compactCountrySelector ? (
+          <div className={cn('relative w-[96px] shrink-0', controlLayout === 'wide-number' && 'w-full min-w-0')}>
             <select
               aria-label="Country calling code"
+              className={cn(inputBaseClassName, 'w-full cursor-pointer appearance-none px-2')}
               value={country}
-              style={controlLayout === 'wide-number' ? { width: '100%', minWidth: 0 } : undefined}
+              style={{ width: '100%', minWidth: 0 }}
               disabled={disabled}
               onChange={(event) => {
                 const nextCountry = event.target.value.toUpperCase()
@@ -168,33 +171,13 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
               }}
               onBlur={onBlur}
             >
-              {items.map((item) => {
-                const selectedLabel = compactCountrySelector && item.value === country
-                  ? compactSelectedCountryLabel
-                  : item.label
-                return <option key={item.value} value={item.value}>{selectedLabel}</option>
-              })}
+              {items.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
-          ) : (
-            <SelectInput
-              aria-label="Country calling code"
-              containerClassName={controlLayout === 'wide-number' ? 'min-w-0 w-full' : 'w-[170px] shrink-0'}
-              className={controlLayout === 'wide-number' ? 'h-12 min-w-0 w-full' : 'h-9'}
-              items={items}
-              value={country}
-              selectedValueLabel={compactCountrySelector ? compactSelectedCountryLabel : undefined}
-              searchable
-              disabled={disabled}
-              onValueChange={(selectedCountry) => {
-                const nextCountry = String(selectedCountry).toUpperCase()
-                if (!isPhoneCountryCode(nextCountry)) return
-
-                setCountry(nextCountry)
-                emitValue(toE164(nationalNumber, nextCountry))
-              }}
-              onBlur={onBlur}
-            />
-          )}
+            <span aria-hidden="true" className={cn('pointer-events-none absolute inset-px flex items-center justify-between gap-0.5 rounded-[9px] bg-white px-2 text-sm text-foreground', disabled && 'bg-muted/50 text-muted-foreground')}>
+              <span className="min-w-0 truncate">{shortSelectedCountryLabel}</span>
+              <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} className="size-3 shrink-0 text-muted-foreground" />
+            </span>
+          </div>
           <Input
             ref={ref}
             id={inputId}

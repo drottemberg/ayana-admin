@@ -28,9 +28,11 @@ import { MyCoachProfileDrawer } from '@/features/coaches/MyCoachProfileDrawer'
 import { coachesQueryKeys } from '@/features/coaches/query-keys'
 import { claimCoachSession } from '@/features/coaches/claim-coach-session'
 import { bookingsQueryKeys } from '@/features/bookings/query-keys'
+import { PendingBookingsModule } from '@/features/bookings/PendingBookingsModule'
 import { BookingCardDayGroup, BookingListCard, bookingCreatedDateKey } from '@/features/bookings/BookingListCard'
 import { getBookingsRequest } from '@/features/bookings/api'
 import { classSessionsQueryKeys } from '@/features/classes/query-keys'
+import { getClassSessionsRequest } from '@/features/classes/api'
 import { ClassSessionListCard } from '@/features/classes/class-session-columns'
 import { formatClassSessionTime } from '@/features/classes/time-zone'
 import { getLocationRequest } from '@/features/locations/api'
@@ -228,6 +230,7 @@ export default function HomePage() {
   const userId = String(session?.user.id ?? '')
   const membership = session?.user.customerMemberships.find((item) => item.customerId === customerId)
   const isCoach = membership?.role === CustomerRole.INSTRUCTOR
+  const isFrontDesk = membership?.role === CustomerRole.FRONT_DESK
   const locationScope = customerId && getAppMode() === 'customer' ? readSelectedLocationScope(customerId) : null
   const locationId = locationScope && locationScope !== ALL_LOCATIONS_SCOPE ? locationScope : null
   const locationQuery = useMemo(() => ({ customerId, locationId }), [customerId, locationId])
@@ -265,6 +268,8 @@ export default function HomePage() {
     && (pendingInvites.data.count > 0)
 
   const canViewSessions = Boolean(isCoach && session?.permissions.classSessions?.view)
+  const canViewFrontDeskSessions = Boolean(isFrontDesk && session?.permissions.classSessions?.view)
+  const canViewFrontDeskPendingBookings = Boolean(isFrontDesk && session?.permissions.bookings?.view)
   const canViewBookings = Boolean(isCoach && session?.permissions.bookings?.view)
   const showCoachModules = Boolean(customerId && userId && isCoach)
   const myCoachProfile = useQuery({
@@ -278,13 +283,15 @@ export default function HomePage() {
 
   const modules = useMemo(() => [
     ...(hasPendingInvites ? [{ key: 'received-invites', label: 'Received invites' }] : []),
+    ...(canViewFrontDeskPendingBookings ? [{ key: 'pending-bookings', label: 'Pending Bookings' }] : []),
+    ...(canViewFrontDeskSessions ? [{ key: 'upcoming-sessions', label: 'Upcoming sessions' }] : []),
     ...(canViewSessions ? [
       { key: 'day-planning', label: 'Day planning' },
       { key: 'upcoming-sessions', label: 'Upcoming sessions' },
       { key: 'sessions-to-claim', label: 'Sessions to claim' },
     ] : []),
     ...(canViewBookings ? [{ key: 'last-bookings', label: 'Last bookings' }] : []),
-  ], [canViewBookings, canViewSessions, hasPendingInvites])
+  ], [canViewBookings, canViewSessions, canViewFrontDeskSessions, canViewFrontDeskPendingBookings, hasPendingInvites])
 
   const hasBusinessDashboard = getAppMode() === 'admin'
     || membership?.role === CustomerRole.OWNER
@@ -355,6 +362,8 @@ export default function HomePage() {
         />
       ) : null}
 
+      {canViewFrontDeskPendingBookings && customerId ? <PendingBookingsModule customerId={customerId} locationId={locationId ?? undefined} /> : null}
+
       {showCoachModules && canViewSessions ? (
         <RelatedEntityModule<HomeSessionRow>
           id={`${MODULE_ANCHOR_PREFIX}-day-planning`}
@@ -371,6 +380,31 @@ export default function HomePage() {
           emptyMessage="No sessions scheduled for today."
           loadingMessage="Loading today's sessions…"
           errorMessage="Could not load today's sessions."
+          pageSize={5}
+          refetchOnMount="always"
+        />
+      ) : null}
+
+      {canViewFrontDeskSessions && customerId ? (
+        <RelatedEntityModule<HomeSessionRow>
+          id={`${MODULE_ANCHOR_PREFIX}-upcoming-sessions`}
+          title="Upcoming sessions"
+          icon={EntityIcon.classes}
+          columns={sessionColumns}
+          renderCard={(item, actions) => <ClassSessionListCard session={item} actions={actions} />}
+          queryKey={[...classSessionsQueryKeys.all, 'home', 'front-desk-upcoming', customerId, locationId]}
+          viewAllTo={`/class-sessions?${new URLSearchParams({ filterCustomerId: customerId, ...(locationId ? { filterLocationId: locationId } : {}) })}`}
+          viewAllMinCount={0}
+          loadData={(state) => getClassSessionsRequest(state as DataTableState<ClassSession>, {
+            customerId,
+            ...(locationId ? { locationId } : {}),
+            status: ['SCHEDULED'],
+            endingAfter: new Date().toISOString(),
+          }) as Promise<DataTableAsyncResult<HomeSessionRow>>}
+          tableKey="home.front-desk-upcoming-sessions"
+          emptyMessage="No running or upcoming sessions."
+          loadingMessage="Loading running and upcoming sessions…"
+          errorMessage="Could not load sessions."
           pageSize={5}
           refetchOnMount="always"
         />

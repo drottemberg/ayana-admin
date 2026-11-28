@@ -89,7 +89,7 @@ export default function ProductsPage() {
           errorMessage="Failed to load products."
         />
       </section>
-      <ProductEditDrawer product={editingProduct} open={Boolean(editingProduct)} onOpenChange={(open) => { if (!open) setEditingProduct(null) }} />
+      <ProductEditDrawer product={editingProduct} open={Boolean(editingProduct)} canCreate={Boolean(session?.permissions.products?.create)} canDelete={Boolean(session?.permissions.products?.delete)} onOpenChange={(open) => { if (!open) setEditingProduct(null) }} />
       <ProductScopeDrawer product={editingScopeProduct} open={Boolean(editingScopeProduct)} onOpenChange={(open) => { if (!open) setEditingScopeProduct(null) }} />
     </>
   )

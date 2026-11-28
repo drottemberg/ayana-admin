@@ -37,9 +37,9 @@ export function ClassTypeListCard({
 
   return <article className={cn('flex min-w-0 items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 text-card-foreground shadow-sm sm:gap-4 sm:px-5', disabled && 'opacity-65')}>
     <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link to={classTypeHref(classType)} className="truncate text-base font-semibold leading-5 text-foreground hover:underline">{classType.name}</Link>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Link to={classTypeHref(classType)} className="line-clamp-2 min-w-0 text-base font-semibold leading-5 text-foreground [overflow-wrap:anywhere] hover:underline sm:line-clamp-none sm:block sm:truncate">{classType.name}</Link>
           <div className="mt-1 truncate text-sm text-[#625b56]">
             {[classType.category, classTypeLabels[classType.type] ?? classType.type].filter(Boolean).join(' · ')}
           </div>

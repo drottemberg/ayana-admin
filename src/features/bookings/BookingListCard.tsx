@@ -2,12 +2,9 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import Tick02Icon from '@hugeicons/core-free-icons/Tick02Icon'
 import Cancel01Icon from '@hugeicons/core-free-icons/Cancel01Icon'
-import CheckmarkCircle02Icon from '@hugeicons/core-free-icons/CheckmarkCircle02Icon'
 import Clock01Icon from '@hugeicons/core-free-icons/Clock01Icon'
-import Queue01Icon from '@hugeicons/core-free-icons/Queue01Icon'
-import CalendarCheckIn01Icon from '@hugeicons/core-free-icons/CalendarCheckIn01Icon'
-import AlertCircleIcon from '@hugeicons/core-free-icons/AlertCircleIcon'
-import CancelCircleIcon from '@hugeicons/core-free-icons/CancelCircleIcon'
+import Calendar01Icon from '@hugeicons/core-free-icons/Calendar01Icon'
+import CalendarRemove01Icon from '@hugeicons/core-free-icons/CalendarRemove01Icon'
 import TimeHalfPassIcon from '@hugeicons/core-free-icons/TimeHalfPassIcon'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 
@@ -107,22 +104,31 @@ function CoachVisitPill({ previousVisits }: { previousVisits?: number | null }) 
   </Badge>
 }
 
-const bookingStatusIcons: Record<BookingStatus, { label: string; icon: IconSvgElement; tone: string }> = {
-  CONFIRMED: { label: 'Confirmed', icon: CheckmarkCircle02Icon, tone: 'bg-emerald-800 text-emerald-50' },
-  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'bg-amber-800 text-amber-50' },
-  WAITLISTED: { label: 'Waitlisted', icon: Queue01Icon, tone: 'bg-amber-800 text-amber-50' },
-  ATTENDED: { label: 'Attended', icon: CalendarCheckIn01Icon, tone: 'bg-gray-600 text-gray-50' },
-  NO_SHOW: { label: 'No show', icon: AlertCircleIcon, tone: 'bg-rose-800 text-rose-50' },
-  CANCELLED: { label: 'Cancelled', icon: CancelCircleIcon, tone: 'bg-rose-800 text-rose-50' },
-  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'bg-rose-800 text-rose-50' },
+const bookingStatusIcons: Record<BookingStatus, { label: string; icon: IconSvgElement; tone: string; avatarBorder: string }> = {
+  CONFIRMED: { label: 'Confirmed', icon: Calendar01Icon, tone: 'bg-emerald-800 text-emerald-50', avatarBorder: 'border-emerald-800' },
+  PENDING_APPROVAL: { label: 'Pending approval', icon: Clock01Icon, tone: 'bg-orange-700 text-orange-50', avatarBorder: 'border-orange-700' },
+  WAITLISTED: { label: 'Waitlisted', icon: Clock01Icon, tone: 'bg-orange-700 text-orange-50', avatarBorder: 'border-orange-700' },
+  ATTENDED: { label: 'Attended', icon: Tick02Icon, tone: 'bg-emerald-800 text-emerald-50', avatarBorder: 'border-emerald-800' },
+  NO_SHOW: { label: 'No show', icon: Cancel01Icon, tone: 'bg-red-700 text-red-50', avatarBorder: 'border-red-700' },
+  CANCELLED: { label: 'Cancelled', icon: CalendarRemove01Icon, tone: 'bg-red-700 text-red-50', avatarBorder: 'border-red-700' },
+  LATE_CANCELLED: { label: 'Late cancelled', icon: TimeHalfPassIcon, tone: 'bg-rose-800 text-rose-50', avatarBorder: 'border-rose-800' },
 }
 
 function BookingStatusIcon({ status }: { status: string }) {
   const presentation = bookingStatusIcons[status as BookingStatus]
   if (!presentation) return <StatusPill status={status} />
-  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-md', presentation.tone)}>
+  return <span role="img" aria-label={presentation.label} title={presentation.label} className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-full ring-2 ring-card', presentation.tone)}>
     <HugeiconsIcon icon={presentation.icon} strokeWidth={2} className="size-4" aria-hidden="true" />
   </span>
+}
+
+function BookingMemberAvatar({ userId, name, status, compact = false }: { userId: string; name: string; status: string; compact?: boolean }) {
+  return <div className={cn('relative mt-0.5 shrink-0', compact ? 'size-10' : 'size-11')}>
+    <div className={cn('flex size-full items-center justify-center rounded-full border-2 text-sm font-semibold sm:border-0', compact && 'text-xs', memberAvatarColor(userId), bookingStatusIcons[status as BookingStatus]?.avatarBorder)} aria-hidden="true">
+      {memberAvatarInitials(name)}
+    </div>
+    <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 sm:hidden"><BookingStatusIcon status={status} /></span>
+  </div>
 }
 
 type CurrentContractData = Pick<Booking, 'currentContractName' | 'currentContractCreditsRemaining' | 'hasCurrentContractBalance'>
@@ -167,13 +173,12 @@ export function BookingListCard({
       <span className="text-xs leading-none text-muted-foreground">{sessionDate.weekday}</span>
       <span className="mt-1 whitespace-nowrap text-xs font-semibold leading-4 text-foreground">{sessionDate.time}</span>
     </div> : null}
-    {showUser ? <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', memberAvatarColor(booking.user.id))} aria-hidden="true">{memberAvatarInitials(memberName)}</div> : null}
+    {showUser ? <BookingMemberAvatar userId={booking.user.id} name={memberName} status={booking.status} /> : null}
     <div className={cn('min-w-0 flex-1', sessionDate && 'py-3.5 pr-4 sm:pr-5')}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           {showUser ? <div className="flex min-w-0 items-center gap-1.5">
             <Link to={`/users/${encodeURIComponent(booking.user.id)}`} className="min-w-0 line-clamp-2 text-base font-semibold leading-5 text-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate hover:underline" title={memberName}>{memberName}</Link>
-            <span className="sm:hidden"><BookingStatusIcon status={booking.status} /></span>
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
             <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div> : null}
@@ -260,11 +265,10 @@ export function ClassBookingListCard({
   if (instructorView) {
     return <article className={cn('flex min-w-0 items-center justify-between gap-3 px-4 py-3 sm:px-5', !grouped && 'rounded-2xl bg-card shadow-sm', isCancelled && 'opacity-60')}>
       <div className="flex min-w-0 items-center gap-3">
-        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold', memberAvatarColor(booking.userId))} aria-hidden="true">{memberAvatarInitials(name)}</div>
+        <BookingMemberAvatar userId={booking.userId} name={name} status={booking.status} compact />
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <div className="flex min-w-0 items-center gap-1.5">
             <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 line-clamp-2 text-sm font-semibold text-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate underline-offset-2 hover:underline" title={name}>{name}</Link>
-            <span className="sm:hidden"><BookingStatusIcon status={booking.status} /></span>
             <StudioVisitPill previousVisits={booking.studioVisitCount} />
             <CoachVisitPill previousVisits={booking.coachVisitCount} />
           </div>
@@ -285,13 +289,12 @@ export function ClassBookingListCard({
   }
 
   return <article className={cn('flex min-w-0 items-start gap-3 px-4 py-3.5 sm:gap-4 sm:px-5', !grouped && 'rounded-2xl bg-card shadow-sm', isCancelled && 'opacity-60')}>
-    <div className={cn('mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold', memberAvatarColor(booking.userId))} aria-hidden="true">{memberAvatarInitials(name)}</div>
+    <BookingMemberAvatar userId={booking.userId} name={name} status={booking.status} />
     <div className="min-w-0 flex-1">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start gap-1.5 sm:items-center">
             <Link to={`/users/${encodeURIComponent(booking.userId)}`} className="min-w-0 line-clamp-2 text-base font-semibold leading-5 text-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate hover:underline" title={name}>{name}</Link>
-            <span className="sm:hidden"><BookingStatusIcon status={booking.status} /></span>
             <span className="hidden sm:contents"><StudioVisitPill previousVisits={booking.studioVisitCount} /></span>
             <span className="hidden sm:contents"><CoachVisitPill previousVisits={booking.coachVisitCount} /></span>
           </div>

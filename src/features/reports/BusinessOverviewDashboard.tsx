@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import type { ColumnDef } from '@tanstack/react-table'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/page-header'
@@ -10,17 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DetailCard } from '@/components/app/DetailCard'
-import { DetailPageLayout, RelatedEntityModule } from '@/components/app/detail-page-layout'
+import { DetailPageLayout } from '@/components/app/detail-page-layout'
 import { EntityIcon } from '@/components/app/entity-icons'
-import type { DataTableState } from '@/components/data-table'
-import { getBookingColumns } from '@/features/bookings/booking-columns'
-import { BookingListCard } from '@/features/bookings/BookingListCard'
-import { canViewBookingContractDetails } from '@/features/bookings/booking-display-permissions'
-import { bookingsQueryKeys } from '@/features/bookings/query-keys'
-import { getBookingsRequest } from '@/features/bookings/api'
-import { decideEgym2Booking, getBookingRowActions } from '@/features/bookings/booking-row-actions'
-import { classSessionsQueryKeys } from '@/features/classes/query-keys'
-import type { Booking } from '@/types/booking'
+import { PendingBookingsModule } from '@/features/bookings/PendingBookingsModule'
 import { getAppMode } from '@/features/app/app-mode'
 import { useConnect } from '@/features/app/use-connect'
 import { getDashboardOverviewRequest, type DashboardOverview, type DashboardPeriod } from '@/features/reports/api'
@@ -125,7 +116,6 @@ function DashboardMetrics({ data, revenueTab }: { data: DashboardOverview; reven
 
 export function BusinessOverviewDashboard({ headerAction }: { headerAction?: ReactNode } = {}) {
   const { session } = useConnect()
-  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [revenueTab, setRevenueTab] = useState<RevenueTab>('all')
   const mode = getAppMode()
@@ -139,7 +129,6 @@ export function BusinessOverviewDashboard({ headerAction }: { headerAction?: Rea
   const isCustomerManagerOrAbove = mode === 'customer'
     && ['OWNER', 'ADMIN', 'MANAGER'].includes(membership?.role ?? '')
   const canViewPendingBookings = Boolean(isCustomerManagerOrAbove && session?.permissions.bookings?.view)
-  const canEditPendingBookings = Boolean(isCustomerManagerOrAbove && session?.permissions.bookings?.edit)
   const customerHomeModules = useMemo(() => [
     { key: 'summary-report', label: 'Summary Report' },
     ...(canViewPendingBookings ? [{ key: 'pending-bookings', label: 'Pending Bookings' }] : []),
@@ -216,11 +205,6 @@ export function BusinessOverviewDashboard({ headerAction }: { headerAction?: Rea
     </section>
 
   if (isCustomerManagerOrAbove) {
-    const invalidateBookingViews = async () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: bookingsQueryKeys.all }),
-      queryClient.invalidateQueries({ queryKey: classSessionsQueryKeys.all }),
-    ])
-
     return <DetailPageLayout
       header={{ title: 'Home', subtitle: 'Your studio activity.', commands: headerAction }}
       modules={customerHomeModules}
@@ -229,40 +213,7 @@ export function BusinessOverviewDashboard({ headerAction }: { headerAction?: Rea
       <DetailCard id="module-summary-report" icon={EntityIcon.data} title="Summary Report">
         {summaryContent}
       </DetailCard>
-      {canViewPendingBookings ? <RelatedEntityModule<Booking & Record<string, unknown>>
-        id="module-pending-bookings"
-        title="Pending Bookings"
-        icon={EntityIcon.classes}
-        columns={getBookingColumns({ showUser: true, showLocation: true }) as ColumnDef<Booking & Record<string, unknown>>[]}
-        renderCard={(booking, actions) => <BookingListCard booking={booking} actions={actions} showContractDetails={canViewBookingContractDetails(session?.user, mode, customerContextId)} />}
-        queryKey={[...bookingsQueryKeys.all, 'home', 'pending-approval', customerContextId, pendingLocationId]}
-        loadData={async (state: DataTableState<Booking & Record<string, unknown>>) => {
-          const result = await getBookingsRequest(state as DataTableState<Booking>, {
-            customerId: [customerContextId],
-            status: ['PENDING_APPROVAL'],
-            ...(pendingLocationId ? { locationId: [pendingLocationId] } : {}),
-          })
-          return { ...result, items: result.items as Array<Booking & Record<string, unknown>> }
-        }}
-        getRowCommands={(booking) => getBookingRowActions({
-          status: booking.status,
-          canEdit: canEditPendingBookings,
-          canCreate: false,
-          isPast: Boolean(booking.startsAt && new Date(booking.startsAt).getTime() < Date.now()),
-          source: booking.source,
-          onCancel: () => undefined,
-          onRebook: () => undefined,
-          onSetAttendance: () => undefined,
-          onCancelClassPass: () => undefined,
-          onEgym2Decision: (action) => { void decideEgym2Booking(booking.id, booking.location.id, action, invalidateBookingViews) },
-        })}
-        tableKey="home.pending-bookings"
-        emptyMessage="No bookings are waiting for approval."
-        loadingMessage="Loading pending bookings…"
-        errorMessage="Could not load pending bookings."
-        pageSize={5}
-        refetchOnMount="always"
-      /> : null}
+      {canViewPendingBookings ? <PendingBookingsModule customerId={customerContextId} locationId={pendingLocationId} /> : null}
     </DetailPageLayout>
   }
 

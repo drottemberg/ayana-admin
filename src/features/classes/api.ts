@@ -250,11 +250,12 @@ export async function getClassSessionsRequest(
 ): Promise<DataTableAsyncResult<ClassSession>> {
   const { classTypeId, ...tableFilters } = tableState.filters
   const requestState = { ...tableState, filters: tableFilters }
-  const { from, to, ...queryFilters } = filters ?? {}
+  const { from, to, endingAfter, ...queryFilters } = filters ?? {}
   const payload = {
     ...classSessionsListConfig.toPayload(requestState, queryFilters),
     ...(typeof from === 'string' ? { from } : {}),
     ...(typeof to === 'string' ? { to } : {}),
+    ...(typeof endingAfter === 'string' ? { endingAfter } : {}),
   }
   const selectedClasses = classTypeId?.filter(Boolean) ?? []
   const result = await apiClient.post<ApiListResult<ClassSession>>('/class-sessions/list', {

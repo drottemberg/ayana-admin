@@ -60,7 +60,8 @@ const locationFormSchema = z.object({
   zip: z.string().trim().min(1, 'Zip code is required.'),
   countryId: z.string().trim().min(1, 'Country is required.'),
   description: z.string().optional(),
-  googleReviewUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || z.string().url().safeParse(value).success, 'Enter a valid Google review URL.'),
+  classReviewUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS review URL.'),
+  orderReviewUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS review URL.'),
   websiteUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS URL.'),
   instagramUrl: z.string().trim().optional().or(z.literal('')).refine((value) => !value || (z.string().url().safeParse(value).success && value.startsWith('https://')), 'Enter a valid HTTPS URL.'),
   defaultCoachId: z.string().optional(),
@@ -198,7 +199,8 @@ export function CreateLocationForm({
       zip: location?.address?.zip ?? '',
       countryId: location?.address?.countryId ?? '',
       description: location?.description ?? '',
-      googleReviewUrl: location?.googleReviewUrl ?? '',
+      classReviewUrl: location?.classReviewUrl === undefined ? location?.googleReviewUrl ?? '' : location.classReviewUrl ?? '',
+      orderReviewUrl: location?.orderReviewUrl === undefined ? location?.googleReviewUrl ?? '' : location.orderReviewUrl ?? '',
       defaultCoachId: location?.defaultCoachId ?? '',
       contactName: location?.contactName ?? '',
       contactPhone: location?.contactPhone ?? '',
@@ -294,7 +296,8 @@ export function CreateLocationForm({
       timezone: values.timezone,
       currency: values.currency.toUpperCase(),
       description: values.description?.trim() || undefined,
-      googleReviewUrl: values.googleReviewUrl?.trim() || null,
+      classReviewUrl: values.classReviewUrl?.trim() || null,
+      orderReviewUrl: values.orderReviewUrl?.trim() || null,
       contactName: values.contactName?.trim() || undefined,
       contactPhone: values.contactPhone?.trim() || undefined,
       contactEmail: values.contactEmail?.trim() || undefined,
@@ -525,15 +528,21 @@ export function CreateLocationForm({
               disabled={!appLinksLoaded}
             />
           </section>
-          <div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
-              label="Google review link"
+              label="Class review link"
               type="url"
               placeholder="https://g.page/r/.../review"
-              error={errors.googleReviewUrl?.message}
-              {...register('googleReviewUrl')}
+              error={errors.classReviewUrl?.message}
+              {...register('classReviewUrl')}
             />
-            <p className="mt-1 text-xs text-muted-foreground">Used to invite customers to review this location after a completed visit or pickup.</p>
+            <TextInput
+              label="Order review link"
+              type="url"
+              placeholder="https://g.page/r/.../review"
+              error={errors.orderReviewUrl?.message}
+              {...register('orderReviewUrl')}
+            />
           </div>
           {isEditMode ? (
             <Controller

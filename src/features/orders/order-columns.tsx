@@ -19,7 +19,14 @@ export function getOrderColumns(options: { showCustomer?: boolean; showLocation?
     {
       id: 'discount', header: 'Discount',
       cell: ({ row }) => row.original.partnershipDiscountSources
-        ? <span className="grid gap-0.5"><Badge variant="outline" className="w-fit border-green-200 text-green-800">Discount{row.original.partnershipDiscountAmount != null ? ` −${new Intl.NumberFormat(undefined, { style: 'currency', currency: row.original.currency || 'EUR' }).format(row.original.partnershipDiscountAmount)}` : ''}</Badge><span className="text-xs text-muted-foreground">{row.original.partnershipDiscountSources}</span></span>
+        ? <span className="inline-flex min-w-max flex-col items-start gap-0.5">
+            <Badge variant="outline" className="border-green-200 text-green-800">
+              {row.original.partnershipDiscountAmount != null
+                ? `Discount −${new Intl.NumberFormat(undefined, { style: 'currency', currency: row.original.currency || 'EUR' }).format(row.original.partnershipDiscountAmount)}`
+                : 'Discount'}
+            </Badge>
+            <span className="max-w-48 truncate text-xs text-muted-foreground" title={row.original.partnershipDiscountSources}>{row.original.partnershipDiscountSources}</span>
+          </span>
         : NO_VALUE_STR,
     },
     {

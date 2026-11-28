@@ -35,6 +35,7 @@ import { ClassTypeEditDrawer } from '@/features/classes/ClassTypeEditDrawer'
 import { ClassSessionEditDrawer } from '@/features/classes/ClassSessionEditDrawer'
 import { CreateClassTypeDrawer } from '@/features/classes/CreateClassTypeDrawer'
 import { useConnect } from '@/features/app/use-connect'
+import { Feature } from '@/types/feature'
 import { getClientContractsRequest } from '@/features/client-contracts/api'
 import { getClientContractColumns } from '@/features/client-contracts/client-contract-columns'
 import { ClientContractService } from '@/features/client-contracts/client-contract-service'
@@ -133,12 +134,12 @@ function getSections(location?: Location, canEdit = false, defaultCoachName?: st
         },
         { label: 'Phone', value: formatPhoneNumber(location?.phone) || NO_VALUE_STR },
         { label: 'Email', value: location?.email ?? NO_VALUE_STR },
-        {
-          label: 'Google review link',
-          value: location?.googleReviewUrl
-            ? <a href={location.googleReviewUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open Google review page ↗</a>
-            : NO_VALUE_STR,
-        },
+        { label: 'Class review link', value: location?.classReviewUrl
+          ? <a href={location.classReviewUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open class review page ↗</a>
+          : NO_VALUE_STR },
+        { label: 'Order review link', value: location?.orderReviewUrl
+          ? <a href={location.orderReviewUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open order review page ↗</a>
+          : NO_VALUE_STR },
         { label: 'Contact name', value: location?.contactName ?? NO_VALUE_STR },
         { label: 'Contact phone', value: formatPhoneNumber(location?.contactPhone) || NO_VALUE_STR },
         { label: 'Contact email', value: location?.contactEmail ?? NO_VALUE_STR },
@@ -171,29 +172,34 @@ export default function LocationPage() {
     [editingLocationPolicy],
   )
   const { session } = useConnect()
-  const canViewCoaches = Boolean(session?.permissions.coaches?.view)
-  const canViewRooms = Boolean(session?.permissions.rooms?.view)
-  const canManageRooms = Boolean(session?.permissions.rooms?.edit)
-  const canEditProducts = Boolean(session?.permissions.products?.edit)
-  const canViewClientContracts = Boolean(session?.permissions.clientContracts?.view)
+  const canViewCoaches = Boolean(session?.hasFeature(Feature.CLASS_SESSIONS) && session.permissions.coaches?.view)
+  const canViewRooms = Boolean(session?.hasFeature(Feature.CLASS_SESSIONS) && session.permissions.rooms?.view)
+  const canManageRooms = canViewRooms && Boolean(session?.permissions.rooms?.edit)
+  const canViewPricingOptions = Boolean(session?.hasFeature(Feature.PRICING_OPTIONS) && session.permissions.pricingOptions?.view)
+  const canViewClasses = Boolean(session?.hasFeature(Feature.CLASSES) && session.permissions.classes?.view)
+  const canViewClassSessions = Boolean(session?.hasFeature(Feature.CLASS_SESSIONS) && session.permissions.classSessions?.view)
+  const canViewDevices = Boolean(session?.hasFeature(Feature.DEVICES) && session.permissions.devices?.view)
+  // The location settings endpoint requires products.edit, not only products.view.
+  const canEditProducts = Boolean(session?.hasFeature(Feature.PRODUCTS) && session.permissions.products?.edit)
+  const canViewClientContracts = Boolean(session?.hasFeature(Feature.CLIENT_CONTRACTS) && session.permissions.clientContracts?.view)
   const canEditClientContracts = Boolean(session?.permissions.clientContracts?.edit)
-  const canViewOrders = Boolean(session?.permissions.orders?.view)
+  const canViewOrders = Boolean(session?.hasFeature(Feature.ORDERS) && session.permissions.orders?.view)
   const canEditOrders = Boolean(session?.permissions.orders?.edit)
   const canRefundOrders = Boolean(session?.permissions.orders?.delete)
-  const canEditLocation = Boolean(session?.permissions.customers?.edit || session?.permissions.users?.edit)
-  const canManageLocationPolicy = Boolean(session?.permissions.customers?.edit || session?.permissions.organization?.editSelf)
+  const canEditLocation = Boolean(session?.hasFeature(Feature.STORES) && session.permissions.locations?.edit)
+  const canManageLocationPolicy = Boolean(session?.hasFeature(Feature.STORES) && (session.permissions.customers?.edit || session.permissions.organization?.editSelf))
   const modules = useMemo(() => [
     ...(canManageLocationPolicy ? [{ key: 'location-policy', label: 'Location policy' }] : []),
     ...(canViewRooms ? [{ key: 'rooms', label: 'Rooms' }] : []),
-    { key: 'pricing-options', label: 'Pricing options' },
-    { key: 'classes', label: 'Classes' },
+    ...(canViewPricingOptions ? [{ key: 'pricing-options', label: 'Pricing options' }] : []),
+    ...(canViewClasses ? [{ key: 'classes', label: 'Classes' }] : []),
     ...(canViewCoaches ? [{ key: 'coaches', label: 'Coaches' }] : []),
-    { key: 'class-sessions', label: 'Class sessions' },
-    { key: 'devices', label: 'Devices' },
+    ...(canViewClassSessions ? [{ key: 'class-sessions', label: 'Class sessions' }] : []),
+    ...(canViewDevices ? [{ key: 'devices', label: 'Devices' }] : []),
     ...(canEditProducts ? [{ key: 'products', label: 'Products' }] : []),
     ...(canViewClientContracts ? [{ key: 'client-contracts', label: 'Client contracts' }] : []),
     ...(canViewOrders ? [{ key: 'orders', label: 'Orders' }] : []),
-  ], [canEditProducts, canManageLocationPolicy, canViewClientContracts, canViewOrders, canViewCoaches, canViewRooms])
+  ], [canManageLocationPolicy, canViewPricingOptions, canViewClasses, canViewClassSessions, canViewDevices, canEditProducts, canViewClientContracts, canViewOrders, canViewCoaches, canViewRooms])
   const {
     data: location,
     isError,
@@ -206,7 +212,7 @@ export default function LocationPage() {
   const defaultCoachQuery = useQuery({
     queryKey: ['coaches', 'location', locationId, 'location-default-details'],
     queryFn: () => getLocationCoachesRequest(locationId),
-    enabled: Boolean(location?.defaultCoachId && session?.permissions.coaches?.view),
+    enabled: Boolean(location?.defaultCoachId && canViewCoaches),
   })
 
   if (isError || (!isLoading && !location)) {
@@ -279,7 +285,7 @@ export default function LocationPage() {
           loadingMessage="Loading rooms..."
           emptyMessage="No rooms configured for this location."
         /> : null}
-        <RelatedEntityModule
+        {canViewPricingOptions ? <RelatedEntityModule
           id="module-pricing-options"
           title="Pricing options"
           icon={EntityIcon.pricingOptions}
@@ -289,8 +295,8 @@ export default function LocationPage() {
           columns={getPricingOptionColumns({ showScope: false, locationScoped: true })}
           loadingMessage="Loading pricing options..."
           emptyMessage="No pricing options available for this location."
-        />
-        <RelatedEntityModule
+        /> : null}
+        {canViewClasses ? <RelatedEntityModule
           id="module-classes"
           title="Classes"
           icon={EntityIcon.classes}
@@ -301,13 +307,13 @@ export default function LocationPage() {
           tableKey="locations.detail.modules.classes"
           columns={getClassTypeColumns()}
           getRowCommands={(classType) => ClassTypeService.getRowActions(classType, {
-            canEdit: Boolean(session?.permissions.customers?.edit),
+            canEdit: Boolean(session?.permissions.classes?.edit),
             onEdit: setEditingClassType,
           })}
           loadingMessage="Loading classes..."
           emptyMessage="No classes configured for this location."
-        />
-        <RelatedEntityModule
+        /> : null}
+        {canViewClassSessions ? <RelatedEntityModule
           id="module-class-sessions"
           title="Class sessions"
           icon={EntityIcon.classes}
@@ -322,7 +328,7 @@ export default function LocationPage() {
             : []}
           loadingMessage="Loading class sessions..."
           emptyMessage="No class sessions found for this location."
-        />
+        /> : null}
         {canViewCoaches && location?.parentId ? <RelatedEntityModule
           id="module-coaches"
           title="Coaches"
@@ -338,7 +344,7 @@ export default function LocationPage() {
           emptyMessage="No coaches assigned to this location."
           errorMessage="Could not load coaches."
         /> : null}
-        <RelatedEntityModule
+        {canViewDevices ? <RelatedEntityModule
           id="module-devices"
           title="Devices"
           icon={EntityIcon.devices}
@@ -354,7 +360,7 @@ export default function LocationPage() {
             : []}
           loadingMessage="Loading devices..."
           emptyMessage="No devices found for this location."
-        />
+        /> : null}
         {canEditProducts ? <RelatedEntityModule
           id="module-products"
           title="Products"

@@ -19,6 +19,8 @@ export type AccessScan = {
 export type AccessToken = {
   id: string
   token: string
+  isDynamic: boolean
+  qrValiditySeconds: number
   organizationId: string
   organizationName?: string | null
   locationScope: 'ALL' | 'SPECIFIC'
@@ -39,10 +41,20 @@ export type AccessScheduleSlot = { dayOfWeek: number; startTime: string; endTime
 
 export type CreatedAccessToken = AccessToken & { token: string }
 
-export type MyAccessToken = Pick<AccessToken, 'id' | 'token' | 'label' | 'purpose' | 'organizationId' | 'organizationName' | 'locationScope' | 'locationIds' | 'locationNames' | 'expiresAt'>
+export type MyAccessToken = Omit<Pick<AccessToken, 'id' | 'token' | 'isDynamic' | 'qrValiditySeconds' | 'label' | 'purpose' | 'organizationId' | 'organizationName' | 'locationScope' | 'locationIds' | 'locationNames' | 'expiresAt'>, 'token'> & { token: string | null }
 
 export function getMyAccessTokensRequest(customerId: string) {
   return apiClient.get<MyAccessToken[]>('/access/my-tokens', { headers: { 'x-org-id': customerId } })
+}
+
+export type DynamicAccessQr = { value: string; expiresAt: string; refreshAfterMs: number }
+
+export function getMyDynamicAccessQrRequest(id: string, customerId: string) {
+  return apiClient.get<DynamicAccessQr>(`/access/my-tokens/${id}/qr`, { headers: { 'x-org-id': customerId } })
+}
+
+export function getManagedDynamicAccessQrRequest(id: string, customerId?: string) {
+  return apiClient.get<DynamicAccessQr>(`/access/tokens/${id}/qr`, customerId ? { headers: { 'x-org-id': customerId } } : undefined)
 }
 
 export async function getAccessScansRequest(state: DataTableState<AccessScan>, filters?: Record<string, unknown>) {
@@ -61,6 +73,8 @@ export function createAccessTokenRequest(input: {
   locationScope: 'ALL' | 'SPECIFIC'
   locationIds: string[]
   purpose: 'ACCESS' | 'CHECK_IN'
+  isDynamic?: boolean
+  qrValiditySeconds?: number
   token?: string
   label?: string
   maxUses?: number
@@ -72,6 +86,8 @@ export function createAccessTokenRequest(input: {
 
 export function updateAccessTokenRequest(id: string, input: {
   token?: string
+  isDynamic?: boolean
+  qrValiditySeconds?: number
   label?: string | null
   maxUses?: number | null
   expiresAt?: string | null
